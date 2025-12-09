@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+This repo is based on python and uses uv for package and environment management.
+Don't use try-catch statement unless it's absolutely needed. 
