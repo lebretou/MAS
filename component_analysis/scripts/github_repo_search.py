@@ -12,11 +12,13 @@ import requests
 
 
 SEARCH_QUERIES = [
+    "multi-agent",
+    "multi-agent AI",
+    "multi agent",
     "multi-agent LLM",
     "multi agent LLM",
     "multi-agent system LLM",
     "LLM multi agent",
-    "autonomous agents application",
     "collaborative agents",
 
 ]

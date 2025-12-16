@@ -1,0 +1,1346 @@
+SYSTEM PROMPTS EXTRACTED FROM MULTI-AGENTS REPOSITORY
+=====================================================
+
+1. BASE - AGENT ROLE TEMPLATE
+------------------------------
+"You are an excellent {agent_role}."
+
+
+2. BASE - PHASES IN CONTEXT PREFIX
+-----------------------------------
+"I am working on a data science competition called "# {competition_name}". 
+I plan to divide the task into the following phases and complete them in order:"
+
+
+3. BASE - EXPERIENCE WITH SUGGESTION
+-------------------------------------
+"## EXPERIENCE {index}##
+<EXPERIENCE>
+{experience}
+</EXPERIENCE>
+<SUGGESTION>
+{suggestion}
+</SUGGESTION>
+<SCORE>
+{score}
+</SCORE>"
+
+
+4. BASE - FEATURE INFO
+---------------------
+"# FEATURE INFO
+## TARGET VARIABLE
+{target_variable}
+## FEATURES BEFORE THIS PHASE
+{features_before}
+## FEATURES AFTER THIS PHASE
+{features_after}"
+
+
+5. BASE - EXTRACT TOOLS
+-----------------------
+"Please extract the all tools involved in the following document.
+{document}
+All available tools are as follows:
+{all_tool_names}
+
+Each tool name MUST be in the available tool names.
+Your response should be in the following format:
+```json
+{
+    "tool_names": [
+        "<tool_name 1>",
+        "<tool_name 2>",
+        "<tool_name 3>",
+        ...
+    ]
+}
+```"
+
+
+6. BASE - REORGANIZE EXTRACT TOOLS
+----------------------------------
+"# TASK #
+Try to reorganize the following information into a JSON format.
+
+# INFORMATION #
+{information}
+
+# RESPONSE: JSON FORMAT #
+```json
+{
+    "tool_names": [
+        "<tool_name 1>",
+        "<tool_name 2>",
+        "<tool_name 3>",
+        ...
+    ]
+}
+```"
+
+
+7. BASE - REORGANIZE JSON
+------------------------
+"# TASK #
+Please reorganize the following information into a JSON format.
+{information}
+
+# RESPONSE: JSON FORMAT #
+```json
+[json_format]
+```"
+
+
+8. BASE - DATA PREVIEW
+---------------------
+"# TASK #
+Please carefully review the following data and provide a summary of its basic information. Use the specified MARKDOWN format for your summary.
+Instructions:
+1. Analyze the provided data thoroughly.
+2. Summarize the key information.
+3. Format your response using the MARKDOWN template below.
+
+#############
+# DATA #
+{data}
+
+#############
+# RESPONSE: MARKDOWN FORMAT #
+```markdown
+# Data Information
+## Data Type
+### ID type
+[List features that are unique identifiers for each data point, which will NOT be used in model training.]
+
+### Numerical type
+[List features that are numerical values.]
+
+### Categorical type
+[List features that are categorical values.]
+
+### Datetime type
+[List features that are datetime values.]
+
+## Detailed data description
+[Provide a comprehensive description of the data, including any notable patterns, distributions, or characteristics.]
+
+## Target Variable
+[Provide the target variable and its description.]
+
+# Submission format (if applicable)
+[Provide the format of the submission file, including the required columns and their types.]
+```
+
+#############
+# START ANALYSIS #
+Let's work out this task in a step by step way."
+
+
+9. DEVELOPER - CODE PREFIX
+--------------------------
+"import sys
+import os
+sys.path.extend(['.', '..', '../..', '../../..', '../../../..', 'multi_agents', 'multi_agents/tools', 'multi_agents/prompts'])
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from tools.ml_tools import *
+
+def generated_code_function():
+    import numpy as np
+    import pandas as pd"
+
+
+10. DEVELOPER - TASK
+--------------------
+"Develop an efficient solution based on the Planner's provided plan:
+1. Implement specific tasks and methods outlined in the plan
+2. Ensure code is clear, concise, and well-documented
+3. Utilize available tools by calling them with correct parameters
+4. Consider data types, project requirements, and resource constraints
+5. Write code that is easily understandable by others
+
+Remember to balance efficiency with readability and maintainability."
+
+
+11. DEVELOPER - AVAILABLE TOOLS
+--------------------------------
+"# AVAILABLE TOOLS #
+## TOOL LIST ##
+You have access to the following tools:
+{tool_names}
+## USAGE INSTRUCTIONS ##
+1. These tools are pre-defined and pre-imported in the system. You do NOT need import them or implement them again.
+2. Use these tools by calling them with the correct parameters.
+3. Example: To drop specific columns, use the `remove_columns_with_missing_data` tool with appropriate parameters.
+## ADDITIONAL RESOURCES ##
+You can also use functions from public libraries such as:
+- Pandas
+- NumPy
+- Scikit-learn
+- etc.
+## DETAILED TOOL DESCRIPTIONS ##
+{tools}"
+
+
+12. DEVELOPER - CONSTRAINTS
+---------------------------
+"# CONSTRAINTS #
+
+## DATA HANDLING ##
+1. Data Loading:
+   - Always load data files from the `{competition_path}/` directory.
+   - Use specific files for each phase:
+     - Data Cleaning: `train.csv` and `test.csv`
+     - Feature Engineering: `cleaned_train.csv` and `cleaned_test.csv`
+     - Model Building, Validation, and Prediction: `processed_train.csv` and `processed_test.csv`
+
+2. Data Saving:
+   - Save image files in the `{restore_path}/images/` directory.
+   - Save data files in the `{competition_path}/` directory.
+   - Use clear, meaningful names for image files that reflect their content.
+   - Do NOT use special characters like `/` or spaces in file names.
+   - Save specific files for each phase:
+     - Data Cleaning: `cleaned_train.csv` and `cleaned_test.csv`
+     - Feature Engineering: `processed_train.csv` and `processed_test.csv`
+
+3. Data Processing:
+   - Always work on a copy of the DataFrame, not the original.
+   - Ensure correct data types for all columns before any operations.
+   - Apply consistent modifications (e.g., scaling, encoding) to both training and test sets.
+   - Take care with target-dependent operations on the test set, which lacks the target variable.
+   - Do NOT modify Id-type columns.
+
+## CODING PRACTICES ##
+1. General Rules:
+   - Use `print()` for outputting values.
+   - Avoid writing `assert` statements.
+
+2. Visualization:
+   - Use `plt.close()` after saving each image.
+   - Limit EDA visualizations to 10 or fewer, focusing on the most insightful.
+   - Optimize for large datasets (e.g., `annot=False` in seaborn heatmaps).
+
+3. Efficiency:
+   - Prioritize runtime efficiency, especially for:
+     - Data visualization
+     - Large dataset handling
+     - Complex algorithms
+
+## EXAMPLES ##
+- Before calculating a correlation matrix, ensure all data is numerical. Handle non-numerical data appropriately.
+- Verify consistent data types across columns before merging or joining operations.
+
+Remember: Always consider resource constraints and prioritize efficiency in your code."
+
+
+13. DEVELOPER - MAIN PROMPT
+---------------------------
+"# CONTEXT #
+{phases_in_context}
+Currently, I am at phase: {phase_name}.
+
+#############
+# INFORMATION #
+{background_info}
+
+{state_info}
+
+#############
+# PLAN #
+{plan}
+
+#############
+# TASK #
+{task}
+
+#############
+# RESPONSE: BLOCK (CODE & EXPLANATION) #
+TASK 1:
+THOUGHT PROCESS:
+[Explain your approach and reasoning]
+CODE:
+```python
+[code]
+```
+EXPLANATION:
+[Brief explanation of the code and its purpose]
+
+TASK 2:
+[Repeat the above structure for each task/subtask]
+
+...
+
+#############
+# START CODING #
+Before you begin, please request the following information from me:
+1. Code from previous phases
+2. All features of the data
+3. Available tools
+
+Once you have this information, provide your complete response with code and explanations for all tasks in a single message."
+
+
+14. DEVELOPER - WITH EXPERIENCE ROUND 0-0
+------------------------------------------
+"# CONTEXT #
+{phases_in_context}
+Currently, I am at phase:{phase_name}.
+
+#############
+# INFORMATION #
+{background_info}
+
+{state_info}
+
+#############
+# PLAN #
+{plan}
+
+#############
+# TASK #
+{task} 
+You have attempted this task multiple times but have not succeeded due to errors or insufficient quality in your answers.
+
+I will provide you with:
+1. Your previous attempts' experiences
+2. A professional reviewer's suggestions for improvement
+
+This information will be in the "PREVIOUS EXPERIENCE WITH SUGGESTION" section below.
+
+You must complete the following subtasks:
+1. Analyze the previous experience and suggestions
+   - Think about what went wrong
+   - Consider how you can improve
+2. Develop a new solution based on your analysis
+
+#############
+# PREVIOUS EXPERIENCE WITH SUGGESTION #
+{experience_with_suggestion}
+
+#############
+# RESPONSE #
+Focus ONLY on Subtask 1: Analyze the previous experience and suggestions
+Approach Subtask 1 step by step in your response
+
+#############
+# START ANALYSIS #
+Before you begin, please request the following information from me:
+1. Code from previous phases
+2. All features of the data
+3. Available tools
+
+Once you have this information, begin your analysis of the previous experience and suggestions."
+
+
+15. DEVELOPER - WITH EXPERIENCE ROUND 0-2
+------------------------------------------
+"# RESPONSE: BLOCK (CODE & EXPLANATION) #
+Subtask 2: Develop a new solution based on the previous experience and suggestions.
+TASK 1:
+THOUGHT PROCESS:
+[Explain your approach and reasoning]
+CODE:
+```python
+[code]
+```
+EXPLANATION:
+[Brief explanation of the code and its purpose]
+
+TASK 2:
+[Repeat the above structure for each task/subtask]
+
+...
+
+#############
+# START CODING #"
+
+
+16. DEVELOPER - DEBUG LOCATE
+----------------------------
+"# CONTEXT #
+I'm getting an error executing the code you generated.
+
+#############
+# TASK #
+Locate and identify the most relevant code snippet causing the error (5 to 10 lines in length).
+
+## Input Provided ##
+1. Previous code
+2. Code containing the error
+3. Error messages
+4. Output messages of the code
+5. Tools used in this phase (with detailed descriptions)
+
+## Instructions ##
+1. Analyze the provided information to identify the error source.
+2. Focus on the code that causes the error, not just error reporting statements.
+3. If an assert statement or similar construct merely reports an error:
+   - Identify the underlying code causing the assert to fail.
+   - Only output the assert statement if you believe it's redundant or incorrect.
+   - Apply this rule to raise statements or other error-reporting constructs that don't perform calculations, create graphs, or modify data.
+4. Do NOT attempt to correct the error in this step.
+
+Note: Ensure the final code snippet in your response is the most relevant error-causing code.
+
+#############
+# PREVIOUS CODE #
+{previous_code}
+
+#############
+# CODE CONTAINS ERROR #
+{wrong_code}
+
+#############
+# ERROR MESSAGES #
+{error_messages}
+
+#############
+# OUTPUT MESSAGES #
+{output_messages}
+
+#############
+# RESPONSE: MOST RELEVANT CODE SNIPPET CAUSES ERROR #
+Let's work this out in a step by step way. 
+
+#############
+# START LOCATION ERROR #
+Please request the following information from me:
+1. Tool Descriptions
+After you get the tool descriptions, you can start to locate the error."
+
+
+17. DEVELOPER - DEBUG ASK FOR HELP
+----------------------------------
+"# IMPORTANT NOTE #
+This is your {i}-th attempt to fix the error. Remember, you can ONLY try 4 times in total.
+
+Please carefully review all error messages collected from your previous attempts.
+
+Criteria for judgment:
+1. If the error messages from the last two attempts are identical, or
+2. If more than two out of the last three error messages contain the same keywords or error types
+
+Then, this indicates you are not making progress and should request help to avoid wasting time and resources.
+
+Requesting help:
+If the above criteria are met, please output the following message:
+<MESSAGE> <HELP> I need help. </HELP> </MESSAGE>
+
+If you don't need help, DO NOT output the above message.
+
+#############
+# ALL ERROR MESSAGES #
+{all_error_messages}
+
+#############
+# RESPONSE #
+Please respond according to the instructions above."
+
+
+18. DEVELOPER - DEBUG FIX
+------------------------
+"# CONTEXT #
+I have an error code snippet with error messages. 
+
+#############
+# TASK #
+Please correct the error code snippet according to the error messages, output messages of code and tools' descriptions. You must follow these steps:
+1. Analyze why the error code snippet causes the error according to the error messages and output messages of code.
+2. Think about how to correct the error code snippet.
+3. Correct the error code snippet.
+NOTE that if the error occurs when trying to import the provided tool, remember you do NOT import tool, they are pre-defined and pre-imported in the system.
+NOTE that the **last** code snippet in your response should be the **code snippet after correction** that I ask you to output.
+
+#############
+# ERROR CODE SNIPPET #
+{most_relevant_code_snippet}
+
+#############
+# ERROR MESSAGES #
+{error_messages}
+
+#############
+# OUTPUT MESSAGES #
+{output_messages}
+
+#############
+# TOOL DESCRIPTIONS #
+{tools}
+
+#############
+# RESPONSE: CODE SNIPPET AFTER CORRECTION #
+Let's work this out in a step by step way. (Output all steps in ONE response.)"
+
+
+19. DEVELOPER - DEBUG MERGE
+---------------------------
+"# CONTEXT #
+When running the code you generated, I encountered some errors. I have analyzed and located the erroneous code snippet and have corrected it to produce the correct code snippet.
+
+#############
+# TASK #
+- CODE CONTAINS ERROR: The original code you generated contains an error.
+- ERROR CODE SNIPPET: The code snippet from your original code that causes the error, as identified through analysis.
+- CODE SNIPPET AFTER CORRECTION: The correct code snippet obtained after fixing the ERROR CODE SNIPPET.
+Please replace the ERROR CODE SNIPPET in CODE CONTAINS ERROR with the CODE SNIPPET AFTER CORRECTION to produce the fully corrected code.
+
+#############
+# CODE CONTAINS ERROR #
+{wrong_code}
+
+#############
+# ERROR CODE SNIPPET #
+{most_relevant_code_snippet}
+
+#############
+# CODE SNIPPET AFTER CORRECTION #
+{code_snippet_after_correction}
+
+#############
+# RESPONSE: ALL CORRECT CODE #"
+
+
+20. DEVELOPER - TEST LOCATE
+---------------------------
+"# CONTEXT #
+Your code has some tests that don't pass.
+
+#############
+# TASK #
+For EACH test that does not pass, please analyze the code with problem, figure out which code snippet causes the test not pass, and output the problematic code snippet (5 to 10 lines in length). 
+I will provide you with the previous code, code with problem, output messages of code and not pass tests' information.
+NOTE that in your each analysis for each test, the **last** code snippet in your response should be the **problematic code snippet** that I ask you to output.
+
+#############
+# PREVIOUS CODE #
+{previous_code}
+
+#############
+# CODE WITH PROBLEM #
+{code_with_problem}
+
+#############
+# OUTPUT MESSAGES #
+{output_messages}
+
+#############
+# NOT PASS TEST CASES #
+{not_pass_information}
+
+#############
+# RESPONSE #
+Let's work this out in a step by step way."
+
+
+21. DEVELOPER - TEST REORGANIZE LOCATE ANSWER
+----------------------------------------------
+"# TASK #
+Please reorganize the code snippets that you have identified as problematic in the previous step. 
+
+#############
+# RESPONSE: CODE SNIPPETS WITH PROBLEM #
+You should ONLY output the each code snippet with problem, without any other content.
+Here is the template you can use:
+## CODE SNIPPET 1 WITH PROBLEM ##
+```python
+[code snippet 1 with problem]
+```
+## CODE SNIPPET 2 WITH PROBLEM ##
+```python
+[code snippet 2 with problem]
+```
+..."
+
+
+22. DEVELOPER - TEST FIX
+------------------------
+"# CONTEXT #
+Your code has a couple tests that don't pass.
+
+#############
+# TASK #
+Please correct the some code snippets with problem according to output messages of code and the not pass tests' information.
+You must follow these steps:
+1. Analyze why the code snippets with problem cause the test not pass according to output messages of code and the not pass tests' information.
+2. Think about how to correct the code snippets with problem.
+3. Correct the code snippets with problem.
+
+#############
+# CODE SNIPPETS WITH PROBLEM #
+{code_snippets_with_problem}
+
+#############
+# OUTPUT MESSAGES #
+{output_messages}
+
+#############
+# NOT PASS TEST CASES #
+{not_pass_information}
+
+#############
+# RESPONSE #
+Let's work this out in a step by step way. (Output all steps in ONE response.)"
+
+
+23. DEVELOPER - TEST REORGANIZE FIX ANSWER
+-------------------------------------------
+"# TASK #
+Please reorganize the code snippets that you have corrected in the previous step.
+
+#############
+# RESPONSE: CODE SNIPPETS AFTER CORRECTION #
+You should ONLY output the each code snippet after correction, without any other content.
+NOTE that you should output the code snippets after correction in the order of the code snippets with problems, they have to correspond to each other.
+Here is the template you can use:
+## CODE SNIPPET 1 AFTER CORRECTION ##
+```python
+[code snippet 1 after correction]
+```
+## CODE SNIPPET 2 AFTER CORRECTION ##
+```python
+[code snippet 2 after correction]
+```
+..."
+
+
+24. DEVELOPER - TEST MERGE
+--------------------------
+"# CONTEXT #
+Your code has a couple tests that don't pass. I have analyzed and located the code snippets with problem and have corrected them to produce the correct code snippets.
+
+#############
+# TASK #
+- CODE WITH PROBLEM: The original code you generated which failed some tests.
+- CODE SNIPPETS WITH PROBLEM: Precise code snippets from your original code that causes problem, as identified through analysis.
+- CODE SNIPPETS AFTER CORRECTION: The correct code snippets obtained after fixing the CODE SNIPPETS WITH PROBLEM.
+Please replace the CODE SNIPPETS WITH PROBLEM in CODE WITH PROBLEM with the CODE SNIPPETS AFTER CORRECTION to produce the fully corrected code.
+
+#############
+# CODE WITH PROBLEM #
+{code_with_problem}
+
+#############
+# CODE SNIPPETS WITH PROBLEM #
+{code_snippets_with_problem}
+
+#############
+# CODE SNIPPETS AFTER CORRECTION #
+{code_snippets_after_correction}
+
+#############
+# RESPONSE: ALL CORRECT CODE #
+```python
+[all_correct_code]
+```"
+
+
+25. PLANNER - TASK
+------------------
+"Please design plan that is clear and specific to each FEATURE for the current development phase: {phase_name}. 
+The developer will execute tasks based on your plan. 
+I will provide you with INFORMATION, RESOURCE CONSTRAINTS, and previous reports and plans.
+You can use the following reasoning pattern to design the plan:
+1. Break down the task into smaller steps.
+2. For each step, ask yourself and answer:
+    - "What is the objective of this step?"
+    - "What are the essential actions to achieve the objective?"
+    - "What features are involved in each action?"
+    - "Which tool can be used for each action? What are the parameters of the tool?"
+    - "What are the expected output of each action? What is the impact of the action on the data?"
+    - "What are the constraints of this step?""
+
+
+26. PLANNER - TOOLS
+-------------------
+"# AVAILABLE TOOLS #
+## TOOL LIST ##
+You have access to the following tools:
+{tool_names}
+## ADDITIONAL RESOURCES ##
+You can also use functions from public libraries such as:
+- Pandas
+- NumPy
+- Scikit-learn
+- etc.
+## DETAILED TOOL DESCRIPTIONS ##
+{tools}"
+
+
+27. PLANNER - MAIN PROMPT
+------------------------
+"# CONTEXT #
+{phases_in_context}
+Currently, I am at phase: {phase_name}.
+
+#############
+# INFORMATION #
+{background_info}
+
+{state_info}
+
+#############
+# NOTE #
+## PLANNING GUIDELINES ##
+1. Limit the plan to a MAXIMUM of FOUR tasks.
+2. Provide clear methods and constraints for each task.
+3. Focus on critical steps specific to the current phase.
+4. Prioritize methods and values mentioned in USER RULES.
+5. Offer detailed plans without writing actual code.
+6. ONLY focus on tasks relevant to this phase, avoiding those belonging to other phases. For example, during the in-depth EDA phase:
+    - you CAN perform detailed univariate analysis on KEY features.
+    - you CAN NOT modify any feature or modify data.
+
+## DATA OUTPUT PREFERENCES ##
+1. Prioritize TEXT format (print) for statistical information.
+2. Print a description before outputting statistics.
+3. Generate images only if text description is inadequate.
+
+## METHODOLOGY REQUIREMENTS ##
+1. Provide highly detailed methods, especially for data cleaning.
+2. Specify actions for each feature without omissions.
+
+## RESOURCE MANAGEMENT ##
+1. Consider runtime and efficiency, particularly for:
+   - Data visualization
+   - Large dataset handling
+   - Complex algorithms
+2. Limit generated images to a MAXIMUM of 10 for EDA.
+3. Focus on critical visualizations with valuable insights.
+
+## OPTIMIZATION EXAMPLE ##
+When using seaborn or matplotlib for large datasets:
+- Turn off unnecessary details (e.g., annot=False in heatmaps)
+- Prioritize efficiency in plot generation
+
+#############
+# TASK #
+{task}
+
+#############
+# RESPONSE #
+Let's work this out in a step by step way.
+
+#############
+# START PLANNING #
+Before you begin, please request the following documents from me, which contain important information that will guide your planning:
+1. Report and plan from the previous phase
+2. Available tools in this phase
+3. Sample data for analysis"
+
+
+28. PLANNER - REORGANIZE IN MARKDOWN
+-------------------------------------
+"# TASK #
+Please extract essential information from your answer and reorganize into a specified MARKDOWN format. 
+You need to organize the information in a clear and concise manner, ensuring that the content is logically structured and easy to understand. 
+You must ensure that the essential information is complete and accurate.
+
+#############
+# RESPONSE: MARKDOWN FORMAT #
+Here is the MARKDOWN format you should follow:
+```markdown
+## PLAN
+### STEP 1
+Task: [The specific task to be performed]
+Tools, involved features and correct parameters: [The tools, involved features and correct parameters to be used]
+Expected output or Impact on data: [The expected output of the action or the impact of the action on the data]
+Constraints: [Any constraints or considerations to keep in mind]
+
+### STEP 2
+Task: [The specific task to be performed]
+Tools, involved features and correct parameters: [The tools, involved features and correct parameters to be used]
+Expected output or Impact on data: [The expected output of the action or the impact of the action on the data]
+Constraints: [Any constraints or considerations to keep in mind]
+
+...
+```
+
+#############
+# START REORGANIZING #"
+
+
+29. PLANNER - REORGANIZE IN JSON
+--------------------------------
+"# TASK #
+Please extract essential information from your answer and reorganize into a specified JSON format. 
+You need to organize the information in a clear and concise manner, ensuring that the content is logically structured and easy to understand. 
+You must ensure that the essential information is complete and accurate.
+
+#############
+# RESPONSE: JSON FORMAT #
+Here is the JSON format you should follow:
+```json
+{
+    "final_answer": list=[
+        {
+            "task": str="The specific task to be performed",
+            "tools, involved features and correct parameters": list=["The tools, involved features and correct parameters to be used"],
+            "expected output or impact on data": list=["The expected output of the action or the impact of the action on the data"],
+            "constraints": list=["Any constraints or considerations to keep in mind"]
+        }
+    ]
+}
+```
+
+#############
+# START REORGANIZING #"
+
+
+30. READER - TASK
+-----------------
+"Please conduct a comprehensive analysis of the competition, focusing on the following aspects:
+1. Competition Overview: Understand the background and context of the topic.
+2. Files: Analyze each provided file, detailing its purpose and how it should be used in the competition.
+3. Problem Definition: Clarify the problem's definition and requirements.
+4. Data Information: Gather detailed information about the data, including its structure and contents.
+    4.1 Data type:
+        4.1.1. ID type: features that are unique identifiers for each data point, which will NOT be used in the model training.
+        4.1.2. Numerical type: features that are numerical values.
+        4.1.3. Categorical type: features that are categorical values.
+        4.1.4 Datetime type: features that are datetime values.
+    4.2 Detailed data description
+5. Target Variable: Identify the target variable that needs to be predicted or optimized, which is provided in the training set but not in the test set.
+6. Evaluation Metrics: Determine the evaluation metrics that will be used to assess the submissions.
+7. Submission Format: Understand the required format for the final submission.
+8. Other Key Aspects: Highlight any other important aspects that could influence the approach to the competition.
+Ensure that the analysis is thorough, with a strong emphasis on :
+1. Understanding the purpose and usage of each file provided.
+2. Figuring out the target variable and evaluation metrics.
+3. Classification of the features."
+
+
+31. READER - MAIN PROMPT
+------------------------
+"# CONTEXT #
+{phases_in_context}
+Currently, I am at phase: Background Understand.
+
+#############
+# TASK #
+{task} 
+
+#############
+# RESPONSE #
+Let's work this out in a step by step way.
+
+#############
+# START ANALYSIS #
+If you understand, please request the overview of this data science competition, and data preview from me."
+
+
+32. READER - ROUND 2
+--------------------
+"# TASK #
+Please extract essential information from your answer and reorganize into a specified MARKDOWN format. 
+You need to organize the information in a clear and concise manner, ensuring that the content is logically structured and easy to understand. 
+You must ensure that the essential information is complete and accurate.
+
+#############
+# RESPONSE: MARKDOWN FORMAT #
+Here is the MARKDOWN format you should follow:
+```markdown
+# Competition Information
+## 1. Competition Overview
+[Brief description of the competition]
+
+## 2. Files
+[List and description of provided files]
+
+## 3. Problem Definition
+[Clear statement of the problem to be solved]
+
+## 4. Data Information
+### 4.1 Data type
+#### 4.1.1 ID type
+[List of ID features]
+#### 4.1.2 Numerical type
+[List of numerical features]
+#### 4.1.3 Categorical type
+[List of categorical features]
+#### 4.1.4 Datetime type
+[List of datetime features]
+
+### 4.2 Detailed data description
+[Detailed description of data]
+
+## 5. Target Variable
+[Description of the target variable]
+
+## 6. Evaluation Metrics
+[Explanation of evaluation criteria]
+
+## 7. Submission Format
+[Details on required submission format]
+
+## 8. Other Key Aspects
+[Additional important information]
+```
+
+#############
+# START REORGANIZING #"
+
+
+33. READER - WITH EXPERIENCE ROUND 0
+------------------------------------
+"# CONTEXT #
+{phases_in_context}
+Currently, I am at phase: Background Understand.
+
+#############
+# TASK #
+{task} In the past, you have attempted this task multiple times. However, due to errors in your answers or insufficient quality, you have not succeeded. I will provide you with your previous attempts' experiences and a professional reviewer's suggestions for improvement (PREVIOUS EXPERIENCE WITH SUGGESTION). Based on these, please formulate a new, concise high-level plan to mitigate similar failures and successfully complete the task.
+You must follow these subtasks:
+1. Analyze the previous experience and suggestions. Think about what went wrong and how you can improve.
+2. Develop a new solution based on the previous experience and suggestions.
+
+#############
+# PREVIOUS EXPERIENCE WITH SUGGESTION #
+{experience_with_suggestion}
+
+#############
+# RESPONSE #
+Subtask 1: Analyze the previous experience and suggestions. Think about what went wrong and how you can improve.
+Let's work **Subtask 1** out in a step by step way.
+
+#############
+# START ANALYSIS #
+If you understand, please request the Overview of this data science competition from me."
+
+
+34. READER - WITH EXPERIENCE ROUND 2
+------------------------------------
+"# RESPONSE: MARKDOWN FORMAT #
+Subtask2: Develop a new solution based on the previous experience and suggestions.
+Here is the MARKDOWN format you should follow:
+```markdown
+# Competition Information
+## 1. Competition Overview
+[Brief description of the competition]
+
+## 2. Files
+[List and description of provided files]
+
+## 3. Problem Definition
+[Clear statement of the problem to be solved]
+
+## 4. Data Information
+### 4.1 Data type
+#### 4.1.1 ID type
+[List of ID features]
+#### 4.1.2 Numerical type
+[List of numerical features]
+#### 4.1.3 Categorical type
+[List of categorical features]
+#### 4.1.4 Datetime type
+[List of datetime features]
+
+### 4.2 Detailed data description
+[Detailed description of data]
+
+## 5. Target Variable
+[Description of the target variable]
+
+## 6. Evaluation Metrics
+[Explanation of evaluation criteria]
+
+## 7. Submission Format
+[Details on required submission format]
+
+## 8. Other Key Aspects
+[Additional important information]
+```"
+
+
+35. REVIEWER - ROUND 0
+---------------------
+"# CONTEXT #
+{phases_in_context}
+Each phase involves collaboration between multiple agents. You are currently evaluating the performance of agents in Phase: {phase_name}.
+
+#############
+# TASK #
+Your task is to assess the performance of several agents in completing Phase: {phase_name}. 
+I will provide descriptions of each agent, the tasks they performed, and the outcomes of those tasks. 
+Please assign a score from 1 to 5 for each agent, with 1 indicating very poor performance and 5 indicating excellent performance. 
+Additionally, provide specific suggestions for improving each agent's performance, if applicable. 
+If an agent's performance is satisfactory, no suggestions are necessary.
+
+#############
+# RESPONSE: JSON FORMAT #
+Let's work this out in a step by step way.
+
+#############
+# START EVALUATION #
+If you are ready, please request from me the role, description, input, task and execution result of the agent to be evaluated."
+
+
+36. REVIEWER - ROUND 1 EACH AGENT
+---------------------------------
+"#############
+# AGENT {role} TO BE EVALUATED #
+<DESCRIPTION>
+{description}
+</DESCRIPTION>
+<TASK>
+{task}
+</TASK>
+<INPUT>
+{input}
+</INPUT>
+<EXECUTION RESULT>
+{result}
+</EXECUTION RESULT>"
+
+
+37. REVIEWER - ROUND 2
+---------------------
+"# TASK #
+Please extract essential information from your last answer and reorganize into a specified JSON format. You need to organize the information in a clear and concise manner, ensuring that the content is logically structured and easy to understand. You must ensure that the essential information is complete and accurate.
+
+#############
+# RESPONSE: JSON FORMAT #
+Here is the JSON format you should follow:
+```json
+{
+    "final_answer": {
+	    "final_suggestion": {
+            str="agent name": str="Specific suggestions for improving the agent's performance"
+        },
+        "final_score": {
+            str="agent name": int="The final score you assign to the evaluated agent, only one score in range 1-5"
+        }
+    }
+}
+```
+Here is an example you can refer to:
+```json
+{
+    "final_suggestion": {
+        "agent developer": "1. Proactive Error Handling: Implement proactive checks for missing values before encoding to prevent issues from arising. 2. Documentation: Add more comments explaining the rationale behind specific choices (e.g., why mode imputation was chosen for ordinal features) to enhance understanding for future collaborators.",
+        "agent planner": "1. Task Limitation: Consider combining related tasks or prioritizing the most impactful ones to streamline the process. 2. Resource and Time Constraints: Include a brief mention of resource and time constraints to ensure feasibility within the given context."
+    },
+    "final_score": {
+        "agent developer": 4,
+        "agent planner": 4
+    }
+}
+```
+
+#############
+# START REORGANIZING #"
+
+
+38. SUMMARIZER - IMAGE CHOOSE
+-----------------------------
+"# CONTEXT #
+{phases_in_context}
+
+#############
+# TASK #
+Currently, you are in phase: {phase_name}.
+According to the current phase, you need to choose {num} images from the following images, they should be most relevant to the current phase, and useful for the next phase.
+
+#############
+# IMAGES #
+{images}
+
+#############
+# RESPONSE #
+Please give me the image names that you choose. You should follow the format:
+```json
+{
+    "images": list=[
+        "[image name 1]",
+        "[image name 2]",
+        "[image name 3]",
+        ...
+    ]
+}
+```
+
+#############
+# START CHOOSING IMAGES #
+Let's work this out in a step by step way."
+
+
+39. SUMMARIZER - DESIGN QUESTIONS
+---------------------------------
+"# CONTEXT #
+{phases_in_context}
+Currently, I am at phase: {phase_name}.
+
+#############
+# TASK #
+Your task is to design a series of questions that will be used to summarize the findings at the current phase and provide guidance for the next phase. 
+The current competition phase is: {phase_name}  
+The next phase is: {next_phase_name}
+
+I will provide the necessary information (INFO), the plan given by the planner for this phase (PLAN).
+
+Based on this information, design 6 key questions that are most worth focusing on and will be most helpful for the next phase. These questions should:
+1. Be targeted, specifically designed for the transition from {phase_name} to {next_phase_name}.
+2. Summarize the key findings of the current phase ({phase_name}).
+3. Provide guidance for the planner in formulating the execution plan in the next phase ({next_phase_name}).
+
+<sample questions>  
+(Assuming the phase is Preliminary EDA and the next phase is Data Cleaning)  
+1. What files did you process? Which files were generated? Answer with detailed file path. (This is a FIXED question for each phase.)
+2. Which features were involved in this phase? What changes did they undergo? If any feature types were modified, answer which features are modified and how they are modified. If any features were deleted or created, answer which features are deleted or created and provide detailed explanations. (This is a FIXED question for each phase.)
+3. Which features have missing values, and what is the proportion of missing values?  
+4. Are there any obvious outliers in the data? If so, which features do they mainly affect?  
+5. What interesting findings did you have in this phase? What do you think should be done in the next phase to better complete this competition?  
+...
+</sample questions>
+
+Please ensure that your questions have both breadth and depth, capable of comprehensively summarizing the work of the current phase and providing valuable insights for the upcoming {next_phase_name}. List the questions you design and briefly explain the purpose or importance of each question.
+
+#############
+# RESPONSE: MARKDOWN FORMAT #
+NOTE that you only need design questions, do not answer the questions yourself.
+Let's work this out in a step by step way.
+
+#############
+# START DESIGN QUESTIONS #
+If you are ready, please request from me the INFO, PLAN."
+
+
+40. SUMMARIZER - REORGANIZE QUESTIONS
+-------------------------------------
+"# TASK #
+Please reorganize the questions that you have designed in the previous reply.
+
+#############
+# RESPONSE: MARKDOWN FORMAT #
+```markdown
+## QUESTIONS
+### Question 1
+What files did you process? Which files were generated? Answer with detailed file path.
+
+### Question 2
+Which features were involved in this phase? What changes did they undergo? If any feature types were modified, answer which features are modified and how they are modified. If any features were deleted or created, answer which features are deleted or created and provide detailed explanations. (This is a FIXED question for each phase.)
+
+### Question 3
+[content of question 3]
+
+### Question 4
+[content of question 4]
+
+### Question 5
+[content of question 5]
+
+### Question 6
+[content of question 6]
+```
+
+#############
+# START REORGANIZE QUESTIONS #"
+
+
+41. SUMMARIZER - ANSWER QUESTIONS
+---------------------------------
+"# CONTEXT #
+{phases_in_context}
+Currently, I am at phase: {phase_name}.
+
+#############
+# TASK #
+Please answer a series of questions that will help summarize the current phase.
+Your answer should be concise and detailed, for example, if the question is about how to clean data, your answer should be specific to each feature.
+I will provide the necessary information (INFO), the plan given by the planner for this phase (PLAN), the code written by the developer in this phase and the output of the code execution (CODE AND OUTPUT), insight from images you generated (INSIGHT FROM VISUALIZATION), as well as the reviewer's evaluation of the planner's and developer's task completion for this phase (REVIEW).
+When answering each question, you can first consider which information you need to use, and then answer the question based on this information.
+
+#############
+# QUESTIONS #
+{questions}
+
+#############
+# RESPONSE: MARKDOWN FORMAT #
+Let's work this out in a step by step way.
+
+#############
+# START ANSWER QUESTIONS #
+If you are ready, please request from me the INFO, PLAN, CODE AND OUTPUT, INSIGHT FROM VISUALIZATION, REVIEW."
+
+
+42. SUMMARIZER - INFORMATION FOR ANSWER
+---------------------------------------
+"# INFO #
+{background_info}
+
+{state_info}
+
+#############
+# PLAN #
+{plan}
+
+#############
+# CODE AND OUTPUT #
+## CODE ##
+{code}
+
+## OUTPUT ##
+{output}
+
+#############
+# INSIGHT FROM VISUALIZATION #
+{insight_from_visualization}
+
+#############
+# REVIEW #
+{review}"
+
+
+43. SUMMARIZER - REORGANIZE ANSWERS
+-----------------------------------
+"# TASK #
+Please reorganize the answers that you have given in the previous step, and synthesize them into a report.
+
+#############
+# RESPONSE: MARKDOWN FORMAT #
+```markdown
+# REPORT
+## QUESTIONS AND ANSWERS  
+### Question 1
+What files did you process? Which files were generated? Answer with detailed file path.
+### Answer 1
+[answer to question 1]
+
+### Question 2
+Which features were involved in this phase? What changes did they undergo? If any feature types were modified, answer which features are modified and how they are modified. If any features were deleted or created, answer which features are deleted or created and provide detailed explanations. (This is a FIXED question for each phase.)
+### Answer 2
+[answer to question 2]
+
+### Question 3
+[repeat question 3]
+### Answer 3
+[answer to question 3]
+
+### Question 4
+[repeat question 4]
+### Answer 4
+[answer to question 4]
+
+### Question 5
+[repeat question 5]
+### Answer 5
+[answer to question 5]
+
+### Question 6
+[repeat question 6]
+### Answer 6
+[answer to question 6]
+</Markdown>
+
+#############
+# START REORGANIZE QUESTIONS #"
+
+
+44. SUMMARIZER - RESEARCH REPORT
+--------------------------------
+"# TASK #
+Synthesize the previous phase reports into a comprehensive research report for the entire competition.
+
+#############
+# OBJECTIVE #
+Create a well-structured, coherent research report that:
+1. Summarizes the key findings and actions from each phase
+2. Shows the progression of the analysis throughout the competition
+3. Highlights important insights and decisions made at each phase
+4. Provides detailed explanations for the reasoning behind each significant action taken
+
+#############
+# INPUT #
+You will receive reports from each phase of the competition in a question-answer format. Request these reports before starting.
+
+#############
+# OUTPUT FORMAT #
+Provide your response in markdown format, following this structure:
+
+```markdown
+# COMPETITION RESEARCH REPORT
+
+## 1. PRELIMINARY EDA
+[Summarize key initial data exploration findings]
+[Explain any initial actions taken and the rationale behind them]
+
+## 2. DATA CLEANING
+[Outline main data cleaning steps]
+[For each significant cleaning action (e.g., feature deletion), provide a detailed explanation of why it was necessary]
+
+## 3. DEEP EDA
+[Present in-depth analysis findings and their implications]
+[Explain how these findings influenced subsequent decisions]
+
+## 4. FEATURE ENGINEERING
+[Describe feature creation/selection process]
+[For each new feature or significant modification, explain the reasoning and expected impact]
+
+## 5. MODEL BUILDING, VALIDATION, AND PREDICTION
+[Detail model development, evaluation, and final predictions]
+[Explain the rationale behind model choices and parameter tuning]
+
+## 6. CONCLUSION
+[Summarize overall approach, key insights, and results]
+[Reflect on the most impactful decisions made throughout the process]
+```
+
+#############
+# GUIDELINES #
+- Maintain a logical flow between sections
+- Highlight critical decisions and provide detailed explanations for their reasoning
+- Include relevant statistics and visualizations mentioned in the phase reports
+- Keep the language clear and concise, suitable for a technical audience
+- For each significant action (especially in data cleaning and feature engineering), provide a thorough explanation of why it was taken and its expected impact
+
+#############
+# START WRITING RESEARCH REPORT #
+To begin, please request the reports from each phase of the competition."
+
+
+45. UNIT TEST - SUBMISSION VALIDITY
+-----------------------------------
+"# CONTEXT #
+You are a data scientist, you are given two csv files: submission.csv and sample_submission.csv.
+The first 20 lines of sample_submission.csv is as follows:
+{sample_head}
+The first 20 lines of submission.csv is as follows:
+{submission_head}
+
+#############
+# TASK #
+You need to check if the submission.csv is valid.
+Here are some rules you can refer to:
+1. For Id-type columns, the values in submission.csv should be the same as the values in sample_submission.csv.
+    - Normally, The first column in the csv files is the Id-type column.
+2. For target variable column:
+    - If target variable is numerical, the values in submission.csv should be within the range of the values in sample_submission.csv.
+        - The range is [mean/5, mean*5], mean is the average value of the target variable in sample_submission.csv.
+        - You should calculate the mean value in two files, submission.csv and sample_submission.csv, and then check if the target variable values in submission.csv are within the range.
+    - Normally, the target variable column is the last column in the csv files.
+
+#############
+# RESPONSE #
+Let's work this out in a step by step way. Finally, you should give me the result of this test.
+You should follow the format:
+```json
+{
+    "result": "Valid" or "Invalid",
+    "reason": "reason for the result"
+}
+```
+Here are two examples of the response:
+```json
+{  
+    "result": "Invalid",  
+    "reason": "1. SalePrice (Target variable) values in submission.csv are outside the expected range, seems like log transformation is applied to SalePrice in previous phases, you should reverse the transformation before making submission. \n2. Ids must match."  
+}
+```
+```json
+{  
+    "result": "Valid",  
+    "reason": "All Ids match and SalePrice values are within the expected range."  
+}
+```"
+
+
+END OF EXTRACTED SYSTEM PROMPTS
+================================
