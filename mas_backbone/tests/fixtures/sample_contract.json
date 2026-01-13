@@ -1,0 +1,34 @@
+{
+  "contract_id": "plan-input-v1",
+  "contract_version": "1.0.0",
+  "description": "Input contract for executor agent - validates plan structure",
+  "schema": {
+    "type": "object",
+    "required": ["plan"],
+    "properties": {
+      "plan": {
+        "type": "object",
+        "required": ["steps"],
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["action", "tool"],
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "description": "The action to perform"
+                },
+                "tool": {
+                  "type": "string",
+                  "description": "The tool to use for this action"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
