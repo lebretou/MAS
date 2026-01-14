@@ -15,6 +15,7 @@ from backbone.models.trace_event import (
     EventType,
     TraceEvent,
 )
+from backbone.tracer import Tracer
 
 __all__ = [
     "PromptComponent",
@@ -26,4 +27,5 @@ __all__ = [
     "ContractRef",
     "EventType",
     "TraceEvent",
+    "Tracer",
 ]

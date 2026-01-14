@@ -1,4 +1,4 @@
-"""Telemetry helpers for LangSmith and MAS backbone (no Langfuse)."""
+"""Telemetry helpers for LangSmith and MAS backbone."""
 
 import os
 import sys
@@ -10,17 +10,14 @@ backbone_path = Path(__file__).parent.parent.parent.parent / "backbone"
 if str(backbone_path.parent) not in sys.path:
     sys.path.insert(0, str(backbone_path.parent))
 
-from backbone.adapters import MASCallbackHandler, FileSink, EventEmitter
-from backbone.utils import generate_execution_id, generate_trace_id
+from backbone import Tracer
+from backbone.adapters import EventEmitter
 
 # load environment variables
 load_dotenv()
 
-# module-level storage for current execution context
-_current_emitter: EventEmitter | None = None
-_current_execution_id: str | None = None
-_current_trace_id: str | None = None
-_current_sink: FileSink | None = None
+# module-level storage for current tracer
+_current_tracer: Tracer | None = None
 
 
 def get_langsmith_config():
@@ -34,43 +31,31 @@ def get_langsmith_config():
 
 def get_mas_backbone_handler():
     """create MAS backbone handler and emitter for semantic tracing."""
-    global _current_emitter, _current_execution_id, _current_trace_id, _current_sink
+    global _current_tracer
     
-    _current_execution_id = generate_execution_id()
-    _current_trace_id = generate_trace_id()
-    
-    output_dir = Path(__file__).parent.parent / "outputs" / "traces" / _current_trace_id
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    _current_sink = FileSink(output_dir / "trace_events.jsonl")
-    
-    callback = MASCallbackHandler(
-        execution_id=_current_execution_id,
-        trace_id=_current_trace_id,
-        event_sink=_current_sink,
-        default_agent_id="workflow",
-    )
-    
-    _current_emitter = EventEmitter(_current_execution_id, _current_trace_id, _current_sink)
+    output_dir = Path(__file__).parent.parent / "outputs" / "traces"
+    _current_tracer = Tracer(output_dir=output_dir)
     
     print(f"✓ MAS Backbone tracing enabled")
-    print(f"  trace id: {_current_trace_id}")
-    print(f"  output: {output_dir}")
+    print(f"  trace id: {_current_tracer.trace_id}")
+    print(f"  output: {_current_tracer.output_path}")
     
-    return callback, _current_emitter
+    return _current_tracer.callback, _current_tracer.emitter
 
 
 def get_emitter() -> EventEmitter | None:
     """get the current EventEmitter for manual events."""
-    return _current_emitter
+    return _current_tracer.emitter if _current_tracer else None
 
 
 def get_trace_info() -> dict:
     """get current execution and trace ids."""
-    return {
-        "execution_id": _current_execution_id,
-        "trace_id": _current_trace_id,
-    }
+    if _current_tracer:
+        return {
+            "execution_id": _current_tracer.execution_id,
+            "trace_id": _current_tracer.trace_id,
+        }
+    return {"execution_id": None, "trace_id": None}
 
 
 def get_callbacks(session_id: str = "default"):

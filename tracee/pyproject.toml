@@ -1,9 +1,35 @@
 [project]
 name = "tracee"
 version = "0.1.0"
-description = "Add your description here"
+description = "MAS tracing and visualization toolkit"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.4.1",
+    "pydantic>=2.0",
+    "langchain-core>=0.3",
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "httpx>=0.28",  # for testing FastAPI
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["backbone/tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+[tool.hatch.build]
+packages = ["backbone", "server"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
