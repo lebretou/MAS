@@ -1,11 +1,12 @@
 """
 Test script for the multi-agent data analysis system.
-This script tests the workflow without the web interface.
+This script tests the workflow directly from the terminal.
 """
 
 import pandas as pd
 import numpy as np
 from backend.graph.workflow import run_analysis_workflow
+from backend.telemetry.config import setup_telemetry
 
 
 def create_test_dataset():
@@ -94,6 +95,10 @@ def main():
     print("\n" + "=" * 60)
     print("DATA ANALYSIS MULTI-AGENT SYSTEM - TEST SUITE")
     print("=" * 60)
+    
+    # Initialize telemetry (LangSmith + MAS backbone)
+    print("\nInitializing telemetry...")
+    setup_telemetry()
     
     try:
         # Run tests

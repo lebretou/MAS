@@ -39,7 +39,7 @@ def get_mas_backbone_handler():
     _current_execution_id = generate_execution_id()
     _current_trace_id = generate_trace_id()
     
-    output_dir = Path(__file__).parent.parent.parent / "outputs" / "traces" / _current_trace_id
+    output_dir = Path(__file__).parent.parent / "outputs" / "traces" / _current_trace_id
     output_dir.mkdir(parents=True, exist_ok=True)
     
     _current_sink = FileSink(output_dir / "trace_events.jsonl")
