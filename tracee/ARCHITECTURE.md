@@ -1,6 +1,6 @@
 # Data Analysis Multi-Agent System — Architecture Guide
 
-This document provides an explanation of the MAS implementation in this folder, including a brief overview of LangChain and LangGraph, how to set up agents, explanations of each file, and how the callback/telemetry system works.
+This document provides an explanation of the MAS implementation in this folder, including a brief overview of LangChain and LangGraph, how to set up agents, explanations of each file, and how the callback/telemetry system works. It also covers the **MAS Backbone** — the underlying tracing infrastructure used across all agent systems.
 
 ---
 
@@ -24,6 +24,17 @@ This document provides an explanation of the MAS implementation in this folder, 
 7. [How the Callback System Works](#how-the-callback-system-works)
 8. [Execution Flow](#execution-flow)
 9. [Running the System](#running-the-system)
+10. [MAS Backbone](#mas-backbone)
+    - [Backbone Overview](#backbone-overview)
+    - [Backbone Directory Structure](#backbone-directory-structure)
+    - [Core Concepts](#core-concepts)
+    - [Data Models](#data-models)
+    - [Event API and Sinks](#event-api-and-sinks)
+    - [LangChain Callback Handler](#langchain-callback-handler)
+    - [Trace Analysis](#trace-analysis)
+    - [Utility Functions](#utility-functions)
+    - [Design Patterns](#design-patterns)
+    - [Integration Examples](#integration-examples)
 
 ---
 
@@ -1009,16 +1020,818 @@ python test_system.py
 
 ---
 
+## MAS Backbone
+
+The **MAS Backbone** is the underlying tracing infrastructure that powers the observability in this multi-agent system. It provides data models, event emission APIs, and analysis utilities that are framework-agnostic and can be used with any LLM orchestration tool.
+
+### Backbone Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           FUTURE UI LAYER                                   │
+│                   (Playground, Trace Viewer, Evaluations)                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         MAS BACKBONE                                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │   Models    │  │  Adapters   │  │  Analysis   │  │       Utils         │ │
+│  │ (Pydantic)  │  │ (Event API) │  │  (Summary)  │  │   (ID generation)   │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          EXTERNAL SYSTEMS                                   │
+│              LangChain / LangGraph Agents, Storage (JSONL/SQLite)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+The backbone is a **headless data layer** — no UI, no server. It defines:
+- **What data structures exist** (models)
+- **How events get captured** (adapters)
+- **How to reconstruct what happened** (analysis)
+
+---
+
+### Backbone Directory Structure
+
+```
+backbone/
+├── __init__.py              # Package exports (public API)
+├── pyproject.toml           # Python package configuration (uv/pip compatible)
+├── models/                  # Pydantic data models
+│   ├── __init__.py
+│   ├── prompt_artifact.py   # Authoring-side: PromptVersion, PromptComponent
+│   ├── execution_record.py  # Execution-side: ExecutionRecord, ModelConfig
+│   └── trace_event.py       # Trace layer: TraceEvent, EventType enum
+├── adapters/                # Integration points
+│   ├── __init__.py
+│   ├── event_api.py         # Manual event emission (EventEmitter, EventSink)
+│   └── langchain_callback.py# Auto-capture from LangChain/LangGraph
+├── analysis/                # Post-hoc analysis utilities
+│   ├── __init__.py
+│   └── trace_summary.py     # Reconstruct agent graph from events
+├── utils/                   # Shared utilities
+│   ├── __init__.py
+│   └── identifiers.py       # UUID generation, timestamps
+├── scripts/                 # Development/testing scripts
+│   ├── __init__.py
+│   └── generate_dummy_run.py# Creates example scenarios with events
+└── tests/                   # pytest test suite
+    ├── __init__.py
+    ├── test_models.py       # Serialization round-trip tests
+    ├── test_invariants.py   # Payload validation tests
+    ├── test_langchain.py    # Callback handler tests
+    ├── test_integration.py  # End-to-end workflow tests
+    └── fixtures/
+        └── sample_contract.json
+```
+
+---
+
+### Core Concepts
+
+#### 1. Pydantic Models as the Schema Layer
+
+**Why Pydantic?**
+- **Validation at construction time**: Invalid data fails immediately, not later in a pipeline
+- **Serialization for free**: `.model_dump_json()` and `.model_validate_json()` handle JSON round-trips
+- **Type hints are documentation**: The code is self-documenting for IDE autocompletion
+
+Every model has `model_config = {"extra": "forbid"}` — this means if you pass an unexpected field, it errors. This catches typos and schema drift early.
+
+#### 2. Protocol-Based Abstraction (EventSink)
+
+```python
+class EventSink(Protocol):
+    def append(self, event: TraceEvent) -> None: ...
+```
+
+This is a **structural subtyping** pattern (duck typing with type hints). Any class with an `append(TraceEvent)` method satisfies this protocol. You don't need inheritance — just implement the method.
+
+**Why this matters**:
+- `ListSink` stores events in memory (for tests)
+- `FileSink` appends to a JSONL file (for persistence)
+
+#### 3. Callback Handler Pattern (LangChain Integration)
+
+LangChain uses the **Observer pattern** via callbacks. When an LLM runs, chain executes, or tool is called, LangChain invokes registered callbacks.
+
+`MASCallbackHandler` subscribes to these callbacks and translates them into `TraceEvent` objects. The key insight: **callbacks capture low-level execution events, NOT semantic agent communication**. That's why `emit_message()` is a manual API call.
+
+#### 4. JSONL as Append-Only Log
+
+Events are stored in JSONL (JSON Lines) format:
+```
+{"event_id": "...", "event_type": "agent_input", ...}
+{"event_id": "...", "event_type": "tool_call", ...}
+{"event_id": "...", "event_type": "agent_message", ...}
+```
+
+---
+
+### Data Models
+
+#### Prompt Artifact: `backbone/models/prompt_artifact.py`
+
+**Purpose**: Defines the **authoring-side** data structures — what gets created in a Playground before execution.
+
+##### PromptComponentType Enum
+
+```python
+class PromptComponentType(str, Enum):
+    """Types of prompt sections that can be toggled on/off."""
+    role = "role"                    # "You are a..."
+    goal = "goal"                    # "Your objective is..."
+    constraints = "constraints"      # "Do not..."
+    io_rules = "io_rules"            # "Output format must be..."
+    examples = "examples"            # Few-shot examples
+    safety = "safety"                # Safety guardrails
+    tool_instructions = "tool_instructions"  # How to use tools
+```
+
+##### PromptComponent Model
+
+```python
+class PromptComponent(BaseModel):
+    type: PromptComponentType
+    content: str
+    enabled: bool = True  # Toggle components without deleting them
+```
+
+##### PromptVersion Model
+
+```python
+class PromptVersion(BaseModel):
+    prompt_id: str          # e.g., "prompt-planner-001"
+    version_id: str         # e.g., "v1.0.0" (immutable once created)
+    name: str               # Human-readable name
+    components: list[PromptComponent]
+    variables: dict[str, str] | None  # Template variables like {{max_steps}}
+    created_at: str         # ISO8601 timestamp
+```
+
+**Key invariant**: `PromptVersion` is **immutable** once created. Changes create new versions.
+
+---
+
+#### Execution Record: `backbone/models/execution_record.py`
+
+**Purpose**: Captures **what actually happened** during a single execution run.
+
+##### ModelConfig Model
+
+```python
+class ModelConfig(BaseModel):
+    """LLM configuration used for this run."""
+    provider: str       # "openai", "anthropic", etc.
+    model_name: str     # "gpt-4", "claude-3", etc.
+    temperature: float
+    max_tokens: int
+    seed: int | None    # For reproducibility
+```
+
+##### Reference Models
+
+```python
+class PromptArtifactRef(BaseModel):
+    """Reference to a versioned prompt artifact."""
+    prompt_id: str
+    version_id: str
+    agent_id: str | None = None
+
+class ContractRef(BaseModel):
+    """Reference to a versioned contract."""
+    contract_id: str
+    contract_version: str
+    agent_id: str | None = None
+```
+
+##### ExecutionRecord Model
+
+```python
+class ExecutionRecord(BaseModel):
+    execution_id: str   # Unique run identifier
+    trace_id: str       # Links to TraceEvent stream
+    origin: Literal["playground", "prod", "sdk", "batch_eval"]
+    created_at: str
+    
+    llm_config: ModelConfig
+    input_payload: dict              # What was passed in
+    resolved_prompt_text: str        # REQUIRED: The actual text sent to LLM
+    
+    prompt_refs: list[PromptArtifactRef] | None  # Links to PromptVersion
+    contract_refs: list[ContractRef] | None      # Links to validation schemas
+    
+    # Environment context
+    git_commit: str | None
+    app_version: str | None
+    env: Literal["dev", "staging", "prod"] | None
+    tags: list[str] | None
+```
+
+**Critical invariant** (enforced by `@model_validator`):
+```python
+if not self.resolved_prompt_text.strip():
+    raise ValueError("resolved_prompt_text must not be empty")
+```
+
+This ensures every execution has a record of the exact prompt sent to the model — not a reference, the actual text.
+
+---
+
+#### Trace Event: `backbone/models/trace_event.py`
+
+**Purpose**: Defines the **semantic event vocabulary** — what types of things can happen during execution.
+
+##### EventType Enum
+
+```python
+class EventType(str, Enum):
+    agent_input = "agent_input"           # Agent received input
+    agent_output = "agent_output"         # Agent produced output
+    agent_message = "agent_message"       # Agent-to-agent communication
+    agent_decision = "agent_decision"     # Agent made a routing decision
+    tool_call = "tool_call"               # Tool was invoked
+    contract_validation = "contract_validation"  # Schema was validated
+    error = "error"                        # Something went wrong
+```
+
+##### TraceEvent Model
+
+```python
+class TraceEvent(BaseModel):
+    event_id: str       # UUID for deduplication
+    trace_id: str       # Groups events in one trace
+    execution_id: str   # Links to ExecutionRecord
+    timestamp: str      # ISO8601
+    sequence: int | None  # Monotonic ordering within trace
+    
+    event_type: EventType
+    agent_id: str       # Which agent this event belongs to
+    
+    span_id: str | None         # For correlating start/end pairs
+    parent_span_id: str | None  # For nesting (e.g., tool within chain)
+    
+    refs: dict[str, Any]  # Namespaced metadata: refs["langchain"], refs["langgraph"]
+    payload: dict[str, Any]  # Event-specific data
+```
+
+##### Payload Validation Rules
+
+Different event types have different required fields (enforced by `@model_validator`):
+
+| Event Type | Required Payload Fields |
+|------------|------------------------|
+| `agent_message` | `to_agent_id`, (`message_summary` OR `payload_ref`) |
+| `contract_validation` | `contract_id`, `contract_version`, `validation_result.is_valid`, `validation_result.errors` |
+| `tool_call` | `tool_name`, `phase` (must be "start" or "end") |
+| `error` | `error_type` (one of: schema, tool, model, infra, logic), `message` |
+
+##### Valid Error Types
+
+```python
+ERROR_TYPES = {"schema", "tool", "model", "infra", "logic"}
+```
+
+---
+
+### Event API and Sinks
+
+Located in `backbone/adapters/event_api.py`, this provides the **manual event emission API** for events that can't be auto-captured from callbacks.
+
+#### EventSink Protocol
+
+```python
+class EventSink(Protocol):
+    """Protocol for receiving trace events."""
+    def append(self, event: TraceEvent) -> None:
+        """Append an event to the sink."""
+        ...
+```
+
+#### ListSink Implementation
+
+```python
+class ListSink:
+    """Stores events in a list (for tests)."""
+    def __init__(self) -> None:
+        self.events: list[TraceEvent] = []
+
+    def append(self, event: TraceEvent) -> None:
+        self.events.append(event)
+
+    def clear(self) -> None:
+        self.events.clear()
+```
+
+#### FileSink Implementation
+
+```python
+class FileSink:
+    """Writes events to a JSONL file (for production)."""
+    def __init__(self, path: Path | str) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def append(self, event: TraceEvent) -> None:
+        with open(self.path, "a") as f:
+            f.write(event.model_dump_json() + "\n")
+```
+
+#### EventEmitter Class
+
+The main API for emitting trace events:
+
+```python
+class EventEmitter:
+    """Manual event emission API - shares sink with callback handler."""
+
+    def __init__(
+        self,
+        execution_id: str,
+        trace_id: str,
+        event_sink: EventSink,
+    ) -> None:
+        self.execution_id = execution_id
+        self.trace_id = trace_id
+        self.event_sink = event_sink
+        self._sequence = 0  # Internal counter for ordering
+```
+
+##### EventEmitter Methods
+
+| Method | Creates Event Type | Key Parameters |
+|--------|-------------------|----------------|
+| `emit()` | Any | `event_type`, `agent_id`, `payload` |
+| `emit_input()` | `agent_input` | `agent_id`, `input_data` |
+| `emit_output()` | `agent_output` | `agent_id`, `output_data` |
+| `emit_message()` | `agent_message` | `from_agent`, `to_agent`, `summary` |
+| `emit_decision()` | `agent_decision` | `agent_id`, `decision`, `reasoning` |
+| `emit_tool_call()` | `tool_call` | `agent_id`, `tool_name`, `phase` |
+| `emit_validation()` | `contract_validation` | `agent_id`, `contract_id`, `is_valid`, `errors` |
+| `emit_error()` | `error` | `agent_id`, `error_type`, `message` |
+
+##### emit() Method Details
+
+```python
+def emit(
+    self,
+    event_type: EventType,
+    agent_id: str,
+    refs: dict | None = None,
+    payload: dict | None = None,
+    span_id: str | None = None,
+    parent_span_id: str | None = None,
+) -> TraceEvent:
+    """Emit a trace event with the given parameters."""
+    event = TraceEvent(
+        event_id=generate_event_id(),
+        trace_id=self.trace_id,
+        execution_id=self.execution_id,
+        timestamp=utc_timestamp(),
+        sequence=self._next_sequence(),
+        event_type=event_type,
+        agent_id=agent_id,
+        span_id=span_id or generate_span_id(),
+        parent_span_id=parent_span_id,
+        refs=refs or {},
+        payload=payload or {},
+    )
+    self.event_sink.append(event)
+    return event
+```
+
+**Why return the event?** — To allow correlating start/end of a tool call:
+```python
+# Correlate start/end of a tool call
+start_event = emitter.emit_tool_call("agent", "search", "start")
+# ... later ...
+emitter.emit_tool_call("agent", "search", "end", span_id=start_event.span_id)
+```
+
+---
+
+### LangChain Callback Handler
+
+Located in `backbone/adapters/langchain_callback.py`, this provides **automatic** event capture from LangChain/LangGraph execution.
+
+#### MASCallbackHandler Class
+
+```python
+class MASCallbackHandler(BaseCallbackHandler):
+    """Emits low-level execution events from LangChain/LangGraph.
+
+    Does NOT infer agent-to-agent messages (use manual API for that).
+
+    Callback Mapping:
+    - on_chain_start  → agent_input (only if chain = agent node)
+    - on_chain_end    → agent_output (only if chain = agent node)
+    - on_llm_start    → tool_call (phase=start, tool_name="llm.generate")
+    - on_llm_end      → tool_call (phase=end, tool_name="llm.generate")
+    - on_tool_start   → tool_call (phase=start)
+    - on_tool_end     → tool_call (phase=end)
+    - on_chain_error  → error (classified)
+    """
+```
+
+#### Internal State
+
+The callback handler maintains internal state for correlating events:
+
+```python
+self._run_span_map: dict[str, str] = {}   # run_id → span_id
+self._run_agent_map: dict[str, str] = {}  # run_id → agent_id
+```
+
+**Why track run_id → span_id?**
+LangChain passes a `run_id` for each execution unit. To correlate start/end events (e.g., `on_llm_start` and `on_llm_end`), we need to use the **same span_id**. The map ensures this.
+
+**Why track run_id → agent_id?**
+Nested callbacks (e.g., `on_llm_end`) don't receive metadata. By storing the agent_id from `on_chain_start`, child callbacks can look it up via `parent_run_id`.
+
+#### Key Callback Methods
+
+##### on_chain_start
+
+```python
+def on_chain_start(
+    self,
+    serialized: dict[str, Any],
+    inputs: dict[str, Any],
+    *,
+    run_id: UUID,
+    parent_run_id: UUID | None = None,
+    tags: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> None:
+    """Handle chain start - emit agent_input if this is an agent node."""
+    # Store agent ID for this run if provided
+    if metadata and ("agent_id" in metadata or "agent" in metadata):
+        agent_id = metadata.get("agent_id", metadata.get("agent", self.default_agent_id))
+        self._run_agent_map[str(run_id)] = agent_id
+
+    agent_id = self._get_agent_id(run_id, metadata)
+    refs = self._make_refs(run_id, parent_run_id, metadata)
+    # ... emit agent_input event
+```
+
+##### on_llm_start / on_llm_end
+
+```python
+def on_llm_start(self, serialized, prompts, *, run_id, ...):
+    """Handle LLM start - emit tool_call with phase=start."""
+    self.emitter.emit_tool_call(
+        agent_id,
+        tool_name="llm.generate",
+        phase="start",
+        tool_input={"prompts": prompts[:1]},  # truncate for brevity
+        refs=refs,
+        span_id=span_id,
+        parent_span_id=parent_span,
+    )
+
+def on_llm_end(self, response, *, run_id, ...):
+    """Handle LLM end - emit tool_call with phase=end."""
+    output_text = response.generations[0][0].text[:200]  # truncated
+    self.emitter.emit_tool_call(
+        agent_id,
+        tool_name="llm.generate",
+        phase="end",
+        tool_output={"text": output_text},
+        span_id=span_id,  # Same span_id as start
+    )
+```
+
+#### Error Classification
+
+The `_classify_error()` function maps exceptions to error types:
+
+```python
+def _classify_error(error: BaseException) -> str:
+    """Classify an error into one of the valid error types."""
+    error_name = type(error).__name__.lower()
+
+    if any(x in error_name for x in ["openai", "anthropic", "llm", "api", "rate"]):
+        return "model"
+    if any(x in error_name for x in ["tool", "function"]):
+        return "tool"
+    if any(x in error_name for x in ["timeout", "connection", "network", "http"]):
+        return "infra"
+    if any(x in error_name for x in ["validation", "schema", "parse", "json", "type"]):
+        return "schema"
+    return "logic"  # default
+```
+
+#### Key Design Decision
+
+The callback handler **does NOT emit `agent_message`**. Why?
+
+LangChain callbacks see execution events (chain started, LLM called, tool ran) but don't understand the **semantic relationship** between agents. The decision to hand off work from planner to executor is a domain concept — only the developer knows when that happens.
+
+---
+
+### Trace Analysis
+
+Located in `backbone/analysis/trace_summary.py`, this provides **post-hoc analysis** — reconstructing what happened from a list of events.
+
+#### Data Classes
+
+```python
+@dataclass
+class AgentEdge:
+    """Represents communication between two agents."""
+    from_agent: str
+    to_agent: str
+    message_count: int
+
+@dataclass
+class FailedContract:
+    """Represents a failed contract validation."""
+    contract_id: str
+    contract_version: str
+    failure_count: int
+
+@dataclass
+class ToolUsage:
+    """Represents tool usage statistics."""
+    tool_name: str
+    call_count: int
+    avg_latency_ms: float | None = None
+```
+
+#### TraceSummary Class
+
+```python
+@dataclass
+class TraceSummary:
+    """Summary of a trace including agent communication and failures."""
+    execution_id: str
+    trace_id: str
+    agents: list[str]                    # All agents that participated
+    edges: list[AgentEdge]               # Who talked to whom
+    messages_by_edge: dict[tuple[str, str], int]  # Message counts
+    failures: list[dict]                 # All failures (errors + validation)
+    failed_contracts: list[FailedContract]  # Contracts that failed
+    tool_usage: list[ToolUsage]          # Tool statistics
+    event_count: int
+```
+
+#### trace_summary() Function
+
+```python
+def trace_summary(events: list[TraceEvent]) -> TraceSummary:
+    """Reconstruct agent graph and detect failures from trace events.
+
+    Args:
+        events: List of TraceEvent objects from a single trace.
+
+    Returns:
+        TraceSummary with agent communication graph and failure information.
+    """
+```
+
+**What it does**:
+1. **Collects agents**: Every unique `agent_id` seen in events
+2. **Builds edges**: From `agent_message` events, extracts `from_agent` (the `agent_id`) and `to_agent` (from `payload.to_agent_id`)
+3. **Detects failures**: Both `error` events and `contract_validation` where `is_valid=False`
+4. **Computes tool latency**: Matches `tool_call` start/end pairs by `span_id`, calculates time difference
+
+**Why this matters**: From a flat list of events, you can reconstruct:
+- The **communication graph** (who talked to whom)
+- The **failure locations** (which agent, which contract)
+- **Performance bottlenecks** (tool latencies)
+
+---
+
+### Utility Functions
+
+Located in `backbone/utils/identifiers.py`, these provide consistent ID generation across the codebase.
+
+```python
+def generate_execution_id() -> str:
+    """Generate a unique execution ID (UUID4)."""
+    return str(uuid.uuid4())
+
+def generate_trace_id() -> str:
+    """Generate a unique trace ID (UUID4)."""
+    return str(uuid.uuid4())
+
+def generate_event_id() -> str:
+    """Generate a unique event ID (UUID4)."""
+    return str(uuid.uuid4())
+
+def generate_span_id() -> str:
+    """Generate a span ID (16-char hex string for OpenTelemetry compatibility)."""
+    return uuid.uuid4().hex[:16]
+
+def utc_timestamp() -> str:
+    """Generate an ISO8601 UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat()
+```
+
+---
+
+### Design Patterns
+
+#### 1. Inversion of Control (Dependency Injection)
+
+`EventEmitter` doesn't know where events go — it just calls `event_sink.append()`. The caller provides the sink:
+
+```python
+# For tests
+sink = ListSink()
+emitter = EventEmitter(exec_id, trace_id, sink)
+
+# For production
+sink = FileSink("/path/to/trace.jsonl")
+emitter = EventEmitter(exec_id, trace_id, sink)
+```
+
+#### 2. Validation at the Boundary
+
+All data validation happens in Pydantic models. By the time an object exists, it's guaranteed valid. No defensive checks scattered through the codebase.
+
+#### 3. Event Sourcing Lite
+
+Events are the source of truth. The `TraceSummary` is a **derived view** computed from events. If you need a different view (e.g., timeline, agent-centric), write a new function that reads the same events.
+
+#### 4. Namespace Isolation (refs dict)
+
+Instead of flat fields like `langchain_run_id`, `langgraph_node`, etc., the `refs` dict uses namespaces:
+
+```python
+refs = {
+    "langchain": {"run_id": "...", "parent_run_id": "..."},
+    "langgraph": {"node": "planner", "state_keys": ["messages"]},
+    "prompt": {"prompt_id": "...", "version_id": "..."},
+}
+```
+
+**Why?** New integrations don't change the schema. Just add a new namespace.
+
+---
+
+### Integration Examples
+
+#### Creating a Prompt Version
+
+```python
+from backbone.models.prompt_artifact import (
+    PromptComponent,
+    PromptComponentType,
+    PromptVersion,
+)
+from backbone.utils.identifiers import utc_timestamp
+
+# User builds a prompt in the UI
+prompt_version = PromptVersion(
+    prompt_id="my-planner-prompt",
+    version_id="v1.0.0",
+    name="My Planner Agent",
+    components=[
+        PromptComponent(type=PromptComponentType.role, content="You are a planning agent."),
+        PromptComponent(type=PromptComponentType.goal, content="Create a step-by-step plan."),
+        PromptComponent(type=PromptComponentType.constraints, content="Max 5 steps.", enabled=True),
+        PromptComponent(type=PromptComponentType.examples, content="Example: ...", enabled=False),
+    ],
+    variables={"max_steps": "5"},
+    created_at=utc_timestamp(),
+)
+
+# Save to storage
+with open("prompts/my-planner-prompt-v1.json", "w") as f:
+    f.write(prompt_version.model_dump_json(indent=2))
+```
+
+#### Setting Up Event Capture for a Run
+
+```python
+from backbone.adapters.event_api import EventEmitter, FileSink
+from backbone.adapters.langchain_callback import MASCallbackHandler
+from backbone.utils.identifiers import generate_execution_id, generate_trace_id
+
+# Generate IDs
+execution_id = generate_execution_id()
+trace_id = generate_trace_id()
+
+# Create output directory
+output_dir = Path(f"outputs/traces/{trace_id}")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+# Set up event capture
+sink = FileSink(output_dir / "trace_events.jsonl")
+emitter = EventEmitter(execution_id, trace_id, sink)
+
+# Create callback handler (shares the same sink)
+callback = MASCallbackHandler(
+    execution_id=execution_id,
+    trace_id=trace_id,
+    event_sink=sink,
+    default_agent_id="planner",
+)
+```
+
+#### Running LangChain with Tracing
+
+```python
+from langchain_openai import ChatOpenAI
+
+# Resolve the prompt text (only enabled components)
+resolved_prompt = "\n\n".join(
+    c.content for c in prompt_version.components if c.enabled
+)
+
+# Run LangChain with callback
+llm = ChatOpenAI(model="gpt-4", temperature=0)
+response = llm.invoke(
+    resolved_prompt,
+    config={"callbacks": [callback], "metadata": {"agent_id": "planner"}},
+)
+
+# Emit semantic event manually (agent decided to hand off)
+emitter.emit_message(
+    from_agent="planner",
+    to_agent="executor",
+    summary=f"Sending plan with {len(response.content)} chars",
+)
+```
+
+#### Analyzing a Trace
+
+```python
+from backbone.analysis.trace_summary import trace_summary
+from backbone.models.trace_event import TraceEvent
+
+# Load events from JSONL
+events = []
+with open(output_dir / "trace_events.jsonl") as f:
+    for line in f:
+        events.append(TraceEvent.model_validate_json(line))
+
+# Generate summary
+summary = trace_summary(events)
+
+print(f"Agents: {summary.agents}")
+print(f"Edges: {[(e.from_agent, e.to_agent) for e in summary.edges]}")
+print(f"Failures: {summary.failures}")
+print(f"Tool usage: {[(t.tool_name, t.call_count) for t in summary.tool_usage]}")
+```
+
+#### Dummy Scenario Generation
+
+The `scripts/generate_dummy_run.py` script creates realistic test scenarios:
+
+**Scenario A: Failure Case**
+```
+planner receives input
+planner calls LLM
+planner makes decision
+planner outputs plan
+planner → executor (agent_message)
+executor receives plan
+executor validates contract → FAILS (missing 'tool' field)
+executor emits error
+```
+
+**Scenario B: Success Case**
+```
+Same as A, but plan includes 'tool' field
+executor validates contract → PASSES
+executor outputs results
+```
+
+---
+
 ## Summary
 
-This Multi-Agent System demonstrates:
+This architecture guide covers two interconnected systems:
 
+### Sample MAS (Multi-Agent System)
+
+A **Data Analysis Multi-Agent System** demonstrating:
 1. **LangGraph for orchestration**: Stateful graph-based workflow with conditional routing
 2. **Specialized agents**: Each agent has a focused responsibility (interaction, planning, coding, summarization)
 3. **Tool integration**: Agents can use tools to inspect data and make informed decisions
 4. **Safe code execution**: Generated code runs in a sandboxed environment
-5. **Unified tracing**: Callback system provides observability via LangSmith and custom backbone
-6. **Clean separation**: State schema, agents, tools, and workflow are in separate modules
-7. **Simple CLI**: Easy-to-use command-line interface for terminal-based execution
+5. **Simple CLI**: Easy-to-use command-line interface for terminal-based execution
 
-This architecture is extensible — you can add more agents, tools, or integrate additional tracing backends by following the established patterns.
+### MAS Backbone
+
+The **underlying tracing infrastructure** providing:
+1. **Pydantic models**: Strict validation for prompts, executions, and events
+2. **Event emission API**: Manual (`EventEmitter`) and automatic (`MASCallbackHandler`)
+3. **Pluggable sinks**: `ListSink` for tests, `FileSink` for production
+4. **Trace analysis**: Reconstruct agent graphs and detect failures from events
+5. **Framework-agnostic design**: Works with any LLM orchestration tool
+
+### Key Insight: Separation of Concerns
+
+- **Authoring** (PromptVersion) vs **Execution** (ExecutionRecord)
+- **Automatic capture** (callbacks) vs **Semantic events** (manual emit)
+- **Storage** (sinks) vs **Analysis** (summary)
+
+This foundation enables future UIs (Playground, Trace Viewer, Evaluations) without changing core data models, and the architecture is extensible — you can add more agents, tools, or integrate additional tracing backends by following the established patterns.

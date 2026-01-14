@@ -20,7 +20,7 @@ You have access to tools that let you:
 
 **Decision Rules:**
 - If the user asks a simple question that you can answer using the tools (e.g., "What columns are in this dataset?", "How many rows?"), answer it directly.
-- If the user requests analysis, visualization, or computation that requires code execution (e.g., "Plot X vs Y", "Run regression", "Calculate correlation"), respond with EXACTLY: [EXECUTE_ANALYSIS]
+- If the user requests analysis, visualization, or ANY computation such as creating a plot, asking for correlations, etc. that requires code execution (e.g., "Plot X vs Y", "Run regression", "Calculate correlation"), respond with EXACTLY: [EXECUTE_ANALYSIS]
 - If the user's query is completely unrelated to data analysis or the dataset, politely explain that you can only help with dataset-related queries.
 
 **Important:**
@@ -44,7 +44,7 @@ def create_interaction_agent(state: AnalysisState) -> AnalysisState:
     tools = create_dataset_tools_for_agent(dataset)
     callbacks = state.get("callbacks", [])
     llm = ChatOpenAI(
-        model="gpt-4o-mini",
+        model="gpt-4.1-2025-04-14",
         temperature=0,
         callbacks=callbacks,
         metadata={"agent": "interaction", "has_tools": True}

@@ -18,6 +18,20 @@ from backbone.models.trace_event import EventType
 from backbone.utils.identifiers import generate_span_id
 
 
+def _sanitize_for_json(obj: Any) -> Any:
+    """Convert non-JSON-serializable objects to string representations."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(item) for item in obj]
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    # For other types, convert to string
+    return str(obj)
+
+
 def _classify_error(error: BaseException) -> str:
     """Classify an error into one of the valid error types."""
     error_name = type(error).__name__.lower()
@@ -143,11 +157,16 @@ class MASCallbackHandler(BaseCallbackHandler):
         span_id = self._get_or_create_span(run_id)
         parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
 
+        # Handle None serialized (can happen with some chain types)
+        chain_name = serialized.get("name", "unknown") if serialized else "unknown"
+        # Sanitize inputs to handle non-serializable objects
+        sanitized_inputs = _sanitize_for_json(inputs)
+
         self.emitter.emit(
             EventType.agent_input,
             agent_id,
             refs=refs,
-            payload={"input": inputs, "chain_name": serialized.get("name", "unknown")},
+            payload={"input": sanitized_inputs, "chain_name": chain_name},
             span_id=span_id,
             parent_span_id=parent_span,
         )
@@ -167,11 +186,14 @@ class MASCallbackHandler(BaseCallbackHandler):
         span_id = self._get_or_create_span(run_id)
         parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
 
+        # Sanitize outputs to handle non-serializable objects like DataFrames
+        sanitized_outputs = _sanitize_for_json(outputs)
+
         self.emitter.emit(
             EventType.agent_output,
             agent_id,
             refs=refs,
-            payload={"output": outputs},
+            payload={"output": sanitized_outputs},
             span_id=span_id,
             parent_span_id=parent_span,
         )
