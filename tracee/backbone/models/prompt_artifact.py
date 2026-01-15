@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class PromptComponentType(str, Enum):
     """Types of prompt components that can be authored."""
 
+    # tentative
     role = "role"
     goal = "goal"
     constraints = "constraints"

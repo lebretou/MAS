@@ -77,13 +77,13 @@ def create_planner_agent(state: AnalysisState) -> AnalysisState:
         system_message = SystemMessage(content=PLANNER_SYSTEM_PROMPT)
         user_message = HumanMessage(content=f"""User query: {state['user_query']}
 
-Dataset information:
-- Columns: {columns}
-- Shape: {shape}
-- Numeric columns: {numeric_cols}
-- Categorical columns: {categorical_cols}
+                                                Dataset information:
+                                                - Columns: {columns}
+                                                - Shape: {shape}
+                                                - Numeric columns: {numeric_cols}
+                                                - Categorical columns: {categorical_cols}
 
-Please create a detailed analysis plan and coding instructions.""")
+                                                Please create a detailed analysis plan and coding instructions.""")
         
         messages = [system_message, user_message]
         response = llm.invoke(messages, config={"callbacks": callbacks})

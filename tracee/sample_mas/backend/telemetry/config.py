@@ -21,7 +21,7 @@ _current_tracer: Tracer | None = None
 
 
 def get_langsmith_config():
-    """configure LangSmith tracing."""
+    """configure LangSmith tracing from dot env file (you shold have this locally)."""
     return {
         "project_name": os.getenv("LANGSMITH_PROJECT", "data-analysis-agents"),
         "api_key": os.getenv("LANGSMITH_API_KEY"),
@@ -58,25 +58,6 @@ def get_trace_info() -> dict:
     return {"execution_id": None, "trace_id": None}
 
 
-def get_callbacks(session_id: str = "default"):
-    """return configured callback handlers (LangSmith + MAS backbone)."""
-    callbacks = []
-    
-    config = get_langsmith_config()
-    if config["tracing_enabled"] and config["api_key"]:
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_PROJECT"] = config["project_name"]
-        os.environ["LANGCHAIN_API_KEY"] = config["api_key"]
-        print(f"✓ LangSmith tracing enabled for project: {config['project_name']}")
-    else:
-        print("⚠ LangSmith tracing disabled - API key not found")
-    
-    mas_callback, _ = get_mas_backbone_handler()
-    callbacks.append(mas_callback)
-    
-    return callbacks
-
-
 def setup_telemetry():
     """setup telemetry for application startup."""
     config = get_langsmith_config()
@@ -98,3 +79,8 @@ def setup_telemetry():
         "callbacks": callbacks,
         "emitter": emitter,
     }
+
+
+def get_callbacks(session_id: str = "default"):
+    """return configured callback handlers (LangSmith + MAS backbone)."""
+    return setup_telemetry()["callbacks"]
