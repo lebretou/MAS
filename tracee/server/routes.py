@@ -14,8 +14,8 @@ from backbone.models.trace_event import TraceEvent
 
 router = APIRouter()
 
-# configurable traces directory
-DEFAULT_TRACES_DIR = Path(__file__).parent.parent / "sample_mas" / "backend" / "outputs" / "traces"
+# configurable traces directory (stored alongside prompts in server/data/)
+DEFAULT_TRACES_DIR = Path(__file__).parent / "data" / "traces"
 TRACES_DIR = Path(os.getenv("TRACES_DIR", str(DEFAULT_TRACES_DIR)))
 
 

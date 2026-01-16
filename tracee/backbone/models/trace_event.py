@@ -20,6 +20,7 @@ class EventType(str, Enum):
     agent_decision = "agent_decision"
     tool_call = "tool_call"
     contract_validation = "contract_validation"
+    prompt_resolved = "prompt_resolved"  # emitted when a prompt is loaded for an agent
     error = "error"
 
 
@@ -62,6 +63,8 @@ class TraceEvent(BaseModel):
             self._validate_contract_validation(payload)
         elif event_type == EventType.tool_call:
             self._validate_tool_call(payload)
+        elif event_type == EventType.prompt_resolved:
+            self._validate_prompt_resolved(payload)
         elif event_type == EventType.error:
             self._validate_error(payload)
 
@@ -109,6 +112,15 @@ class TraceEvent(BaseModel):
             raise ValueError("tool_call payload must contain 'phase'")
         if payload["phase"] not in TOOL_CALL_PHASES:
             raise ValueError(f"tool_call phase must be one of {TOOL_CALL_PHASES}")
+
+    def _validate_prompt_resolved(self, payload: dict) -> None:
+        """prompt_resolved requires prompt_id, version_id, and resolved_text."""
+        if "prompt_id" not in payload:
+            raise ValueError("prompt_resolved payload must contain 'prompt_id'")
+        if "version_id" not in payload:
+            raise ValueError("prompt_resolved payload must contain 'version_id'")
+        if "resolved_text" not in payload:
+            raise ValueError("prompt_resolved payload must contain 'resolved_text'")
 
     def _validate_error(self, payload: dict) -> None:
         """error requires error_type and message."""

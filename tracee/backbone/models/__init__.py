@@ -1,6 +1,7 @@
 """Core data models for MAS backbone."""
 
 from backbone.models.prompt_artifact import (
+    Prompt,
     PromptComponent,
     PromptComponentType,
     PromptVersion,
@@ -17,6 +18,7 @@ from backbone.models.trace_event import (
 )
 
 __all__ = [
+    "Prompt",
     "PromptComponent",
     "PromptComponentType",
     "PromptVersion",

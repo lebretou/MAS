@@ -1,4 +1,4 @@
-"""FastAPI application for serving trace data."""
+"""FastAPI application for serving trace and prompt data."""
 
 import os
 from pathlib import Path
@@ -6,15 +6,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from server.routes import router
+from server.routes import router as trace_router
+from server.prompt_routes import router as prompt_router, PROMPTS_DIR
 
-# configurable traces directory via environment variable
-DEFAULT_TRACES_DIR = Path(__file__).parent.parent / "sample_mas" / "backend" / "outputs" / "traces"
-TRACES_DIR = Path(os.getenv("TRACES_DIR", str(DEFAULT_TRACES_DIR)))
+# configurable traces directory via environment variable (stored alongside prompts in server/data/)
+from server.routes import TRACES_DIR
 
 app = FastAPI(
     title="Tracee API",
-    description="API server for serving MAS trace data",
+    description="API server for serving MAS trace data and prompt management",
     version="0.1.0",
 )
 
@@ -28,13 +28,18 @@ app.add_middleware(
 )
 
 # include routes
-app.include_router(router, prefix="/api")
+app.include_router(trace_router, prefix="/api")
+app.include_router(prompt_router, prefix="/api")
 
 
 @app.get("/")
 def root():
     """Health check endpoint."""
-    return {"status": "ok", "traces_dir": str(TRACES_DIR)}
+    return {
+        "status": "ok",
+        "traces_dir": str(TRACES_DIR),
+        "prompts_dir": str(PROMPTS_DIR),
+    }
 
 
 if __name__ == "__main__":

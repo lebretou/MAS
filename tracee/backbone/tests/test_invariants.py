@@ -290,6 +290,82 @@ class TestErrorInvariants:
             assert event.payload["error_type"] == error_type
 
 
+class TestPromptResolvedInvariants:
+    """Test prompt_resolved payload invariants."""
+
+    def _make_event(self, payload: dict) -> TraceEvent:
+        return TraceEvent(
+            event_id=generate_event_id(),
+            trace_id=generate_trace_id(),
+            execution_id=generate_execution_id(),
+            timestamp=utc_timestamp(),
+            event_type=EventType.prompt_resolved,
+            agent_id="test",
+            refs={},
+            payload=payload,
+        )
+
+    def test_requires_prompt_id(self):
+        """prompt_resolved must have prompt_id."""
+        with pytest.raises(ValidationError) as exc_info:
+            self._make_event({
+                "version_id": "v1",
+                "resolved_text": "You are an agent.",
+            })
+        assert "prompt_id" in str(exc_info.value)
+
+    def test_requires_version_id(self):
+        """prompt_resolved must have version_id."""
+        with pytest.raises(ValidationError) as exc_info:
+            self._make_event({
+                "prompt_id": "planner-prompt",
+                "resolved_text": "You are an agent.",
+            })
+        assert "version_id" in str(exc_info.value)
+
+    def test_requires_resolved_text(self):
+        """prompt_resolved must have resolved_text."""
+        with pytest.raises(ValidationError) as exc_info:
+            self._make_event({
+                "prompt_id": "planner-prompt",
+                "version_id": "v1",
+            })
+        assert "resolved_text" in str(exc_info.value)
+
+    def test_valid_prompt_resolved(self):
+        """Valid prompt_resolved event should pass."""
+        event = self._make_event({
+            "prompt_id": "planner-prompt",
+            "version_id": "v1",
+            "resolved_text": "You are an expert planning agent.\n\nCreate step-by-step plans.",
+        })
+        assert event.payload["prompt_id"] == "planner-prompt"
+        assert event.payload["version_id"] == "v1"
+        assert "planning agent" in event.payload["resolved_text"]
+
+    def test_accepts_optional_components(self):
+        """prompt_resolved can include components list."""
+        event = self._make_event({
+            "prompt_id": "planner-prompt",
+            "version_id": "v1",
+            "resolved_text": "You are an agent.",
+            "components": [
+                {"type": "role", "content": "You are an agent.", "enabled": True},
+            ],
+        })
+        assert len(event.payload["components"]) == 1
+
+    def test_accepts_optional_variables_used(self):
+        """prompt_resolved can include variables_used dict."""
+        event = self._make_event({
+            "prompt_id": "planner-prompt",
+            "version_id": "v1",
+            "resolved_text": "Max 5 steps.",
+            "variables_used": {"max_steps": "5"},
+        })
+        assert event.payload["variables_used"]["max_steps"] == "5"
+
+
 class TestSequenceOrdering:
     """Test sequence ordering invariants."""
 

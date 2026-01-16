@@ -198,3 +198,38 @@ class EventEmitter:
         if details:
             payload["details"] = details
         return self.emit(EventType.error, agent_id, refs=refs, payload=payload)
+
+    def emit_prompt_resolved(
+        self,
+        agent_id: str,
+        prompt_id: str,
+        version_id: str,
+        resolved_text: str,
+        components: list[dict] | None = None,
+        variables_used: dict[str, str] | None = None,
+        refs: dict | None = None,
+    ) -> TraceEvent:
+        """Emit a prompt_resolved event when a prompt is loaded for an agent.
+        
+        This captures a snapshot of the exact prompt text used at runtime,
+        enabling trace visualization to show which prompt was used.
+        
+        Args:
+            agent_id: The agent that loaded this prompt
+            prompt_id: The prompt identifier
+            version_id: The version of the prompt
+            resolved_text: The full resolved prompt text (all enabled components)
+            components: Optional list of component dicts with type, content, enabled
+            variables_used: Optional dict of template variables that were substituted
+            refs: Optional additional references
+        """
+        payload: dict = {
+            "prompt_id": prompt_id,
+            "version_id": version_id,
+            "resolved_text": resolved_text,
+        }
+        if components:
+            payload["components"] = components
+        if variables_used:
+            payload["variables_used"] = variables_used
+        return self.emit(EventType.prompt_resolved, agent_id, refs=refs, payload=payload)

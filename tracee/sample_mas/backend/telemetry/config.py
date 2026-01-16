@@ -33,7 +33,8 @@ def get_mas_backbone_handler():
     """create MAS backbone handler and emitter for semantic tracing."""
     global _current_tracer
     
-    output_dir = Path(__file__).parent.parent / "outputs" / "traces"
+    # Write traces to the centralized server data directory
+    output_dir = Path(__file__).parent.parent.parent.parent / "server" / "data" / "traces"
     _current_tracer = Tracer(output_dir=output_dir)
     
     print(f"✓ MAS Backbone tracing enabled")
