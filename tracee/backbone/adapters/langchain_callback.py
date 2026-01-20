@@ -1,21 +1,20 @@
-"""LangChain callback handler for automatic trace event emission.
+"""LangChain callback handler for raw trace event capture.
 
-Brief idea of callback in LangChain/LangGraph is a list of events happened during LLM system runs
-it describes what the agents did (e.g., tool calls, actions, prompts)
+Captures LangChain/LangGraph events with minimal transformation.
+Events are stored with their original event type names (e.g., 'on_llm_start').
 
-This file translates LangChain callback events into our TraceEvent objects
+Semantic analysis (agent messages, decisions, etc.) is performed by a separate
+analysis layer after capture.
 """
 
 from typing import Any
 from uuid import UUID
 
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 
-from backbone.adapters.event_api import EventEmitter, EventSink
-from backbone.models.trace_event import EventType
-from backbone.utils.identifiers import generate_span_id
+from backbone.models.trace_event import TraceEvent
+from backbone.utils.identifiers import generate_event_id, generate_span_id, utc_timestamp
 
 
 def _sanitize_for_json(obj: Any) -> Any:
@@ -28,47 +27,44 @@ def _sanitize_for_json(obj: Any) -> Any:
         return [_sanitize_for_json(item) for item in obj]
     if isinstance(obj, (str, int, float, bool)):
         return obj
-    # For other types, convert to string
+    # for other types, convert to string
     return str(obj)
 
 
-def _classify_error(error: BaseException) -> str:
-    """Classify an error into one of the valid error types."""
-    error_name = type(error).__name__.lower()
+class EventSink:
+    """Protocol for receiving trace events."""
 
-    # model-related errors
-    if any(x in error_name for x in ["openai", "anthropic", "llm", "api", "rate"]):
-        return "model"
-
-    # tool-related errors
-    if any(x in error_name for x in ["tool", "function"]):
-        return "tool"
-
-    # infrastructure errors
-    if any(x in error_name for x in ["timeout", "connection", "network", "http"]):
-        return "infra"
-
-    # schema/validation errors
-    if any(x in error_name for x in ["validation", "schema", "parse", "json", "type"]):
-        return "schema"
-
-    # default to logic error
-    return "logic"
+    def append(self, event: TraceEvent) -> None:
+        """Append an event to the sink."""
+        raise NotImplementedError
 
 
-class MASCallbackHandler(BaseCallbackHandler):
-    """Emits low-level execution events from LangChain/LangGraph.
+class ListSink(EventSink):
+    """Stores events in a list."""
 
-    Does NOT infer agent-to-agent messages (use manual API for that).
+    def __init__(self) -> None:
+        self.events: list[TraceEvent] = []
 
-    Mapping:
-    - on_chain_start  -> agent_input (only if chain = agent node)
-    - on_chain_end    -> agent_output (only if chain = agent node)
-    - on_llm_start    -> tool_call (phase=start, tool_name="llm.generate")
-    - on_llm_end      -> tool_call (phase=end, tool_name="llm.generate")
-    - on_tool_start   -> tool_call (phase=start)
-    - on_tool_end     -> tool_call (phase=end)
-    - on_chain_error  -> error (classified)
+    def append(self, event: TraceEvent) -> None:
+        """Append an event to the list."""
+        self.events.append(event)
+
+    def clear(self) -> None:
+        """Clear all events."""
+        self.events.clear()
+
+
+class RawCallbackHandler(BaseCallbackHandler):
+    """Captures raw LangChain/LangGraph events with minimal transformation.
+    
+    Events are stored with their original event type names. No semantic inference
+    is performed - that's handled by the analysis layer.
+    
+    Event types captured:
+    - on_chain_start, on_chain_end, on_chain_error
+    - on_llm_start, on_llm_end, on_llm_error
+    - on_tool_start, on_tool_end, on_tool_error
+    - on_chat_model_start (if available)
     """
 
     def __init__(
@@ -76,23 +72,20 @@ class MASCallbackHandler(BaseCallbackHandler):
         execution_id: str,
         trace_id: str,
         event_sink: EventSink,
-        default_agent_id: str = "unknown",
     ) -> None:
         super().__init__()
-        self.emitter = EventEmitter(execution_id, trace_id, event_sink)
-        self.default_agent_id = default_agent_id
+        self.execution_id = execution_id
+        self.trace_id = trace_id
+        self.event_sink = event_sink
+        self._sequence = 0
         # track span IDs for correlating start/end events
         self._run_span_map: dict[str, str] = {}
-        # track agent IDs from chain metadata
-        self._run_agent_map: dict[str, str] = {}
 
-    def _get_agent_id(self, run_id: UUID | None, metadata: dict | None = None) -> str:
-        """Get agent ID from run tracking or metadata."""
-        if run_id and str(run_id) in self._run_agent_map:
-            return self._run_agent_map[str(run_id)]
-        if metadata:
-            return metadata.get("agent_id", metadata.get("agent", self.default_agent_id))
-        return self.default_agent_id
+    def _next_sequence(self) -> int:
+        """Get the next sequence number."""
+        seq = self._sequence
+        self._sequence += 1
+        return seq
 
     def _get_or_create_span(self, run_id: UUID | None) -> str:
         """Get existing span ID or create a new one for this run."""
@@ -131,9 +124,44 @@ class MASCallbackHandler(BaseCallbackHandler):
             if lg_refs:
                 refs["langgraph"] = lg_refs
 
+            # store any agent hint from metadata
+            if "agent" in metadata or "agent_id" in metadata:
+                refs["hint"] = {
+                    "agent_id": metadata.get("agent_id", metadata.get("agent"))
+                }
+
         return refs
 
-    # --- chain callbacks (agent boundaries) ---
+    def _emit(
+        self,
+        event_type: str,
+        run_id: UUID | None,
+        parent_run_id: UUID | None,
+        payload: dict,
+        metadata: dict | None = None,
+    ) -> TraceEvent:
+        """Emit a raw event."""
+        span_id = self._get_or_create_span(run_id)
+        parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
+        refs = self._make_refs(run_id, parent_run_id, metadata)
+
+        event = TraceEvent(
+            event_id=generate_event_id(),
+            trace_id=self.trace_id,
+            execution_id=self.execution_id,
+            timestamp=utc_timestamp(),
+            sequence=self._next_sequence(),
+            event_type=event_type,
+            agent_id=None,  # not inferred - let analysis layer determine
+            span_id=span_id,
+            parent_span_id=parent_span,
+            refs=refs,
+            payload=payload,
+        )
+        self.event_sink.append(event)
+        return event
+
+    # --- chain callbacks ---
 
     def on_chain_start(
         self,
@@ -146,29 +174,20 @@ class MASCallbackHandler(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle chain start - emit agent_input if this is an agent node."""
-        # store agent ID for this run if provided
-        if metadata and ("agent_id" in metadata or "agent" in metadata):
-            agent_id = metadata.get("agent_id", metadata.get("agent", self.default_agent_id))
-            self._run_agent_map[str(run_id)] = agent_id
-
-        agent_id = self._get_agent_id(run_id, metadata)
-        refs = self._make_refs(run_id, parent_run_id, metadata)
-        span_id = self._get_or_create_span(run_id)
-        parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
-
-        # Handle None serialized (can happen with some chain types)
+        """Capture chain start event."""
         chain_name = serialized.get("name", "unknown") if serialized else "unknown"
-        # Sanitize inputs to handle non-serializable objects
         sanitized_inputs = _sanitize_for_json(inputs)
 
-        self.emitter.emit(
-            EventType.agent_input,
-            agent_id,
-            refs=refs,
-            payload={"input": sanitized_inputs, "chain_name": chain_name},
-            span_id=span_id,
-            parent_span_id=parent_span,
+        self._emit(
+            event_type="on_chain_start",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            metadata=metadata,
+            payload={
+                "chain_name": chain_name,
+                "inputs": sanitized_inputs,
+                "tags": tags,
+            },
         )
 
     def on_chain_end(
@@ -180,22 +199,17 @@ class MASCallbackHandler(BaseCallbackHandler):
         tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle chain end - emit agent_output."""
-        agent_id = self._get_agent_id(run_id)
-        refs = self._make_refs(run_id, parent_run_id)
-        span_id = self._get_or_create_span(run_id)
-        parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
-
-        # Sanitize outputs to handle non-serializable objects like DataFrames
+        """Capture chain end event."""
         sanitized_outputs = _sanitize_for_json(outputs)
 
-        self.emitter.emit(
-            EventType.agent_output,
-            agent_id,
-            refs=refs,
-            payload={"output": sanitized_outputs},
-            span_id=span_id,
-            parent_span_id=parent_span,
+        self._emit(
+            event_type="on_chain_end",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            payload={
+                "outputs": sanitized_outputs,
+                "tags": tags,
+            },
         )
 
     def on_chain_error(
@@ -207,20 +221,19 @@ class MASCallbackHandler(BaseCallbackHandler):
         tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle chain error - emit error event with classification."""
-        agent_id = self._get_agent_id(run_id)
-        refs = self._make_refs(run_id, parent_run_id)
-        error_type = _classify_error(error)
-
-        self.emitter.emit_error(
-            agent_id,
-            error_type=error_type,
-            message=str(error),
-            details={"exception_type": type(error).__name__},
-            refs=refs,
+        """Capture chain error event."""
+        self._emit(
+            event_type="on_chain_error",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            payload={
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "tags": tags,
+            },
         )
 
-    # --- LLM callbacks (treated as tool calls) ---
+    # --- LLM callbacks ---
 
     def on_llm_start(
         self,
@@ -233,24 +246,19 @@ class MASCallbackHandler(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle LLM start - emit tool_call with phase=start."""
-        agent_id = self._get_agent_id(parent_run_id, metadata)
-        refs = self._make_refs(run_id, parent_run_id, metadata)
-        span_id = self._get_or_create_span(run_id)
-        parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
+        """Capture LLM start event."""
+        model_name = serialized.get("kwargs", {}).get("model_name", "unknown") if serialized else "unknown"
 
-        # store model info in refs
-        model_name = serialized.get("kwargs", {}).get("model_name", "unknown")
-        refs["llm"] = {"model": model_name}
-
-        self.emitter.emit_tool_call(
-            agent_id,
-            tool_name="llm.generate",
-            phase="start",
-            tool_input={"prompts": prompts[:1]},  # truncate for brevity
-            refs=refs,
-            span_id=span_id,
-            parent_span_id=parent_span,
+        self._emit(
+            event_type="on_llm_start",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            metadata=metadata,
+            payload={
+                "model_name": model_name,
+                "prompts": prompts[:1],  # truncate for brevity
+                "tags": tags,
+            },
         )
 
     def on_llm_end(
@@ -262,25 +270,26 @@ class MASCallbackHandler(BaseCallbackHandler):
         tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle LLM end - emit tool_call with phase=end."""
-        agent_id = self._get_agent_id(parent_run_id)
-        refs = self._make_refs(run_id, parent_run_id)
-        span_id = self._get_or_create_span(run_id)
-        parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
-
+        """Capture LLM end event."""
         # extract generation text (truncated)
         output_text = ""
         if response.generations and response.generations[0]:
-            output_text = response.generations[0][0].text[:200]
+            output_text = response.generations[0][0].text[:500]
 
-        self.emitter.emit_tool_call(
-            agent_id,
-            tool_name="llm.generate",
-            phase="end",
-            tool_output={"text": output_text},
-            refs=refs,
-            span_id=span_id,
-            parent_span_id=parent_span,
+        # extract token usage if available
+        token_usage = None
+        if response.llm_output and "token_usage" in response.llm_output:
+            token_usage = response.llm_output["token_usage"]
+
+        self._emit(
+            event_type="on_llm_end",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            payload={
+                "output_text": output_text,
+                "token_usage": token_usage,
+                "tags": tags,
+            },
         )
 
     def on_llm_error(
@@ -292,16 +301,16 @@ class MASCallbackHandler(BaseCallbackHandler):
         tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle LLM error - emit error event."""
-        agent_id = self._get_agent_id(parent_run_id)
-        refs = self._make_refs(run_id, parent_run_id)
-
-        self.emitter.emit_error(
-            agent_id,
-            error_type="model",
-            message=str(error),
-            details={"exception_type": type(error).__name__},
-            refs=refs,
+        """Capture LLM error event."""
+        self._emit(
+            event_type="on_llm_error",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            payload={
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "tags": tags,
+            },
         )
 
     # --- tool callbacks ---
@@ -318,22 +327,19 @@ class MASCallbackHandler(BaseCallbackHandler):
         inputs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle tool start - emit tool_call with phase=start."""
-        agent_id = self._get_agent_id(parent_run_id, metadata)
-        refs = self._make_refs(run_id, parent_run_id, metadata)
-        span_id = self._get_or_create_span(run_id)
-        parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
+        """Capture tool start event."""
+        tool_name = serialized.get("name", "unknown") if serialized else "unknown"
 
-        tool_name = serialized.get("name", "unknown_tool")
-
-        self.emitter.emit_tool_call(
-            agent_id,
-            tool_name=tool_name,
-            phase="start",
-            tool_input=inputs or {"raw": input_str[:500]},
-            refs=refs,
-            span_id=span_id,
-            parent_span_id=parent_span,
+        self._emit(
+            event_type="on_tool_start",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            metadata=metadata,
+            payload={
+                "tool_name": tool_name,
+                "input": inputs or {"raw": input_str[:500]},
+                "tags": tags,
+            },
         )
 
     def on_tool_end(
@@ -345,23 +351,17 @@ class MASCallbackHandler(BaseCallbackHandler):
         tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle tool end - emit tool_call with phase=end."""
-        agent_id = self._get_agent_id(parent_run_id)
-        refs = self._make_refs(run_id, parent_run_id)
-        span_id = self._get_or_create_span(run_id)
-        parent_span = self._run_span_map.get(str(parent_run_id)) if parent_run_id else None
-
-        # convert output to string if needed
+        """Capture tool end event."""
         output_str = str(output)[:500] if output else ""
 
-        self.emitter.emit_tool_call(
-            agent_id,
-            tool_name="unknown_tool",  # we don't have tool name in on_tool_end
-            phase="end",
-            tool_output={"result": output_str},
-            refs=refs,
-            span_id=span_id,
-            parent_span_id=parent_span,
+        self._emit(
+            event_type="on_tool_end",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            payload={
+                "output": output_str,
+                "tags": tags,
+            },
         )
 
     def on_tool_error(
@@ -373,14 +373,18 @@ class MASCallbackHandler(BaseCallbackHandler):
         tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle tool error - emit error event."""
-        agent_id = self._get_agent_id(parent_run_id)
-        refs = self._make_refs(run_id, parent_run_id)
-
-        self.emitter.emit_error(
-            agent_id,
-            error_type="tool",
-            message=str(error),
-            details={"exception_type": type(error).__name__},
-            refs=refs,
+        """Capture tool error event."""
+        self._emit(
+            event_type="on_tool_error",
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            payload={
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "tags": tags,
+            },
         )
+
+
+# keep old name as alias for backwards compatibility during migration
+MASCallbackHandler = RawCallbackHandler

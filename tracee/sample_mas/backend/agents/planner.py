@@ -1,7 +1,6 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from backend.state.schema import AnalysisState
-from backend.telemetry.config import get_emitter
 
 
 PLANNER_SYSTEM_PROMPT = """You are a planning agent in a data analysis system. Your role is to:
@@ -95,26 +94,10 @@ def create_planner_agent(state: AnalysisState) -> AnalysisState:
         state["next_agent"] = "coding"
         state["messages"].append(AIMessage(content=f"Analysis plan created: {output[:200]}..."))
         
-        emitter = get_emitter()
-        if emitter:
-            emitter.emit_message(
-                from_agent="planner",
-                to_agent="coding",
-                summary=f"Handing off analysis plan ({len(output)} chars) for code generation",
-            )
-        
     except Exception as e:
         error_msg = f"Error in planner agent: {str(e)}"
         state["analysis_plan"] = error_msg
         state["next_agent"] = "end"
         state["messages"].append(AIMessage(content=error_msg))
-        
-        emitter = get_emitter()
-        if emitter:
-            emitter.emit_error(
-                agent_id="planner",
-                error_type="logic",
-                message=str(e),
-            )
     
     return state

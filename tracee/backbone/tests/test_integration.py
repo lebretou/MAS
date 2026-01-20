@@ -1,252 +1,242 @@
-"""Integration tests for the full backbone workflow."""
+"""Integration tests for the backbone workflow."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from backbone.adapters.event_api import EventEmitter, ListSink
+from backbone.adapters.event_api import EventEmitter, FileSink
+from backbone.adapters.langchain_callback import ListSink
 from backbone.analysis.trace_summary import trace_summary
-from backbone.models.execution_record import ExecutionRecord
-from backbone.models.trace_event import EventType, TraceEvent
-from backbone.scripts.generate_dummy_run import (
-    generate_scenario_a_failure,
-    generate_scenario_b_success,
-)
-from backbone.utils.identifiers import generate_execution_id, generate_trace_id
+from backbone.models.trace_event import PROMPT_RESOLVED, TraceEvent
+from backbone.sdk.tracing import enable_tracing, get_active_context
+from backbone.utils.identifiers import generate_execution_id, generate_trace_id, utc_timestamp
 
 
-class TestDummyScenarios:
-    """Test the dummy scenario generators."""
+class TestEnableTracing:
+    """Test the enable_tracing context manager."""
 
-    def setup_method(self):
-        """Set up test output directory."""
-        self.output_dir = Path(__file__).parent / "test_outputs"
-        self.output_dir.mkdir(exist_ok=True)
+    def test_creates_context_with_generated_ids(self):
+        """enable_tracing should generate trace_id and execution_id if not provided."""
+        with enable_tracing() as ctx:
+            assert ctx.trace_id is not None
+            assert ctx.execution_id is not None
+            assert len(ctx.trace_id) > 0
+            assert len(ctx.execution_id) > 0
 
-    def teardown_method(self):
-        """Clean up test outputs."""
-        import shutil
-        if self.output_dir.exists():
-            shutil.rmtree(self.output_dir)
+    def test_uses_provided_trace_id(self):
+        """enable_tracing should use provided trace_id."""
+        with enable_tracing(trace_id="my-trace-123") as ctx:
+            assert ctx.trace_id == "my-trace-123"
 
-    def test_scenario_a_generates_execution_record(self):
-        """Scenario A should generate a valid ExecutionRecord."""
-        record, events = generate_scenario_a_failure(self.output_dir)
+    def test_provides_callbacks_list(self):
+        """enable_tracing context should provide callbacks list."""
+        with enable_tracing() as ctx:
+            assert ctx.callbacks is not None
+            assert len(ctx.callbacks) == 1
 
-        assert record.execution_id
-        assert record.trace_id
-        assert record.resolved_prompt_text
-        assert record.prompt_refs is not None
-        assert len(record.prompt_refs) > 0
-        assert record.contract_refs is not None
+    def test_sets_active_context(self):
+        """enable_tracing should set the active context."""
+        assert get_active_context() is None
+        
+        with enable_tracing() as ctx:
+            assert get_active_context() is ctx
+        
+        assert get_active_context() is None
 
-    def test_scenario_a_generates_events(self):
-        """Scenario A should generate expected events."""
-        record, events = generate_scenario_a_failure(self.output_dir)
-
-        assert len(events) == 9  # as specified in the scenario
-
-        # check event types in order
-        assert events[0].event_type == EventType.agent_input
-        assert events[1].event_type == EventType.tool_call
-        assert events[2].event_type == EventType.tool_call
-        assert events[3].event_type == EventType.agent_decision
-        assert events[4].event_type == EventType.agent_output
-        assert events[5].event_type == EventType.agent_message
-        assert events[6].event_type == EventType.agent_input
-        assert events[7].event_type == EventType.contract_validation
-        assert events[8].event_type == EventType.error
-
-    def test_scenario_a_all_events_share_ids(self):
-        """All events in Scenario A should share execution_id and trace_id."""
-        record, events = generate_scenario_a_failure(self.output_dir)
-
-        for event in events:
-            assert event.execution_id == record.execution_id
-            assert event.trace_id == record.trace_id
-
-    def test_scenario_a_sequence_is_increasing(self):
-        """Event sequence numbers should be strictly increasing."""
-        record, events = generate_scenario_a_failure(self.output_dir)
-
-        sequences = [e.sequence for e in events if e.sequence is not None]
-        assert sequences == list(range(len(sequences)))
-
-    def test_scenario_b_generates_success(self):
-        """Scenario B should generate successful execution."""
-        record, events = generate_scenario_b_success(self.output_dir)
-
-        # find contract_validation event
-        validation_events = [e for e in events if e.event_type == EventType.contract_validation]
-        assert len(validation_events) == 1
-        assert validation_events[0].payload["validation_result"]["is_valid"] is True
-
-        # no error events in success scenario
-        error_events = [e for e in events if e.event_type == EventType.error]
-        assert len(error_events) == 0
-
-    def test_scenario_b_generates_events(self):
-        """Scenario B should generate expected events (same count, different outcome)."""
-        record, events = generate_scenario_b_success(self.output_dir)
-
-        assert len(events) == 9
-
-        # last event should be agent_output, not error
-        assert events[-1].event_type == EventType.agent_output
-
-    def test_scenarios_write_files(self):
-        """Both scenarios should write output files."""
-        record_a, _ = generate_scenario_a_failure(self.output_dir)
-        record_b, _ = generate_scenario_b_success(self.output_dir)
-
-        # check scenario A files
-        scenario_a_dir = self.output_dir / record_a.trace_id
-        assert (scenario_a_dir / "execution_record.json").exists()
-        assert (scenario_a_dir / "trace_events.jsonl").exists()
-        assert (scenario_a_dir / "prompt_version.json").exists()
-
-        # check scenario B files
-        scenario_b_dir = self.output_dir / record_b.trace_id
-        assert (scenario_b_dir / "execution_record.json").exists()
-        assert (scenario_b_dir / "trace_events.jsonl").exists()
+    def test_emit_prompt_resolved(self):
+        """Context should allow emitting prompt_resolved events."""
+        with enable_tracing() as ctx:
+            ctx.emit_prompt_resolved(
+                prompt_id="test-prompt",
+                version_id="v1",
+                resolved_text="You are a test agent.",
+                agent_id="test",
+            )
+        
+        # check event was emitted
+        assert len(ctx.event_sink.events) == 1
+        event = ctx.event_sink.events[0]
+        assert event.event_type == PROMPT_RESOLVED
+        assert event.payload["prompt_id"] == "test-prompt"
 
 
-class TestTraceSummary:
-    """Test trace summary analysis."""
+class TestTraceSummaryWithRawEvents:
+    """Test trace summary with raw LangChain events."""
 
-    def setup_method(self):
-        """Set up test output directory."""
-        self.output_dir = Path(__file__).parent / "test_outputs"
-        self.output_dir.mkdir(exist_ok=True)
+    def _make_raw_event(
+        self,
+        event_type: str,
+        trace_id: str,
+        execution_id: str,
+        sequence: int,
+        payload: dict | None = None,
+        refs: dict | None = None,
+        span_id: str | None = None,
+    ) -> TraceEvent:
+        """Create a raw trace event for testing."""
+        from backbone.utils.identifiers import generate_event_id, generate_span_id
+        return TraceEvent(
+            event_id=generate_event_id(),
+            trace_id=trace_id,
+            execution_id=execution_id,
+            timestamp=utc_timestamp(),
+            sequence=sequence,
+            event_type=event_type,
+            agent_id=None,
+            span_id=span_id or generate_span_id(),
+            parent_span_id=None,
+            refs=refs or {},
+            payload=payload or {},
+        )
 
-    def teardown_method(self):
-        """Clean up test outputs."""
-        import shutil
-        if self.output_dir.exists():
-            shutil.rmtree(self.output_dir)
-
-    def test_summary_reconstructs_planner_executor_edge(self):
-        """TraceSummary should reconstruct planner -> executor edge."""
-        record, events = generate_scenario_a_failure(self.output_dir)
+    def test_summary_extracts_tool_usage(self):
+        """TraceSummary should extract tool usage from on_tool_start/end events."""
+        trace_id = generate_trace_id()
+        execution_id = generate_execution_id()
+        span_id = "test-span-123"
+        
+        events = [
+            self._make_raw_event(
+                "on_tool_start",
+                trace_id, execution_id, 0,
+                payload={"tool_name": "search", "input": {"query": "test"}},
+                span_id=span_id,
+            ),
+            self._make_raw_event(
+                "on_tool_end",
+                trace_id, execution_id, 1,
+                payload={"output": "result"},
+                span_id=span_id,
+            ),
+        ]
+        
         summary = trace_summary(events)
+        
+        assert len(summary.tool_usage) == 1
+        assert summary.tool_usage[0].tool_name == "search"
+        assert summary.tool_usage[0].call_count == 1
 
-        # check agents
+    def test_summary_extracts_llm_usage(self):
+        """TraceSummary should extract LLM usage from on_llm_start/end events."""
+        trace_id = generate_trace_id()
+        execution_id = generate_execution_id()
+        span_id = "llm-span-123"
+        
+        events = [
+            self._make_raw_event(
+                "on_llm_start",
+                trace_id, execution_id, 0,
+                payload={"model_name": "gpt-4", "prompts": ["test"]},
+                span_id=span_id,
+            ),
+            self._make_raw_event(
+                "on_llm_end",
+                trace_id, execution_id, 1,
+                payload={"output_text": "hello"},
+                span_id=span_id,
+            ),
+        ]
+        
+        summary = trace_summary(events)
+        
+        assert len(summary.llm_usage) == 1
+        assert summary.llm_usage[0].tool_name == "gpt-4"
+        assert summary.llm_usage[0].call_count == 1
+
+    def test_summary_detects_errors(self):
+        """TraceSummary should detect error events."""
+        trace_id = generate_trace_id()
+        execution_id = generate_execution_id()
+        
+        events = [
+            self._make_raw_event(
+                "on_chain_error",
+                trace_id, execution_id, 0,
+                payload={"error_type": "ValueError", "error_message": "invalid input"},
+            ),
+        ]
+        
+        summary = trace_summary(events)
+        
+        assert len(summary.failures) == 1
+        assert summary.failures[0]["type"] == "on_chain_error"
+        assert summary.failures[0]["error_type"] == "ValueError"
+
+    def test_summary_extracts_agents_from_hints(self):
+        """TraceSummary should extract agents from refs.hint.agent_id."""
+        trace_id = generate_trace_id()
+        execution_id = generate_execution_id()
+        
+        events = [
+            self._make_raw_event(
+                "on_chain_start",
+                trace_id, execution_id, 0,
+                refs={"hint": {"agent_id": "planner"}},
+            ),
+            self._make_raw_event(
+                "on_chain_end",
+                trace_id, execution_id, 1,
+                refs={"hint": {"agent_id": "planner"}},
+            ),
+            self._make_raw_event(
+                "on_chain_start",
+                trace_id, execution_id, 2,
+                refs={"hint": {"agent_id": "executor"}},
+            ),
+        ]
+        
+        summary = trace_summary(events)
+        
         assert "planner" in summary.agents
         assert "executor" in summary.agents
 
-        # check edge exists
-        edge = next((e for e in summary.edges if e.from_agent == "planner" and e.to_agent == "executor"), None)
-        assert edge is not None
-        assert edge.message_count == 1
-
-    def test_summary_detects_schema_failure(self):
-        """TraceSummary should detect schema failure in Scenario A."""
-        record, events = generate_scenario_a_failure(self.output_dir)
+    def test_summary_extracts_agents_from_langgraph_node(self):
+        """TraceSummary should extract agents from refs.langgraph.node."""
+        trace_id = generate_trace_id()
+        execution_id = generate_execution_id()
+        
+        events = [
+            self._make_raw_event(
+                "on_chain_start",
+                trace_id, execution_id, 0,
+                refs={"langgraph": {"node": "interaction"}},
+            ),
+        ]
+        
         summary = trace_summary(events)
+        
+        assert "interaction" in summary.agents
 
-        # check failures
-        assert len(summary.failures) > 0
-
-        # check for schema error
-        error_failures = [f for f in summary.failures if f.get("type") == "error"]
-        assert any(f.get("error_type") == "schema" for f in error_failures)
-
-    def test_summary_detects_failed_contract(self):
-        """TraceSummary should detect failed contract validation."""
-        record, events = generate_scenario_a_failure(self.output_dir)
+    def test_summary_infers_agent_transitions(self):
+        """TraceSummary should infer agent transitions from event sequences."""
+        trace_id = generate_trace_id()
+        execution_id = generate_execution_id()
+        
+        events = [
+            self._make_raw_event(
+                "on_chain_start",
+                trace_id, execution_id, 0,
+                refs={"hint": {"agent_id": "planner"}},
+            ),
+            self._make_raw_event(
+                "on_chain_end",
+                trace_id, execution_id, 1,
+                refs={"hint": {"agent_id": "planner"}},
+            ),
+            self._make_raw_event(
+                "on_chain_start",
+                trace_id, execution_id, 2,
+                refs={"hint": {"agent_id": "executor"}},
+            ),
+        ]
+        
         summary = trace_summary(events)
-
-        # check failed contracts
-        assert len(summary.failed_contracts) > 0
-        assert any(fc.contract_id == "plan-input-v1" for fc in summary.failed_contracts)
-
-    def test_summary_shows_no_failures_for_success(self):
-        """TraceSummary should show no failures for Scenario B."""
-        record, events = generate_scenario_b_success(self.output_dir)
-        summary = trace_summary(events)
-
-        # no error failures
-        error_failures = [f for f in summary.failures if f.get("type") == "error"]
-        assert len(error_failures) == 0
-
-        # no failed contracts
-        assert len(summary.failed_contracts) == 0
-
-    def test_summary_computes_tool_usage(self):
-        """TraceSummary should compute tool usage statistics."""
-        record, events = generate_scenario_a_failure(self.output_dir)
-        summary = trace_summary(events)
-
-        # check tool usage
-        assert len(summary.tool_usage) > 0
-
-        # check llm.generate usage
-        llm_usage = next((t for t in summary.tool_usage if t.tool_name == "llm.generate"), None)
-        assert llm_usage is not None
-        assert llm_usage.call_count >= 1
-
-    def test_summary_computes_messages_by_edge(self):
-        """TraceSummary should compute messages by edge."""
-        record, events = generate_scenario_a_failure(self.output_dir)
-        summary = trace_summary(events)
-
-        # check messages_by_edge
-        assert ("planner", "executor") in summary.messages_by_edge
-        assert summary.messages_by_edge[("planner", "executor")] == 1
-
-    def test_summary_event_count(self):
-        """TraceSummary should track total event count."""
-        record, events = generate_scenario_a_failure(self.output_dir)
-        summary = trace_summary(events)
-
-        assert summary.event_count == len(events)
-
-
-class TestExecutionRecordPromptRefLink:
-    """Test that ExecutionRecord correctly links to PromptVersion."""
-
-    def setup_method(self):
-        """Set up test output directory."""
-        self.output_dir = Path(__file__).parent / "test_outputs"
-        self.output_dir.mkdir(exist_ok=True)
-
-    def teardown_method(self):
-        """Clean up test outputs."""
-        import shutil
-        if self.output_dir.exists():
-            shutil.rmtree(self.output_dir)
-
-    def test_execution_record_links_to_prompt_version(self):
-        """ExecutionRecord.prompt_refs should link to PromptVersion."""
-        record, events = generate_scenario_a_failure(self.output_dir)
-
-        # read the generated prompt version
-        scenario_dir = self.output_dir / record.trace_id
-        with open(scenario_dir / "prompt_version.json") as f:
-            prompt_version = json.load(f)
-
-        # verify link
-        assert record.prompt_refs is not None
-        assert len(record.prompt_refs) > 0
-
-        prompt_ref = record.prompt_refs[0]
-        assert prompt_ref.prompt_id == prompt_version["prompt_id"]
-        assert prompt_ref.version_id == prompt_version["version_id"]
-
-    def test_execution_record_resolved_prompt_matches_version(self):
-        """ExecutionRecord.resolved_prompt_text should match PromptVersion components."""
-        record, events = generate_scenario_a_failure(self.output_dir)
-
-        # read the generated prompt version
-        scenario_dir = self.output_dir / record.trace_id
-        with open(scenario_dir / "prompt_version.json") as f:
-            prompt_version = json.load(f)
-
-        # the resolved text should contain content from all enabled components
-        for component in prompt_version["components"]:
-            if component.get("enabled", True):
-                assert component["content"] in record.resolved_prompt_text
+        
+        # should have an edge from planner to executor
+        assert len(summary.edges) == 1
+        assert summary.edges[0].from_agent == "planner"
+        assert summary.edges[0].to_agent == "executor"
 
 
 class TestEventEmitterSequence:
@@ -257,7 +247,7 @@ class TestEventEmitterSequence:
         sink = ListSink()
         emitter = EventEmitter(generate_execution_id(), generate_trace_id(), sink)
 
-        emitter.emit_input("test", {})
+        emitter.emit("test_event", {"data": "test"})
 
         assert sink.events[0].sequence == 0
 
@@ -267,7 +257,45 @@ class TestEventEmitterSequence:
         emitter = EventEmitter(generate_execution_id(), generate_trace_id(), sink)
 
         for i in range(5):
-            emitter.emit_input("test", {})
+            emitter.emit("test_event", {"iteration": i})
 
         for i, event in enumerate(sink.events):
             assert event.sequence == i
+
+
+class TestFileSink:
+    """Test FileSink writes events correctly."""
+
+    def setup_method(self):
+        """Set up test output directory."""
+        self.output_dir = Path(__file__).parent / "test_outputs"
+        self.output_dir.mkdir(exist_ok=True)
+
+    def teardown_method(self):
+        """Clean up test outputs."""
+        import shutil
+        if self.output_dir.exists():
+            shutil.rmtree(self.output_dir)
+
+    def test_writes_events_to_file(self):
+        """FileSink should write events to a JSONL file."""
+        trace_id = generate_trace_id()
+        output_path = self.output_dir / trace_id / "trace_events.jsonl"
+        
+        sink = FileSink(output_path)
+        emitter = EventEmitter(generate_execution_id(), trace_id, sink)
+        
+        emitter.emit("on_chain_start", {"chain_name": "test"})
+        emitter.emit("on_chain_end", {"outputs": {}})
+        
+        # read the file
+        with open(output_path) as f:
+            lines = f.readlines()
+        
+        assert len(lines) == 2
+        
+        event1 = json.loads(lines[0])
+        assert event1["event_type"] == "on_chain_start"
+        
+        event2 = json.loads(lines[1])
+        assert event2["event_type"] == "on_chain_end"

@@ -1,28 +1,23 @@
-"""Trace summary analysis - reconstructs agent graph and detects failures."""
+"""Trace summary analysis - extracts basic statistics from raw trace events.
+
+This module provides heuristic-based analysis of raw LangChain events.
+For semantic analysis (agent messages, decisions), see agent_analyzer.py.
+"""
 
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from backbone.models.trace_event import EventType, TraceEvent
+from backbone.models.trace_event import TraceEvent
 
 
 @dataclass
 class AgentEdge:
-    """Represents communication between two agents."""
+    """Represents inferred communication between two agents."""
 
     from_agent: str
     to_agent: str
     message_count: int
-
-
-@dataclass
-class FailedContract:
-    """Represents a failed contract validation."""
-
-    contract_id: str
-    contract_version: str
-    failure_count: int
 
 
 @dataclass
@@ -36,7 +31,11 @@ class ToolUsage:
 
 @dataclass
 class TraceSummary:
-    """Summary of a trace including agent communication and failures."""
+    """Summary of a trace with basic statistics.
+    
+    Note: Agent edges are inferred from event sequences, not explicit messages.
+    For accurate agent communication analysis, use the agent_analyzer module.
+    """
 
     execution_id: str
     trace_id: str
@@ -44,8 +43,8 @@ class TraceSummary:
     edges: list[AgentEdge]
     messages_by_edge: dict[tuple[str, str], int] = field(default_factory=dict)
     failures: list[dict] = field(default_factory=list)
-    failed_contracts: list[FailedContract] = field(default_factory=list)
     tool_usage: list[ToolUsage] = field(default_factory=list)
+    llm_usage: list[ToolUsage] = field(default_factory=list)
     event_count: int = 0
 
 
@@ -56,14 +55,47 @@ def _parse_timestamp(ts: str) -> datetime:
     return datetime.fromisoformat(ts)
 
 
+def _get_agent_from_event(event: TraceEvent) -> str | None:
+    """Extract agent identifier from an event.
+    
+    Checks multiple sources in order of priority:
+    1. refs.hint.agent_id (explicitly set via metadata)
+    2. refs.langgraph.node (from LangGraph workflow)
+    3. event.agent_id field
+    """
+    # check hints from metadata
+    if "hint" in event.refs:
+        agent_id = event.refs["hint"].get("agent_id")
+        if agent_id:
+            return agent_id
+    
+    # check langgraph node
+    if "langgraph" in event.refs:
+        node = event.refs["langgraph"].get("node")
+        if node:
+            return node
+    
+    # fallback to agent_id field
+    return event.agent_id
+
+
 def trace_summary(events: list[TraceEvent]) -> TraceSummary:
-    """Reconstruct agent graph and detect failures from trace events.
+    """Extract basic statistics from raw trace events.
+
+    This provides heuristic-based analysis of the trace:
+    - Tool/LLM usage counts and latencies
+    - Error detection
+    - Agent identification
+    - Inferred agent transitions (based on event sequences)
+
+    For semantic analysis (actual agent messages, decisions), use the
+    agent_analyzer module instead.
 
     Args:
         events: List of TraceEvent objects from a single trace.
 
     Returns:
-        TraceSummary with agent communication graph and failure information.
+        TraceSummary with basic statistics and inferred information.
     """
     if not events:
         return TraceSummary(
@@ -80,77 +112,79 @@ def trace_summary(events: list[TraceEvent]) -> TraceSummary:
     # collect unique agents
     agents_set: set[str] = set()
 
-    # track agent-to-agent messages
-    edge_counts: dict[tuple[str, str], int] = defaultdict(int)
-
     # track failures
     failures: list[dict] = []
 
-    # track failed contracts
-    contract_failures: dict[tuple[str, str], int] = defaultdict(int)
-
-    # track tool usage - (tool_name, span_id) -> (start_time, end_time)
+    # track tool usage - tool_name -> {"count": N, "latencies": [...]}
     tool_calls: dict[str, dict] = defaultdict(lambda: {"count": 0, "latencies": []})
-    tool_start_times: dict[str, datetime] = {}
+    tool_start_times: dict[str, tuple[str, datetime]] = {}  # span_id -> (tool_name, start_time)
+
+    # track LLM usage separately
+    llm_calls: dict[str, dict] = defaultdict(lambda: {"count": 0, "latencies": []})
+    llm_start_times: dict[str, tuple[str, datetime]] = {}
+
+    # track agent transitions for edge inference
+    last_agent: str | None = None
+    edge_counts: dict[tuple[str, str], int] = defaultdict(int)
 
     for event in events:
-        agents_set.add(event.agent_id)
+        # extract agent from event
+        agent = _get_agent_from_event(event)
+        if agent:
+            agents_set.add(agent)
+            # track agent transitions
+            if last_agent and last_agent != agent:
+                edge_counts[(last_agent, agent)] += 1
+            last_agent = agent
 
-        if event.event_type == EventType.agent_message:
-            from_agent = event.agent_id
-            to_agent = event.payload.get("to_agent_id", "unknown")
-            agents_set.add(to_agent)
-            edge_counts[(from_agent, to_agent)] += 1
+        event_type = event.event_type
 
-        elif event.event_type == EventType.contract_validation:
-            result = event.payload.get("validation_result", {})
-            if not result.get("is_valid", True):
-                contract_id = event.payload.get("contract_id", "unknown")
-                contract_version = event.payload.get("contract_version", "unknown")
-                contract_failures[(contract_id, contract_version)] += 1
-                failures.append({
-                    "type": "contract_validation",
-                    "agent_id": event.agent_id,
-                    "contract_id": contract_id,
-                    "contract_version": contract_version,
-                    "errors": result.get("errors", []),
-                    "timestamp": event.timestamp,
-                })
-
-        elif event.event_type == EventType.error:
-            failures.append({
-                "type": "error",
-                "agent_id": event.agent_id,
-                "error_type": event.payload.get("error_type", "unknown"),
-                "message": event.payload.get("message", ""),
-                "timestamp": event.timestamp,
-            })
-
-        elif event.event_type == EventType.tool_call:
+        # handle tool events
+        if event_type == "on_tool_start":
             tool_name = event.payload.get("tool_name", "unknown")
-            phase = event.payload.get("phase", "")
             span_id = event.span_id or ""
+            tool_start_times[span_id] = (tool_name, _parse_timestamp(event.timestamp))
+            tool_calls[tool_name]["count"] += 1
 
-            if phase == "start":
-                tool_start_times[span_id] = _parse_timestamp(event.timestamp)
-                tool_calls[tool_name]["count"] += 1
-            elif phase == "end" and span_id in tool_start_times:
-                start_time = tool_start_times[span_id]
+        elif event_type == "on_tool_end":
+            span_id = event.span_id or ""
+            if span_id in tool_start_times:
+                tool_name, start_time = tool_start_times[span_id]
                 end_time = _parse_timestamp(event.timestamp)
                 latency_ms = (end_time - start_time).total_seconds() * 1000
                 tool_calls[tool_name]["latencies"].append(latency_ms)
                 del tool_start_times[span_id]
 
-    # build edges list
+        # handle LLM events
+        elif event_type == "on_llm_start":
+            model_name = event.payload.get("model_name", "unknown")
+            span_id = event.span_id or ""
+            llm_start_times[span_id] = (model_name, _parse_timestamp(event.timestamp))
+            llm_calls[model_name]["count"] += 1
+
+        elif event_type == "on_llm_end":
+            span_id = event.span_id or ""
+            if span_id in llm_start_times:
+                model_name, start_time = llm_start_times[span_id]
+                end_time = _parse_timestamp(event.timestamp)
+                latency_ms = (end_time - start_time).total_seconds() * 1000
+                llm_calls[model_name]["latencies"].append(latency_ms)
+                del llm_start_times[span_id]
+
+        # handle error events
+        elif event_type in ("on_chain_error", "on_llm_error", "on_tool_error"):
+            failures.append({
+                "type": event_type,
+                "agent_id": agent,
+                "error_type": event.payload.get("error_type", "unknown"),
+                "message": event.payload.get("error_message", ""),
+                "timestamp": event.timestamp,
+            })
+
+    # build inferred edges list
     edges = [
         AgentEdge(from_agent=from_agent, to_agent=to_agent, message_count=count)
         for (from_agent, to_agent), count in edge_counts.items()
-    ]
-
-    # build failed contracts list
-    failed_contracts = [
-        FailedContract(contract_id=cid, contract_version=cver, failure_count=count)
-        for (cid, cver), count in contract_failures.items()
     ]
 
     # build tool usage list
@@ -164,14 +198,25 @@ def trace_summary(events: list[TraceEvent]) -> TraceSummary:
             avg_latency_ms=avg_latency,
         ))
 
+    # build LLM usage list
+    llm_usage = []
+    for model_name, data in llm_calls.items():
+        latencies = data["latencies"]
+        avg_latency = sum(latencies) / len(latencies) if latencies else None
+        llm_usage.append(ToolUsage(
+            tool_name=model_name,
+            call_count=data["count"],
+            avg_latency_ms=avg_latency,
+        ))
+
     return TraceSummary(
         execution_id=execution_id,
         trace_id=trace_id,
-        agents=sorted(agents_set),
+        agents=sorted(a for a in agents_set if a),  # filter out None
         edges=edges,
         messages_by_edge=dict(edge_counts),
         failures=failures,
-        failed_contracts=failed_contracts,
         tool_usage=tool_usage,
+        llm_usage=llm_usage,
         event_count=len(events),
     )

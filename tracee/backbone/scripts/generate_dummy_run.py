@@ -1,17 +1,19 @@
 """Generate dummy execution records and trace events for testing.
 
-Implements two mandatory scenarios:
-- Scenario A (failure): planner -> executor, contract fails
-- Scenario B (success): planner -> executor, contract passes
+NOTE: This script generates raw LangChain-style events. The old semantic
+event types (agent_message, agent_decision, etc.) have been removed.
 
-Both scenarios include PromptArtifactRef and ContractRef links.
+Generates two scenarios:
+- Scenario A (failure): chain execution with error
+- Scenario B (success): chain execution completes successfully
 """
 
 import json
 import time
 from pathlib import Path
 
-from backbone.adapters.event_api import EventEmitter, FileSink, ListSink
+from backbone.adapters.event_api import EventEmitter, FileSink
+from backbone.adapters.langchain_callback import ListSink
 from backbone.models.execution_record import (
     ContractRef,
     ExecutionRecord,
@@ -25,6 +27,7 @@ from backbone.models.prompt_artifact import (
 )
 from backbone.utils.identifiers import (
     generate_execution_id,
+    generate_span_id,
     generate_trace_id,
     utc_timestamp,
 )
@@ -60,18 +63,15 @@ def create_sample_prompt_version() -> PromptVersion:
 
 
 def generate_scenario_a_failure(output_dir: Path) -> tuple[ExecutionRecord, list]:
-    """Generate Scenario A: planner -> executor, contract fails.
+    """Generate Scenario A: chain execution with error.
 
-    Timeline:
-    1. planner: agent_input
-    2. planner: tool_call (llm.generate, start)
-    3. planner: tool_call (llm.generate, end)
-    4. planner: agent_decision
-    5. planner: agent_output
-    6. planner: agent_message -> executor
-    7. executor: agent_input
-    8. executor: contract_validation (is_valid=false)
-    9. executor: error (type=schema)
+    Timeline (using raw LangChain event types):
+    1. on_chain_start (planner)
+    2. on_llm_start
+    3. on_llm_end
+    4. on_chain_end (planner)
+    5. on_chain_start (executor)
+    6. on_chain_error
     """
     execution_id = generate_execution_id()
     trace_id = generate_trace_id()
@@ -87,85 +87,70 @@ def generate_scenario_a_failure(output_dir: Path) -> tuple[ExecutionRecord, list
     # create sample prompt version
     prompt_version = create_sample_prompt_version()
 
-    # 1. planner receives input
-    emitter.emit_input(
-        "planner",
-        input_data={"user_request": "Analyze sales data and create report"},
-        refs={"langgraph": {"node": "planner"}},
-    )
-    time.sleep(0.01)  # small delay for timestamp ordering
-
-    # 2. planner: tool_call (llm.generate, start)
-    llm_span_id = emitter.emit_tool_call(
-        "planner",
-        tool_name="llm.generate",
-        phase="start",
-        tool_input={"prompt": "Create a plan for: Analyze sales data"},
-        refs={"llm": {"model": "gpt-4"}},
-    ).span_id
-    time.sleep(0.01)
-
-    # 3. planner: tool_call (llm.generate, end)
-    emitter.emit_tool_call(
-        "planner",
-        tool_name="llm.generate",
-        phase="end",
-        tool_output={"text": '{"steps": [{"action": "load_data"}, {"action": "analyze"}]}'},
-        span_id=llm_span_id,
+    # 1. planner chain starts
+    planner_span = generate_span_id()
+    emitter.emit(
+        "on_chain_start",
+        payload={
+            "chain_name": "planner",
+            "inputs": {"user_request": "Analyze sales data and create report"},
+        },
+        refs={"hint": {"agent_id": "planner"}, "langgraph": {"node": "planner"}},
     )
     time.sleep(0.01)
 
-    # 4. planner: agent_decision
-    emitter.emit_decision(
-        "planner",
-        decision="execute_plan",
-        reasoning="Plan looks valid, sending to executor",
+    # 2. LLM call starts
+    llm_span = generate_span_id()
+    emitter.emit(
+        "on_llm_start",
+        payload={
+            "model_name": "gpt-4",
+            "prompts": ["Create a plan for: Analyze sales data"],
+        },
+        refs={"hint": {"agent_id": "planner"}},
     )
     time.sleep(0.01)
 
-    # 5. planner: agent_output
-    emitter.emit_output(
-        "planner",
-        output_data={"plan": {"steps": [{"action": "load_data"}, {"action": "analyze"}]}},
+    # 3. LLM call ends
+    emitter.emit(
+        "on_llm_end",
+        payload={
+            "output_text": '{"steps": [{"action": "load_data"}, {"action": "analyze"}]}',
+            "token_usage": {"prompt_tokens": 50, "completion_tokens": 30},
+        },
+        refs={"hint": {"agent_id": "planner"}},
     )
     time.sleep(0.01)
 
-    # 6. planner: agent_message -> executor
-    emitter.emit_message(
-        "planner",
-        "executor",
-        summary="Sending execution plan with 2 steps",
-        refs={"contract": {"contract_id": "plan-output-v1", "version": "1.0.0"}},
+    # 4. planner chain ends
+    emitter.emit(
+        "on_chain_end",
+        payload={
+            "outputs": {"plan": {"steps": [{"action": "load_data"}, {"action": "analyze"}]}},
+        },
+        refs={"hint": {"agent_id": "planner"}},
     )
     time.sleep(0.01)
 
-    # 7. executor: agent_input
-    emitter.emit_input(
-        "executor",
-        input_data={"plan": {"steps": [{"action": "load_data"}, {"action": "analyze"}]}},
-        refs={"langgraph": {"node": "executor"}},
+    # 5. executor chain starts
+    emitter.emit(
+        "on_chain_start",
+        payload={
+            "chain_name": "executor",
+            "inputs": {"plan": {"steps": [{"action": "load_data"}, {"action": "analyze"}]}},
+        },
+        refs={"hint": {"agent_id": "executor"}, "langgraph": {"node": "executor"}},
     )
     time.sleep(0.01)
 
-    # 8. executor: contract_validation (is_valid=false)
-    emitter.emit_validation(
-        "executor",
-        contract_id="plan-input-v1",
-        contract_version="1.0.0",
-        is_valid=False,
-        errors=[
-            {"path": "$.steps[0].tool", "message": "missing required field 'tool'"},
-            {"path": "$.steps[1].tool", "message": "missing required field 'tool'"},
-        ],
-    )
-    time.sleep(0.01)
-
-    # 9. executor: error (type=schema)
-    emitter.emit_error(
-        "executor",
-        error_type="schema",
-        message="Plan validation failed: missing required field 'tool' in steps",
-        details={"failed_paths": ["$.steps[0].tool", "$.steps[1].tool"]},
+    # 6. executor chain fails
+    emitter.emit(
+        "on_chain_error",
+        payload={
+            "error_type": "ValidationError",
+            "error_message": "Plan validation failed: missing required field 'tool' in steps",
+        },
+        refs={"hint": {"agent_id": "executor"}},
     )
 
     # create execution record
@@ -225,13 +210,17 @@ def generate_scenario_a_failure(output_dir: Path) -> tuple[ExecutionRecord, list
 
 
 def generate_scenario_b_success(output_dir: Path) -> tuple[ExecutionRecord, list]:
-    """Generate Scenario B: planner -> executor, contract passes.
+    """Generate Scenario B: chain execution completes successfully.
 
-    Timeline:
-    1-6. Same as Scenario A
-    7. executor: agent_input
-    8. executor: contract_validation (is_valid=true)
-    9. executor: agent_output
+    Timeline (using raw LangChain event types):
+    1. on_chain_start (planner)
+    2. on_llm_start
+    3. on_llm_end
+    4. on_chain_end (planner)
+    5. on_chain_start (executor)
+    6. on_tool_start
+    7. on_tool_end
+    8. on_chain_end (executor)
     """
     execution_id = generate_execution_id()
     trace_id = generate_trace_id()
@@ -247,96 +236,98 @@ def generate_scenario_b_success(output_dir: Path) -> tuple[ExecutionRecord, list
     # create sample prompt version
     prompt_version = create_sample_prompt_version()
 
-    # 1. planner receives input
-    emitter.emit_input(
-        "planner",
-        input_data={"user_request": "Analyze sales data and create report"},
-        refs={"langgraph": {"node": "planner"}},
-    )
-    time.sleep(0.01)
-
-    # 2. planner: tool_call (llm.generate, start)
-    llm_span_id = emitter.emit_tool_call(
-        "planner",
-        tool_name="llm.generate",
-        phase="start",
-        tool_input={"prompt": "Create a plan for: Analyze sales data"},
-        refs={"llm": {"model": "gpt-4"}},
-    ).span_id
-    time.sleep(0.01)
-
-    # 3. planner: tool_call (llm.generate, end)
-    emitter.emit_tool_call(
-        "planner",
-        tool_name="llm.generate",
-        phase="end",
-        tool_output={
-            "text": '{"steps": [{"action": "load_data", "tool": "csv_reader"}, {"action": "analyze", "tool": "pandas"}]}'
+    # 1. planner chain starts
+    emitter.emit(
+        "on_chain_start",
+        payload={
+            "chain_name": "planner",
+            "inputs": {"user_request": "Analyze sales data and create report"},
         },
-        span_id=llm_span_id,
+        refs={"hint": {"agent_id": "planner"}, "langgraph": {"node": "planner"}},
     )
     time.sleep(0.01)
 
-    # 4. planner: agent_decision
-    emitter.emit_decision(
-        "planner",
-        decision="execute_plan",
-        reasoning="Plan looks valid with tool specifications, sending to executor",
-    )
-    time.sleep(0.01)
-
-    # 5. planner: agent_output (valid plan with tool field)
-    emitter.emit_output(
-        "planner",
-        output_data={
-            "plan": {
-                "steps": [
-                    {"action": "load_data", "tool": "csv_reader"},
-                    {"action": "analyze", "tool": "pandas"},
-                ]
-            }
+    # 2. LLM call starts
+    emitter.emit(
+        "on_llm_start",
+        payload={
+            "model_name": "gpt-4",
+            "prompts": ["Create a plan for: Analyze sales data"],
         },
+        refs={"hint": {"agent_id": "planner"}},
     )
     time.sleep(0.01)
 
-    # 6. planner: agent_message -> executor
-    emitter.emit_message(
-        "planner",
-        "executor",
-        summary="Sending execution plan with 2 steps (including tools)",
-        refs={"contract": {"contract_id": "plan-output-v1", "version": "1.0.0"}},
-    )
-    time.sleep(0.01)
-
-    # 7. executor: agent_input
-    emitter.emit_input(
-        "executor",
-        input_data={
-            "plan": {
-                "steps": [
-                    {"action": "load_data", "tool": "csv_reader"},
-                    {"action": "analyze", "tool": "pandas"},
-                ]
-            }
+    # 3. LLM call ends
+    emitter.emit(
+        "on_llm_end",
+        payload={
+            "output_text": '{"steps": [{"action": "load_data", "tool": "csv_reader"}, {"action": "analyze", "tool": "pandas"}]}',
+            "token_usage": {"prompt_tokens": 50, "completion_tokens": 40},
         },
-        refs={"langgraph": {"node": "executor"}},
+        refs={"hint": {"agent_id": "planner"}},
     )
     time.sleep(0.01)
 
-    # 8. executor: contract_validation (is_valid=true)
-    emitter.emit_validation(
-        "executor",
-        contract_id="plan-input-v1",
-        contract_version="1.0.0",
-        is_valid=True,
-        errors=[],
+    # 4. planner chain ends
+    emitter.emit(
+        "on_chain_end",
+        payload={
+            "outputs": {
+                "plan": {
+                    "steps": [
+                        {"action": "load_data", "tool": "csv_reader"},
+                        {"action": "analyze", "tool": "pandas"},
+                    ]
+                }
+            },
+        },
+        refs={"hint": {"agent_id": "planner"}},
     )
     time.sleep(0.01)
 
-    # 9. executor: agent_output
-    emitter.emit_output(
-        "executor",
-        output_data={"status": "success", "results": {"rows_processed": 1000}},
+    # 5. executor chain starts
+    emitter.emit(
+        "on_chain_start",
+        payload={
+            "chain_name": "executor",
+            "inputs": {
+                "plan": {
+                    "steps": [
+                        {"action": "load_data", "tool": "csv_reader"},
+                        {"action": "analyze", "tool": "pandas"},
+                    ]
+                }
+            },
+        },
+        refs={"hint": {"agent_id": "executor"}, "langgraph": {"node": "executor"}},
+    )
+    time.sleep(0.01)
+
+    # 6. tool call starts
+    tool_span = generate_span_id()
+    emitter.emit(
+        "on_tool_start",
+        payload={"tool_name": "csv_reader", "input": {"path": "sales.csv"}},
+        refs={"hint": {"agent_id": "executor"}},
+    )
+    time.sleep(0.01)
+
+    # 7. tool call ends
+    emitter.emit(
+        "on_tool_end",
+        payload={"output": "Loaded 1000 rows from sales.csv"},
+        refs={"hint": {"agent_id": "executor"}},
+    )
+    time.sleep(0.01)
+
+    # 8. executor chain ends
+    emitter.emit(
+        "on_chain_end",
+        payload={
+            "outputs": {"status": "success", "results": {"rows_processed": 1000}},
+        },
+        refs={"hint": {"agent_id": "executor"}},
     )
 
     # create execution record

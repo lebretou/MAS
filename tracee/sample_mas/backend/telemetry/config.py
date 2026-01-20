@@ -11,7 +11,6 @@ if str(backbone_path.parent) not in sys.path:
     sys.path.insert(0, str(backbone_path.parent))
 
 from backbone import Tracer
-from backbone.adapters import EventEmitter
 
 # load environment variables
 load_dotenv()
@@ -30,10 +29,10 @@ def get_langsmith_config():
 
 
 def get_mas_backbone_handler():
-    """create MAS backbone handler and emitter for semantic tracing."""
+    """create MAS backbone handler for raw event capture."""
     global _current_tracer
     
-    # Write traces to the centralized server data directory
+    # write traces to the centralized server data directory
     output_dir = Path(__file__).parent.parent.parent.parent / "server" / "data" / "traces"
     _current_tracer = Tracer(output_dir=output_dir)
     
@@ -41,12 +40,7 @@ def get_mas_backbone_handler():
     print(f"  trace id: {_current_tracer.trace_id}")
     print(f"  output: {_current_tracer.output_path}")
     
-    return _current_tracer.callback, _current_tracer.emitter
-
-
-def get_emitter() -> EventEmitter | None:
-    """get the current EventEmitter for manual events."""
-    return _current_tracer.emitter if _current_tracer else None
+    return _current_tracer.callback
 
 
 def get_trace_info() -> dict:
@@ -72,13 +66,12 @@ def setup_telemetry():
     else:
         print("⚠ LangSmith tracing disabled - API key not found")
     
-    mas_callback, emitter = get_mas_backbone_handler()
+    mas_callback = get_mas_backbone_handler()
     callbacks.append(mas_callback)
     
     return {
         "langsmith": config,
         "callbacks": callbacks,
-        "emitter": emitter,
     }
 
 

@@ -2,7 +2,6 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from backend.state.schema import AnalysisState
 from backend.tools.execution_tools import execute_code_safely
-from backend.telemetry.config import get_emitter
 import os
 
 
@@ -113,31 +112,9 @@ Return ONLY the code, no markdown formatting.""")
         
         if execution_result["success"]:
             state["messages"].append(AIMessage(content="Code executed successfully."))
-            
-            emitter = get_emitter()
-            if emitter:
-                plots = execution_result.get("plots", [])
-                emitter.emit_message(
-                    from_agent="coding",
-                    to_agent="summary",
-                    summary=f"Code executed successfully. Generated {len(plots)} plot(s). Passing results for summarization.",
-                )
         else:
             error_info = execution_result.get("error", {})
             state["messages"].append(AIMessage(content=f"Code execution failed: {error_info.get('message', 'Unknown error')}"))
-            
-            emitter = get_emitter()
-            if emitter:
-                emitter.emit_error(
-                    agent_id="coding",
-                    error_type="logic",
-                    message=error_info.get("message", "Unknown execution error"),
-                )
-                emitter.emit_message(
-                    from_agent="coding",
-                    to_agent="summary",
-                    summary="Code execution failed. Passing error details for summarization.",
-                )
         
     except Exception as e:
         error_msg = f"Error in coding agent: {str(e)}"
@@ -145,13 +122,5 @@ Return ONLY the code, no markdown formatting.""")
         state["execution_result"] = {"success": False, "error": {"message": str(e)}}
         state["next_agent"] = "summary"
         state["messages"].append(AIMessage(content=error_msg))
-        
-        emitter = get_emitter()
-        if emitter:
-            emitter.emit_error(
-                agent_id="coding",
-                error_type="logic",
-                message=str(e),
-            )
     
     return state

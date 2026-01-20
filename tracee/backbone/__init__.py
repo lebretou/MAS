@@ -13,7 +13,7 @@ from backbone.models.execution_record import (
     ContractRef,
 )
 from backbone.models.trace_event import (
-    EventType,
+    PROMPT_RESOLVED,
     TraceEvent,
 )
 from backbone.tracer import Tracer
@@ -28,7 +28,7 @@ __all__ = [
     "ModelConfig",
     "PromptArtifactRef",
     "ContractRef",
-    "EventType",
+    "PROMPT_RESOLVED",
     "TraceEvent",
     "Tracer",
     "PromptLoader",

@@ -2,7 +2,6 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from backend.state.schema import AnalysisState
 from backend.tools.dataset_tools import create_dataset_tools_for_agent
-from backend.telemetry.config import get_emitter
 
 
 INTERACTION_SYSTEM_PROMPT = """You are an interaction agent in a data analysis system. Your role is to:
@@ -86,14 +85,6 @@ def create_interaction_agent(state: AnalysisState) -> AnalysisState:
             state["relevance_decision"] = "relevant"
             state["next_agent"] = "planner"
             state["messages"].append(AIMessage(content="Query requires analysis. Proceeding to planning phase."))
-            
-            emitter = get_emitter()
-            if emitter:
-                emitter.emit_message(
-                    from_agent="interaction",
-                    to_agent="planner",
-                    summary=f"Query is relevant for analysis: '{state['user_query'][:100]}...'",
-                )
         else:
             state["relevance_decision"] = "chat_only"
             state["next_agent"] = "end"
@@ -106,13 +97,5 @@ def create_interaction_agent(state: AnalysisState) -> AnalysisState:
         error_msg = f"Error in interaction agent: {str(e)}"
         state["final_summary"] = error_msg
         state["messages"].append(AIMessage(content=error_msg))
-        
-        emitter = get_emitter()
-        if emitter:
-            emitter.emit_error(
-                agent_id="interaction",
-                error_type="logic",
-                message=str(e),
-            )
     
     return state

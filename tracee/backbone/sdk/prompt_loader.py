@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import httpx
-from typing import TYPE_CHECKING
 
 from backbone.models.prompt_artifact import PromptVersion
-
-if TYPE_CHECKING:
-    from backbone.adapters.event_api import EventEmitter
 
 
 class PromptLoaderError(Exception):
@@ -121,8 +117,11 @@ class PromptLoader:
         self,
         prompt_id: str,
         version_id: str = "latest",
+        agent_id: str | None = None,
     ) -> str:
         """Get resolved prompt text by ID and version.
+        
+        Auto-emits a prompt_resolved event if tracing is active.
         
         This is the simplest way to use prompts - just one line of code:
         
@@ -131,6 +130,7 @@ class PromptLoader:
         Args:
             prompt_id: The prompt identifier
             version_id: The version to load ("latest" for most recent)
+            agent_id: Optional agent ID to associate with the trace event
             
         Returns:
             The resolved prompt text (all enabled components concatenated)
@@ -139,51 +139,27 @@ class PromptLoader:
             PromptLoaderError: If the prompt/version is not found or server error
         """
         version = self.get_version(prompt_id, version_id)
-        return version.resolve()
-
-    def get_with_trace(
-        self,
-        prompt_id: str,
-        version_id: str,
-        agent_id: str,
-        emitter: EventEmitter,
-    ) -> str:
-        """Get resolved prompt text and emit a prompt_resolved trace event.
-        
-        Use this method when you want the prompt usage to appear in the trace,
-        enabling the UI to show which prompt was used by which agent.
-        
-        Args:
-            prompt_id: The prompt identifier
-            version_id: The version to load ("latest" for most recent)
-            agent_id: The agent loading this prompt
-            emitter: The EventEmitter to emit the trace event
-            
-        Returns:
-            The resolved prompt text
-            
-        Raises:
-            PromptLoaderError: If the prompt/version is not found or server error
-        """
-        version = self.get_version(prompt_id, version_id)
         resolved_text = version.resolve()
         
-        # Emit trace event with full prompt snapshot
-        emitter.emit_prompt_resolved(
-            agent_id=agent_id,
-            prompt_id=prompt_id,
-            version_id=version.version_id,  # Use actual version ID (in case "latest" was passed)
-            resolved_text=resolved_text,
-            components=[
-                {
-                    "type": c.type.value,
-                    "content": c.content,
-                    "enabled": c.enabled,
-                }
-                for c in version.components
-            ],
-            variables_used=version.variables,
-        )
+        # auto-emit if tracing is active
+        from backbone.sdk.tracing import get_active_context
+        ctx = get_active_context()
+        if ctx:
+            ctx.emit_prompt_resolved(
+                prompt_id=prompt_id,
+                version_id=version.version_id,
+                resolved_text=resolved_text,
+                agent_id=agent_id,
+                components=[
+                    {
+                        "type": c.type.value,
+                        "content": c.content,
+                        "enabled": c.enabled,
+                    }
+                    for c in version.components
+                ],
+                variables_used=version.variables,
+            )
         
         return resolved_text
 

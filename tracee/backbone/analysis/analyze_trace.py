@@ -65,15 +65,27 @@ def format_summary(summary: TraceSummary) -> str:
     lines.append("-" * 40)
     for agent in summary.agents:
         lines.append(f"  • {agent}")
+    if not summary.agents:
+        lines.append("  (no agents identified)")
     lines.append("")
     
-    # agent communication graph
+    # agent transitions (inferred)
     if summary.edges:
         lines.append("-" * 40)
-        lines.append("AGENT COMMUNICATION")
+        lines.append("AGENT TRANSITIONS (inferred)")
         lines.append("-" * 40)
         for edge in summary.edges:
-            lines.append(f"  {edge.from_agent} → {edge.to_agent} ({edge.message_count} messages)")
+            lines.append(f"  {edge.from_agent} → {edge.to_agent} ({edge.message_count}x)")
+        lines.append("")
+    
+    # LLM usage
+    if summary.llm_usage:
+        lines.append("-" * 40)
+        lines.append("LLM USAGE")
+        lines.append("-" * 40)
+        for llm in summary.llm_usage:
+            latency_str = f" (avg: {llm.avg_latency_ms:.2f}ms)" if llm.avg_latency_ms else ""
+            lines.append(f"  • {llm.tool_name}: {llm.call_count} calls{latency_str}")
         lines.append("")
     
     # tool usage
@@ -93,25 +105,12 @@ def format_summary(summary: TraceSummary) -> str:
         lines.append("-" * 40)
         for failure in summary.failures:
             lines.append(f"  [{failure['type']}] {failure.get('agent_id', 'unknown')}")
-            if failure['type'] == 'error':
-                lines.append(f"    Error: {failure.get('error_type', 'unknown')}")
-                lines.append(f"    Message: {failure.get('message', '')}")
-            elif failure['type'] == 'contract_validation':
-                lines.append(f"    Contract: {failure.get('contract_id', 'unknown')}")
-                lines.append(f"    Errors: {failure.get('errors', [])}")
+            lines.append(f"    Error: {failure.get('error_type', 'unknown')}")
+            lines.append(f"    Message: {failure.get('message', '')}")
             lines.append(f"    Time: {failure.get('timestamp', '')}")
         lines.append("")
     
-    # failed contracts summary
-    if summary.failed_contracts:
-        lines.append("-" * 40)
-        lines.append("FAILED CONTRACTS SUMMARY")
-        lines.append("-" * 40)
-        for fc in summary.failed_contracts:
-            lines.append(f"  • {fc.contract_id} (v{fc.contract_version}): {fc.failure_count} failures")
-        lines.append("")
-    
-    if not summary.failures and not summary.failed_contracts:
+    if not summary.failures:
         lines.append("-" * 40)
         lines.append("✓ No failures detected")
         lines.append("-" * 40)

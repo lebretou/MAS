@@ -1,12 +1,15 @@
 """Convenience wrapper for MAS tracing.
 
 Provides a simple interface to set up tracing with minimal boilerplate.
+
+For new code, prefer using the `enable_tracing()` context manager from
+`backbone.sdk.tracing` for a cleaner interface.
 """
 
 from pathlib import Path
 
-from backbone.adapters.event_api import EventEmitter, EventSink, FileSink, ListSink
-from backbone.adapters.langchain_callback import MASCallbackHandler
+from backbone.adapters.event_api import EventEmitter, FileSink
+from backbone.adapters.langchain_callback import RawCallbackHandler, ListSink, EventSink
 from backbone.utils.identifiers import generate_execution_id, generate_trace_id
 
 
@@ -18,25 +21,26 @@ class Tracer:
         
         tracer = Tracer(output_dir="./traces")
         graph.invoke(input, config={"callbacks": [tracer.callback]})
+    
+    For new code, prefer the `enable_tracing()` context manager:
         
-        # manual events
-        tracer.emitter.emit_message("planner", "coder", summary="Here's the plan")
+        from backbone.sdk import enable_tracing
+        
+        with enable_tracing(output_dir="./traces") as ctx:
+            graph.invoke(input, config={"callbacks": ctx.callbacks})
     """
 
     def __init__(
         self,
         output_dir: str | Path | None = None,
-        default_agent_id: str = "workflow",
     ) -> None:
         """Initialize a new tracer.
         
         Args:
             output_dir: directory to store trace files. If None, traces are kept in memory.
-            default_agent_id: default agent ID for events without explicit agent context.
         """
         self.trace_id = generate_trace_id()
         self.execution_id = generate_execution_id()
-        self._default_agent_id = default_agent_id
 
         if output_dir:
             self._output_path = Path(output_dir) / self.trace_id
@@ -47,21 +51,20 @@ class Tracer:
             self._sink = ListSink()
 
         self._emitter = EventEmitter(self.execution_id, self.trace_id, self._sink)
-        self._callback = MASCallbackHandler(
+        self._callback = RawCallbackHandler(
             execution_id=self.execution_id,
             trace_id=self.trace_id,
             event_sink=self._sink,
-            default_agent_id=default_agent_id,
         )
 
     @property
-    def callback(self) -> MASCallbackHandler:
+    def callback(self) -> RawCallbackHandler:
         """LangChain callback handler for automatic event capture."""
         return self._callback
 
     @property
     def emitter(self) -> EventEmitter:
-        """Event emitter for manual event emission."""
+        """Event emitter for manual event emission (primarily prompt_resolved)."""
         return self._emitter
 
     @property
