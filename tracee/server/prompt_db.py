@@ -244,4 +244,3 @@ def get_latest_version(prompt_id: str) -> PromptVersion | None:
     return get_version(prompt_id, latest_id)
 
 
-init_db()

@@ -90,7 +90,7 @@ class TracingContext:
     ) -> TraceEvent:
         """Emit a prompt_resolved event.
         
-        This is called automatically by the prompt SDK when load_prompt() is used.
+        This is called automatically by the prompt SDK when PromptLoader is used.
         """
         return self.emitter.emit_prompt_resolved(
             prompt_id=prompt_id,
@@ -100,6 +100,38 @@ class TracingContext:
             components=components,
             variables_used=variables_used,
         )
+
+
+def _create_tracing_components(
+    trace_id: str | None = None,
+    execution_id: str | None = None,
+    output_dir: str | Path | None = None,
+    output_file: str = "trace_events.jsonl",
+    base_url: str | None = None,
+) -> tuple[str, str, EventSink, RawCallbackHandler, EventEmitter]:
+    """create sink, handler, and emitter for tracing."""
+    tid = trace_id or generate_trace_id()
+    eid = execution_id or generate_execution_id()
+
+    if base_url:
+        sink: EventSink = HttpSink(base_url=base_url, trace_id=tid)
+    elif output_dir:
+        output_path = Path(output_dir) / tid / output_file
+        sink = FileSink(output_path)
+    else:
+        sink = ListSink()
+
+    handler = RawCallbackHandler(
+        execution_id=eid,
+        trace_id=tid,
+        event_sink=sink,
+    )
+    emitter = EventEmitter(
+        execution_id=eid,
+        trace_id=tid,
+        event_sink=sink,
+    )
+    return tid, eid, sink, handler, emitter
 
 
 @contextmanager
@@ -146,29 +178,12 @@ def enable_tracing(
     """
     global _active_context
     
-    # generate IDs if not provided
-    tid = trace_id or generate_trace_id()
-    eid = execution_id or generate_execution_id()
-    
-    # create sink
-    if base_url:
-        sink = HttpSink(base_url=base_url, trace_id=tid)
-    elif output_dir:
-        output_path = Path(output_dir) / tid / output_file
-        sink = FileSink(output_path)
-    else:
-        sink = ListSink()
-    
-    # create callback handler this will take langchain raw events
-    handler = RawCallbackHandler(
-        execution_id=eid,
-        trace_id=tid,
-        event_sink=sink,
-    )
-    emitter = EventEmitter( # this is for customized events
-        execution_id=eid,
-        trace_id=tid,
-        event_sink=sink,
+    tid, eid, sink, handler, emitter = _create_tracing_components(
+        trace_id=trace_id,
+        execution_id=execution_id,
+        output_dir=output_dir,
+        output_file=output_file,
+        base_url=base_url,
     )
     
     # create context
@@ -188,17 +203,3 @@ def enable_tracing(
     finally:
         _active_context = None
 
-
-def load_prompt(
-    prompt_id: str,
-    version_id: str = "latest",
-    agent_id: str | None = None,
-    base_url: str = "http://localhost:8000",
-) -> str:
-    """Load a prompt and auto-emit prompt_resolved if tracing is active.
-    
-    """
-    from backbone.sdk.prompt_loader import PromptLoader
-    
-    loader = PromptLoader(base_url=base_url)
-    return loader.get(prompt_id, version_id, agent_id)

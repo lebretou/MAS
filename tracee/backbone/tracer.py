@@ -10,8 +10,8 @@ from pathlib import Path
 
 from backbone.adapters.event_api import EventEmitter
 from backbone.adapters.langchain_callback import RawCallbackHandler
-from backbone.adapters.sinks import EventSink, FileSink, ListSink
-from backbone.utils.identifiers import generate_execution_id, generate_trace_id
+from backbone.adapters.sinks import EventSink
+from backbone.sdk.tracing import _create_tracing_components
 
 
 class Tracer:
@@ -40,23 +40,18 @@ class Tracer:
         Args:
             output_dir: directory to store trace files. If None, traces are kept in memory.
         """
-        self.trace_id = generate_trace_id()
-        self.execution_id = generate_execution_id()
-
+        tid, eid, sink, handler, emitter = _create_tracing_components(
+            output_dir=output_dir,
+        )
+        self.trace_id = tid
+        self.execution_id = eid
+        self._sink = sink
         if output_dir:
             self._output_path = Path(output_dir) / self.trace_id
-            self._output_path.mkdir(parents=True, exist_ok=True)
-            self._sink: EventSink = FileSink(self._output_path / "trace_events.jsonl")
         else:
             self._output_path = None
-            self._sink = ListSink()
-
-        self._emitter = EventEmitter(self.execution_id, self.trace_id, self._sink)
-        self._callback = RawCallbackHandler(
-            execution_id=self.execution_id,
-            trace_id=self.trace_id,
-            event_sink=self._sink,
-        )
+        self._callback = handler
+        self._emitter = emitter
 
     @property
     def callback(self) -> RawCallbackHandler:

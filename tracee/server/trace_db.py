@@ -203,4 +203,3 @@ def delete_trace(trace_id: str) -> None:
         conn.commit()
 
 
-init_db()

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from server.routes import router as trace_router
 from server.prompt_routes import router as prompt_router
 from server.playground_routes import router as playground_router
+from server.db import init_all
 from server.model_config_routes import router as model_config_router
 from server.trace_db import TRACE_DB_PATH
 
@@ -35,6 +36,12 @@ app.include_router(trace_router, prefix="/api")
 app.include_router(prompt_router, prefix="/api")
 app.include_router(playground_router, prefix="/api")
 app.include_router(model_config_router, prefix="/api")
+
+
+@app.on_event("startup")
+def startup():
+    """initialize database tables."""
+    init_all()
 
 
 @app.get("/")

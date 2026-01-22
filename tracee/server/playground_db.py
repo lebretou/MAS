@@ -111,4 +111,3 @@ def get_run(run_id: str) -> PlaygroundRun | None:
     return PlaygroundRun.model_validate_json(row["run_json"])
 
 
-init_db()

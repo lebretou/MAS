@@ -1,58 +1,80 @@
-# Data Analysis Multi-Agent System — Architecture Guide
+# Tracee Architecture
 
-This document provides an explanation of the MAS implementation in this folder, including a brief overview of LangChain and LangGraph, how to set up agents, explanations of each file, and how the callback/telemetry system works. It also covers the **MAS Backbone** — the underlying tracing infrastructure used across all agent systems.
+Tracee is a developer tool for building and debugging multi-agent systems (MAS).
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [LangChain and LangGraph Primer](#langchain-and-langgraph-primer)
-   - [What is LangChain?](#what-is-langchain)
-   - [What is LangGraph?](#what-is-langgraph)
-   - [Key Concepts](#key-concepts)
-3. [Folder Structure](#folder-structure)
-4. [Architecture Diagram](#architecture-diagram)
-5. [Setting Up a Multi-Agent System](#setting-up-a-multi-agent-system)
-6. [File-by-File Explanation](#file-by-file-explanation)
-   - [CLI Entry Point](#cli-entry-point-mainpy)
-   - [State Schema](#state-schema-backendstateschemapybackendstate__init__py)
-   - [Workflow Graph](#workflow-graph-backendgraphworkflowpy)
-   - [Agents](#agents)
-   - [Tools](#tools)
-   - [Telemetry Configuration](#telemetry-configuration-backendtelemetryconfigpy)
-7. [How the Callback System Works](#how-the-callback-system-works)
-8. [Execution Flow](#execution-flow)
-9. [Running the System](#running-the-system)
-10. [MAS Backbone](#mas-backbone)
-    - [Backbone Overview](#backbone-overview)
-    - [Backbone Directory Structure](#backbone-directory-structure)
-    - [Core Concepts](#core-concepts)
-    - [Data Models](#data-models)
-    - [Event API and Sinks](#event-api-and-sinks)
-    - [LangChain Callback Handler](#langchain-callback-handler)
-    - [Trace Analysis](#trace-analysis)
-    - [Utility Functions](#utility-functions)
-    - [Design Patterns](#design-patterns)
-    - [Integration Examples](#integration-examples)
+1. [Motivation](#motivation)
+2. [Core Features](#core-features)
+3. [System Overview](#system-overview)
+4. [LangChain and LangGraph Primer](#langchain-and-langgraph-primer)
+5. [Directory Structure](#directory-structure)
+6. [Quickstart](#quickstart)
+7. [Core Components](#core-components)
+8. [Data Models](#data-models)
+9. [SDK Usage](#sdk-usage)
+10. [API Reference](#api-reference)
+11. [UI Integration](#ui-integration)
 
 ---
 
-## Overview
+## Motivation
 
-This project is a **Data Analysis Multi-Agent System** that allows users to:
-1. Load datasets (CSV, Excel, JSON, Parquet) from the command line
-2. Ask natural language questions about their data
-3. Get automated analysis, visualizations, and insights
+Based on the interviews with developers experienced in building multi-agent systems, two pain points came up repeatedly:
 
-The system uses **four specialized agents** orchestrated by **LangGraph**:
+1. **Prompt iteration** Developers spend a lot of time tweaking prompts, but testing changes requires running the full agent pipeline. They prefer isolated testing—being able to test a single prompt against an LLM without running the entire system.
 
-| Agent | Role |
-|-------|------|
-| **Interaction** | Validates queries, answers simple questions, routes requests |
-| **Planner** | Creates analysis plans and coding instructions |
-| **Coding** | Generates and executes Python code for analysis |
-| **Summary** | Interprets results and creates summaries |
+2. **Debugging means reading logs.** When something goes wrong, developers resort to manually reading through LLM inputs/outputs in terminal logs. 
+
+## The 2 Core Features
+
+Tracee addresses these pain points with and build on two core features (many of the existing tools have these two features):
+
+### Playground
+
+A prompt testing environment for rapid iteration. Developers can:
+- Edit prompts in blocks (role, goal, constraints, etc.)
+- Test prompts against different models individually. Please refer to LangSmith's similar feature page: https://docs.langchain.com/langsmith/run-evaluation-from-prompt-playground
+- Version prompts and compare outputs across versions
+- Load prompts in agent code via SDK with one line: `loader.get("my-prompt", "v2")`
+
+### Trace Viewer
+
+A structured view of agent execution for debugging. Instead of reading raw logs:
+- See all LLM calls, tool invocations, and agent transitions in one place
+- Correlate events with span IDs to understand parent-child relationships
+- Identify which prompt version was used at runtime
+- Analyze traces post-hoc to reconstruct what happened
+
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                           UI (Future)                               │
+│            Trace Viewer · Prompt Editor · Playground                │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        FastAPI Server                               │
+│   /api/traces · /api/prompts · /api/playground · /api/model-configs │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        SQLite Storage                               │
+│              traces · prompts · prompt_versions · playground_runs   │
+└─────────────────────────────────────────────────────────────────────┘
+                                  ▲
+                                  │
+┌─────────────────────────────────────────────────────────────────────┐
+│                        SDK (Agent Code)                             │
+│          enable_tracing() · PromptLoader · RawCallbackHandler       │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -67,69 +89,74 @@ The system uses **four specialized agents** orchestrated by **LangGraph**:
 - **Tool Integration**: Ability to give LLMs access to external tools and APIs
 - **Callbacks**: Hooks into the execution lifecycle for logging, tracing, and monitoring
 
-Key LangChain components used in this project:
+Key LangChain components:
 
 ```python
 from langchain_openai import ChatOpenAI           # LLM wrapper for OpenAI models
 from langchain_core.messages import (
-    SystemMessage,   # System instructions for the LLM
-    HumanMessage,    # User input messages
+    SystemMessage,   # system instructions for the LLM
+    HumanMessage,    # user input messages
     AIMessage,       # LLM responses
-    ToolMessage      # Results from tool executions
+    ToolMessage      # results from tool executions
 )
-from langchain_core.tools import tool, StructuredTool  # Tool decorators and classes
-from langchain_core.callbacks import BaseCallbackHandler  # For custom callbacks
+from langchain_core.tools import tool, StructuredTool  # tool decorators and classes
+from langchain_core.callbacks import BaseCallbackHandler  # for custom callbacks
 ```
 
 ### What is LangGraph?
 
-**LangGraph** is built on top of LangChain and provides a way to build **stateful, multi-agent workflows** as directed graphs. Think of it as a state machine where:
+**LangGraph** is built on top of LangChain and provides a way to build **stateful, multi-agent workflows** as directed graphs:
 
 - **Nodes** are agents or functions that process and transform state
 - **Edges** define the flow between nodes (can be conditional)
-- **State** is a typed dictionary that flows through the graph. Think of this as the shared context that all agents have access to. 
+- **State** is a typed dictionary that flows through the graph
 
 Key LangGraph components:
 
 ```python
 from langgraph.graph import StateGraph, END
 
-# Create a graph with a typed state schema
+# create a graph with a typed state schema
 workflow = StateGraph(AnalysisState)
 
-# Add nodes (agents)
+# add nodes (agents)
 workflow.add_node("agent_name", agent_function)
 
-# Define flow
+# define flow
 workflow.set_entry_point("first_agent")
-workflow.add_edge("agent_a", "agent_b")  # Always go from A to B
-workflow.add_conditional_edges(           # Conditional routing
+workflow.add_edge("agent_a", "agent_b")  # always go from A to B
+workflow.add_conditional_edges(           # conditional routing
     "agent_a",
     routing_function,
     {"option1": "agent_b", "option2": END}
 )
 
-# Compile and run
+# compile and run
 app = workflow.compile()
 result = app.invoke(initial_state)
 ```
 
 ### Key Concepts
 
-#### 1. State Management
+#### State Management
+
 LangGraph uses a `TypedDict` to define the state schema. State flows through nodes and can be modified at each step:
 
 ```python
+from typing import TypedDict, Annotated
+from operator import add
+
 class AnalysisState(TypedDict):
     dataset: pd.DataFrame
     user_query: str
-    messages: Annotated[list[BaseMessage], add]  # Messages are appended
+    messages: Annotated[list[BaseMessage], add]  # messages are appended
     next_agent: str
 ```
 
 The `Annotated[list, add]` pattern tells LangGraph to **append** to the list rather than replace it.
 
-#### 2. Conditional Edges
+#### Conditional Edges
+
 Routing decisions are made by functions that examine the state:
 
 ```python
@@ -139,7 +166,8 @@ def should_continue(state: AnalysisState) -> str:
     return "end"
 ```
 
-#### 3. Tool Binding
+#### Tool Binding
+
 LLMs can be given tools that they can choose to call:
 
 ```python
@@ -147,623 +175,13 @@ llm = ChatOpenAI(model="gpt-4o-mini")
 llm_with_tools = llm.bind_tools([tool1, tool2])
 response = llm_with_tools.invoke(messages)
 
-# Check if the LLM wants to call a tool
+# check if the LLM wants to call a tool
 if response.tool_calls:
     for tool_call in response.tool_calls:
         result = execute_tool(tool_call)
 ```
 
----
-
-## Folder Structure
-
-```
-sample_mas/
-├── backend/                    # Main application code
-│   ├── __init__.py
-│   ├── agents/                 # Agent implementations
-│   │   ├── __init__.py
-│   │   ├── interaction.py      # Query validation & routing
-│   │   ├── planner.py          # Analysis planning
-│   │   ├── coding.py           # Code generation & execution
-│   │   └── summary.py          # Result summarization
-│   ├── graph/                  # LangGraph workflow definition
-│   │   ├── __init__.py
-│   │   └── workflow.py         # Graph construction & execution
-│   ├── state/                  # State schema definition
-│   │   ├── __init__.py
-│   │   └── schema.py           # TypedDict state schema
-│   ├── telemetry/              # Tracing & callbacks configuration
-│   │   ├── __init__.py
-│   │   └── config.py           # LangSmith + MAS backbone setup
-│   └── tools/                  # LangChain tools for agents
-│       ├── __init__.py
-│       ├── dataset_tools.py    # Tools for dataset inspection
-│       └── execution_tools.py  # Safe code execution sandbox
-├── outputs/                    # Generated plots & traces
-├── main.py                     # CLI entry point
-├── test_system.py              # Integration tests
-├── sample_data.csv             # Demo dataset
-└── README.md                   # Quick start guide
-```
-
----
-
-## Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                             CLI Entry Point                                  │
-│                               (main.py)                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────┐                                                            │
-│  │   Dataset   │                                                            │
-│  │   (CSV/     │                                                            │
-│  │   Excel/    │                                                            │
-│  │   JSON)     │                                                            │
-│  └──────┬──────┘                                                            │
-│         │                                                                   │
-│         ▼                                                                   │
-│  ┌─────────────────────────────────────────────────────────────────┐        │
-│  │                  LangGraph Workflow                              │        │
-│  │                    (workflow.py)                                 │        │
-│  │                                                                  │        │
-│  │  ┌───────────┐   ┌─────────┐   ┌────────┐   ┌──────┐            │        │
-│  │  │Interaction│──▶│ Planner │──▶│ Coding │──▶│Summary│            │        │
-│  │  │   Agent   │   │  Agent  │   │ Agent  │   │Agent │            │        │
-│  │  └─────┬─────┘   └─────────┘   └───┬────┘   └──────┘            │        │
-│  │        │                           │                             │        │
-│  │        │ (uses tools)              │ (executes)                  │        │
-│  │        ▼                           ▼                             │        │
-│  │  ┌───────────┐              ┌───────────┐                        │        │
-│  │  │ Dataset   │              │ Execution │                        │        │
-│  │  │  Tools    │              │ Sandbox   │                        │        │
-│  │  └───────────┘              └───────────┘                        │        │
-│  └─────────────────────────────────────────────────────────────────┘        │
-│                                                                             │
-│                        ┌─────────────────────────────────┐                  │
-│                        │         Callback System         │                  │
-│                        │  ┌───────────┐  ┌────────────┐  │                  │
-│                        │  │ LangSmith │  │MAS Backbone│  │                  │
-│                        │  └───────────┘  └────────────┘  │                  │
-│                        └─────────────────────────────────┘                  │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Setting Up a Multi-Agent System
-
-Here's a step-by-step guide to building a MAS with LangGraph:
-
-### Step 1: Define Your State Schema
-
-Create a `TypedDict` that holds all data shared between agents:
-
-```python
-from typing import TypedDict, Annotated
-from operator import add
-from langchain_core.messages import BaseMessage
-
-class AnalysisState(TypedDict):
-    # Shared data
-    dataset: pd.DataFrame
-    user_query: str
-    
-    # Message history (use Annotated[list, add] to append)
-    messages: Annotated[list[BaseMessage], add]
-    
-    # Agent outputs
-    analysis_plan: str
-    generated_code: str
-    final_summary: str
-    
-    # Control flow
-    next_agent: str
-```
-
-### Step 2: Create Agent Functions
-
-In LangChain/LangGraph, agents(nodes) are treated as functions in traditional programming. Each agent is a function that takes state and returns modified state:
-
-```python
-def create_my_agent(state: AnalysisState) -> AnalysisState:
-    # Initialize LLM
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    
-    # Create messages
-    system_msg = SystemMessage(content="Your system prompt here")
-    user_msg = HumanMessage(content=state["user_query"])
-    
-    # Get LLM response
-    response = llm.invoke([system_msg, user_msg])
-    
-    # Update state
-    state["agent_output"] = response.content
-    state["next_agent"] = "next_agent_name"
-    state["messages"].append(AIMessage(content=response.content))
-    
-    return state
-```
-
-### Step 3: Build the Workflow Graph
-
-```python
-from langgraph.graph import StateGraph, END
-
-def create_workflow() -> StateGraph:
-    workflow = StateGraph(AnalysisState)
-    
-    # Add nodes (agents)
-    workflow.add_node("agent_a", create_agent_a)
-    workflow.add_node("agent_b", create_agent_b)
-    workflow.add_node("agent_c", create_agent_c)
-    
-    # Set entry point
-    workflow.set_entry_point("agent_a")
-    
-    # Add edges
-    workflow.add_conditional_edges(
-        "agent_a",
-        lambda state: state["next_agent"],
-        {"agent_b": "agent_b", "end": END}
-    )
-    workflow.add_edge("agent_b", "agent_c")
-    workflow.add_edge("agent_c", END)
-    
-    return workflow.compile()
-```
-
-### Step 4: Run the Workflow
-
-```python
-app = create_workflow()
-
-initial_state = {
-    "dataset": my_dataframe,
-    "user_query": "Analyze this data",
-    "messages": [],
-    # ... other fields initialized
-}
-
-result = app.invoke(initial_state)
-print(result["final_summary"])
-```
-
----
-
-## File-by-File Explanation
-
-### CLI Entry Point: `main.py`
-
-The command-line interface that allows users to interact with the system:
-
-#### Key Functions
-
-| Function | Description |
-|----------|-------------|
-| `load_dataset()` | Loads CSV, Excel, JSON, or Parquet files into pandas DataFrame |
-| `interactive_mode()` | Runs a loop accepting multiple queries from the user |
-| `single_query_mode()` | Executes a single query and exits |
-| `main()` | Parses arguments and orchestrates the execution |
-
-#### Usage Modes
-
-**Interactive Mode** (default when no `--query` is provided):
-```bash
-python main.py --dataset data.csv
-```
-
-**Single Query Mode**:
-```bash
-python main.py --dataset data.csv --query "Plot histogram of age column"
-```
-
-**With Sample Data**:
-```bash
-python main.py --sample --query "Create a correlation heatmap"
-```
-
----
-
-### State Schema: `backend/state/schema.py`
-
-Defines the `AnalysisState` TypedDict that flows through all agents:
-
-```python
-class AnalysisState(TypedDict):
-    # Dataset information
-    dataset: pd.DataFrame           # The actual data
-    dataset_path: str               # Original filename
-    dataset_info: dict              # Columns, dtypes, shape
-    
-    # Conversation history
-    messages: Annotated[list[BaseMessage], add]  # Appended across agents
-    user_query: str                 # Original user question
-    
-    # Agent outputs (populated as workflow progresses)
-    relevance_decision: str         # "relevant" or "chat_only"
-    analysis_plan: str              # From planner agent
-    coding_prompt: str              # Instructions for coding agent
-    generated_code: str             # Python code from coding agent
-    execution_result: dict          # {success, stdout, plots, error}
-    final_summary: str              # User-facing summary
-    
-    # Control flow
-    next_agent: str                 # Routing decision
-    
-    # Session & telemetry
-    session_id: str
-    callbacks: list                 # Callback handlers for tracing
-```
-
-**Important**: The `Annotated[list[BaseMessage], add]` syntax tells LangGraph to **append** new messages to the existing list rather than replacing it. This preserves conversation history across all agents.
-
----
-
-### Workflow Graph: `backend/graph/workflow.py`
-
-Constructs and executes the LangGraph workflow.
-
-#### `create_workflow() -> StateGraph`
-
-Builds the graph structure:
-
-```python
-def create_workflow() -> StateGraph:
-    workflow = StateGraph(AnalysisState)
-    
-    # Add four agent nodes
-    workflow.add_node("interaction", create_interaction_agent)
-    workflow.add_node("planner", create_planner_agent)
-    workflow.add_node("coding", create_coding_agent)
-    workflow.add_node("summary", create_summary_agent)
-    
-    # Entry point
-    workflow.set_entry_point("interaction")
-    
-    # Conditional edge: interaction decides whether to continue
-    workflow.add_conditional_edges(
-        "interaction",
-        should_continue_to_planner,
-        {"planner": "planner", "end": END}
-    )
-    
-    # Linear flow for remaining agents
-    workflow.add_edge("planner", "coding")
-    workflow.add_edge("coding", "summary")
-    workflow.add_edge("summary", END)
-    
-    return workflow.compile()
-```
-
-#### `should_continue_to_planner(state) -> str`
-
-Routing function that decides whether to proceed to planning or end early:
-
-```python
-def should_continue_to_planner(state: AnalysisState) -> str:
-    if state.get("relevance_decision") == "relevant":
-        return "planner"  # Complex query → continue to planner
-    return "end"          # Simple query → interaction already answered
-```
-
-#### `run_analysis_workflow()`
-
-Main entry point that:
-1. Extracts dataset metadata
-2. Creates callback handlers for tracing
-3. Initializes the state dictionary
-4. Invokes the compiled graph
-5. Returns formatted results
-
----
-
-### Agents
-
-#### Interaction Agent: `backend/agents/interaction.py`
-
-**Purpose**: First point of contact. Validates query relevance and answers simple questions.
-
-##### Key Function: `create_interaction_agent(state) -> AnalysisState`
-
-```python
-def create_interaction_agent(state: AnalysisState) -> AnalysisState:
-    # Create LLM with tool binding
-    dataset = state["dataset"]
-    tools = create_dataset_tools_for_agent(dataset)
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, callbacks=callbacks)
-    llm_with_tools = llm.bind_tools(tools)
-    
-    # Agentic loop: keep calling tools until LLM gives final answer
-    messages = [SystemMessage(...), HumanMessage(...)]
-    for i in range(max_iterations):
-        response = llm_with_tools.invoke(messages)
-        messages.append(response)
-        
-        if response.tool_calls:
-            # Execute each tool and add results to messages
-            for tool_call in response.tool_calls:
-                tool = find_tool(tool_call["name"])
-                result = tool.invoke(tool_call["args"])
-                messages.append(ToolMessage(content=str(result), tool_call_id=...))
-        else:
-            break  # No more tool calls, we have the final response
-    
-    # Route based on response content
-    if "[EXECUTE_ANALYSIS]" in response.content:
-        state["relevance_decision"] = "relevant"
-        state["next_agent"] = "planner"
-    else:
-        state["relevance_decision"] = "chat_only"
-        state["next_agent"] = "end"
-        state["final_summary"] = response.content
-    
-    return state
-```
-
-##### System Prompt Logic
-
-The interaction agent uses a decision rule:
-- **Simple questions** (e.g., "What columns are in this dataset?") → Answer directly using tools
-- **Analysis requests** (e.g., "Plot X vs Y") → Output `[EXECUTE_ANALYSIS]` token to trigger full workflow
-
----
-
-#### Planner Agent: `backend/agents/planner.py`
-
-**Purpose**: Creates a detailed analysis plan and instructions for the coding agent.
-
-##### Key Function: `create_planner_agent(state) -> AnalysisState`
-
-```python
-def create_planner_agent(state: AnalysisState) -> AnalysisState:
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)  # Slightly creative
-    
-    # Provide dataset context
-    user_msg = HumanMessage(content=f"""
-        User query: {state['user_query']}
-        
-        Dataset information:
-        - Columns: {columns}
-        - Numeric columns: {numeric_cols}
-        - Categorical columns: {categorical_cols}
-        
-        Please create a detailed analysis plan and coding instructions.
-    """)
-    
-    response = llm.invoke([system_msg, user_msg])
-    
-    # Store the plan (serves as prompt for coding agent)
-    state["analysis_plan"] = response.content
-    state["coding_prompt"] = response.content
-    state["next_agent"] = "coding"
-    
-    return state
-```
-
-##### Output Format
-
-The planner produces structured output:
-
-```markdown
-## Analysis Plan
-1. Load and prepare data
-2. Perform calculations/analysis
-3. Create visualizations
-4. Output results
-
-## Coding Instructions
-- Use column 'price' for the y-axis
-- Calculate correlation using df.corr()
-- Save plot as 'correlation_heatmap.png'
-```
-
----
-
-#### Coding Agent: `backend/agents/coding.py`
-
-**Purpose**: Generates executable Python code and runs it in a sandbox.
-
-##### Key Function: `create_coding_agent(state) -> AnalysisState`
-
-```python
-def create_coding_agent(state: AnalysisState) -> AnalysisState:
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)  # Precise for code
-    
-    user_msg = HumanMessage(content=f"""
-        Analysis Plan and Instructions:
-        {state['coding_prompt']}
-        
-        Dataset columns available: {list(dataset.columns)}
-        
-        Please generate the Python code to accomplish this analysis.
-        Return ONLY the code, no markdown formatting.
-    """)
-    
-    response = llm.invoke([system_msg, user_msg])
-    code = response.content
-    
-    # Clean up markdown formatting if present
-    if "```python" in code:
-        code = code.split("```python")[1].split("```")[0].strip()
-    
-    state["generated_code"] = code
-    
-    # Execute in sandbox
-    execution_result = execute_code_safely(code, dataset, output_dir)
-    state["execution_result"] = execution_result
-    state["next_agent"] = "summary"
-    
-    return state
-```
-
-##### Available Libraries
-
-The coding agent can use:
-- `pandas` (as `pd`)
-- `numpy` (as `np`)
-- `matplotlib.pyplot` (as `plt`)
-- `seaborn` (as `sns`)
-- `sklearn` (scikit-learn)
-- `scipy`
-
----
-
-#### Summary Agent: `backend/agents/summary.py`
-
-**Purpose**: Interprets execution results and creates a user-friendly summary.
-
-##### Key Function: `create_summary_agent(state) -> AnalysisState`
-
-```python
-def create_summary_agent(state: AnalysisState) -> AnalysisState:
-    execution_result = state.get("execution_result", {})
-    
-    # Build context based on success/failure
-    if execution_result.get("success"):
-        context = f"""
-            Code Execution: SUCCESS
-            Standard Output: {execution_result.get('stdout')}
-            Generated Visualizations: {execution_result.get('plots')}
-        """
-    else:
-        context = f"""
-            Code Execution: FAILED
-            Error: {execution_result.get('error')}
-        """
-    
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)  # Natural language
-    response = llm.invoke([system_msg, HumanMessage(content=context)])
-    
-    state["final_summary"] = response.content
-    state["next_agent"] = "end"
-    
-    return state
-```
-
----
-
-### Tools
-
-#### Dataset Tools: `backend/tools/dataset_tools.py`
-
-Provides tools for the interaction agent to inspect datasets.
-
-##### Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `get_dataset_info()` | Returns columns, dtypes, shape, missing values |
-| `get_sample_rows(n)` | Returns first n rows as dictionaries |
-| `search_dataset_columns(keyword)` | Finds columns containing keyword |
-| `get_column_statistics(column)` | Returns detailed stats for a column |
-
-##### Tool Binding Pattern
-
-Tools need the dataset, but LangChain tools can't directly take DataFrame arguments. Solution: **closure-based factory**:
-
-```python
-def create_dataset_tools_for_agent(dataset: pd.DataFrame) -> list:
-    # Create wrapper functions that capture dataset in closure
-    def _get_dataset_info() -> dict:
-        return get_dataset_info.func(dataset)  # Call original with captured dataset
-    
-    # Convert to LangChain tools
-    tools = [
-        StructuredTool.from_function(
-            func=_get_dataset_info,
-            name="get_dataset_info",
-            description="Get comprehensive dataset information..."
-        ),
-        # ... other tools
-    ]
-    return tools
-```
-
----
-
-#### Execution Tools: `backend/tools/execution_tools.py`
-
-##### `execute_code_safely(code, dataset, output_dir) -> dict`
-
-Runs generated Python code in a restricted sandbox:
-
-```python
-def execute_code_safely(code: str, dataset: pd.DataFrame, output_dir: str) -> dict:
-    result = {
-        "success": False,
-        "stdout": "",
-        "stderr": "",
-        "error": None,
-        "plots": [],
-        "variables": {}
-    }
-    
-    # Restricted globals — only safe builtins + data science libraries
-    safe_globals = {
-        '__builtins__': {
-            'print': print, 'len': len, 'range': range,
-            'list': list, 'dict': dict, 'str': str,
-            # ... other safe builtins
-        },
-        'pd': pd,
-        'np': np,
-        'plt': plt,
-        'sns': sns,
-        'df': dataset.copy(),      # Provide dataset as 'df'
-        'dataset': dataset.copy(), # Also as 'dataset'
-    }
-    
-    # Capture stdout/stderr
-    with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-        exec(code, safe_globals, local_vars)
-        
-        # Save any matplotlib figures
-        for fig in plt.get_fignums():
-            fig.savefig(os.path.join(output_dir, f"plot_{uuid}.png"))
-        plt.close('all')
-    
-    result["success"] = True
-    result["stdout"] = stdout_buffer.getvalue()
-    result["plots"] = [list of saved filenames]
-    
-    return result
-```
-
----
-
-### Telemetry Configuration: `backend/telemetry/config.py`
-
-Sets up tracing via LangSmith and the MAS backbone.
-
-##### Key Functions
-
-| Function | Description |
-|----------|-------------|
-| `get_langsmith_config()` | Returns LangSmith project name and API key from env |
-| `get_mas_backbone_handler()` | Creates MASCallbackHandler and EventEmitter |
-| `get_callbacks(session_id)` | Returns list of callback handlers for workflow |
-| `get_emitter()` | Returns current EventEmitter for manual events |
-| `setup_telemetry()` | Called at startup to initialize tracing |
-
-##### Module-Level State
-
-```python
-_current_emitter: EventEmitter | None = None
-_current_execution_id: str | None = None
-_current_trace_id: str | None = None
-_current_sink: FileSink | None = None
-```
-
-This allows agents to access the emitter via `get_emitter()` for manual event emission.
-
----
-
-## How the Callback System Works
-
-### What Are Callbacks?
+#### Callbacks
 
 LangChain/LangGraph callbacks are **hooks into the execution lifecycle**. They receive events like:
 - Chain/agent started/ended
@@ -771,1069 +189,576 @@ LangChain/LangGraph callbacks are **hooks into the execution lifecycle**. They r
 - Tool call started/ended
 - Errors occurred
 
-### Callback Flow
+Tracee's `RawCallbackHandler` subscribes to these callbacks and captures them as `TraceEvent` objects.
+
+---
+
+## Directory Structure
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          LangChain Execution                             │
-│                                                                          │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                   │
-│  │ Chain Start │───▶│  LLM Call   │───▶│ Tool Call   │                   │
-│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘                   │
-│         │                  │                  │                          │
-│         ▼                  ▼                  ▼                          │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │                    Callback Handlers                             │    │
-│  │  ┌────────────────────┐    ┌────────────────────────────────┐   │    │
-│  │  │ LangSmith Handler  │    │   MASCallbackHandler            │   │    │
-│  │  │ (built-in tracing) │    │   (custom backbone adapter)     │   │    │
-│  │  └────────────────────┘    └────────────────────────────────┘   │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-│                                    │                                     │
-│                                    ▼                                     │
-│                     ┌──────────────────────────────┐                     │
-│                     │  FileSink                     │                     │
-│                     │  outputs/traces/trace_events │                     │
-│                     │  .jsonl                       │                     │
-│                     └──────────────────────────────┘                     │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-### MASCallbackHandler
-
-Located in `backbone/adapters/langchain_callback.py`, this translates LangChain events into our trace event format:
-
-```python
-class MASCallbackHandler(BaseCallbackHandler):
-    """
-    Event Mapping:
-    - on_chain_start  → agent_input event
-    - on_chain_end    → agent_output event
-    - on_llm_start    → tool_call (phase=start, tool_name="llm.generate")
-    - on_llm_end      → tool_call (phase=end)
-    - on_tool_start   → tool_call (phase=start)
-    - on_tool_end     → tool_call (phase=end)
-    - on_chain_error  → error event
-    """
-    
-    def on_chain_start(self, serialized, inputs, *, run_id, metadata, **kwargs):
-        # Extract agent_id from metadata
-        agent_id = metadata.get("agent", "unknown")
-        
-        # Emit agent_input event
-        self.emitter.emit(
-            EventType.agent_input,
-            agent_id,
-            payload={"input": inputs, "chain_name": serialized.get("name")}
-        )
-    
-    def on_llm_start(self, serialized, prompts, *, run_id, **kwargs):
-        # Emit tool_call start for LLM
-        self.emitter.emit_tool_call(
-            agent_id,
-            tool_name="llm.generate",
-            phase="start",
-            tool_input={"prompts": prompts}
-        )
-```
-
-### Manual Event Emission
-
-For events that callbacks can't capture (like agent-to-agent messages), use the `EventEmitter`:
-
-```python
-from backend.telemetry.config import get_emitter
-
-emitter = get_emitter()
-if emitter:
-    emitter.emit_message(
-        from_agent="interaction",
-        to_agent="planner",
-        summary="Query requires analysis"
-    )
-```
-
-### Passing Callbacks Through the Workflow
-
-Callbacks are passed at multiple levels:
-
-```python
-# 1. Stored in state
-initial_state = {
-    "callbacks": get_callbacks(session_id),
-    # ...
-}
-
-# 2. Passed to LLM initialization
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    callbacks=state.get("callbacks", []),
-    metadata={"agent": "interaction"}  # Identifies agent in traces
-)
-
-# 3. Passed to invoke calls
-response = llm.invoke(messages, config={"callbacks": callbacks})
-
-# 4. Passed to workflow execution
-final_state = app.invoke(initial_state, config={"callbacks": callbacks})
+tracee/
+├── backbone/                    # Core tracing library
+│   ├── adapters/
+│   │   ├── event_api.py         # EventEmitter for manual events
+│   │   ├── langchain_callback.py# RawCallbackHandler for LangChain
+│   │   └── sinks.py             # ListSink, FileSink, HttpSink
+│   ├── analysis/
+│   │   └── trace_summary.py     # Reconstruct agent graphs from events
+│   ├── models/
+│   │   ├── prompt_artifact.py   # Prompt, PromptVersion, PromptComponent
+│   │   ├── playground_run.py    # PlaygroundRun model
+│   │   ├── saved_model_config.py# SavedModelConfig model
+│   │   └── trace_event.py       # TraceEvent model
+│   ├── sdk/
+│   │   ├── tracing.py           # enable_tracing() context manager
+│   │   └── prompt_loader.py     # PromptLoader for agent code
+│   ├── utils/
+│   │   └── identifiers.py       # UUID generation, timestamps
+│   └── tracer.py                # Tracer class (legacy wrapper)
+├── server/
+│   ├── app.py                   # FastAPI application
+│   ├── db.py                    # Database initialization
+│   ├── routes.py                # Trace endpoints
+│   ├── prompt_routes.py         # Prompt endpoints
+│   ├── playground_routes.py     # Playground endpoints
+│   ├── model_config_routes.py   # Model config endpoints
+│   ├── trace_db.py              # Trace SQLite operations
+│   ├── prompt_db.py             # Prompt SQLite operations
+│   └── playground_db.py         # Playground SQLite operations
+└── sample_mas/                  # Example multi-agent system
 ```
 
 ---
 
-## Execution Flow
+## Quickstart
 
-Here's what happens when a user runs an analysis:
+This project uses **uv**, a fast Python package manager written in Rust. It's 10-100x faster than pip and handles virtual environments automatically. Install it from https://docs.astral.sh/uv/getting-started/installation/.
 
-### 1. Initialization Phase
+### 1. Run the Server
 
-```
-User runs: python main.py --dataset data.csv --query "Plot correlation heatmap"
-    │
-    ▼
-main.py
-    │
-    ├── Parse command-line arguments
-    ├── Initialize telemetry (LangSmith + MAS backbone)
-    ├── Load dataset into pandas DataFrame
-    └── Call run_analysis_workflow()
-```
-
-### 2. Analysis Phase
-
-```
-run_analysis_workflow()
-    │
-    ├── Extract dataset metadata
-    ├── Create callbacks (LangSmith + MAS backbone)
-    ├── Initialize state dictionary
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         LangGraph Workflow                              │
-│                                                                         │
-│  ┌────────────────┐                                                     │
-│  │  INTERACTION   │ ← Entry point                                       │
-│  │    Agent       │                                                     │
-│  └───────┬────────┘                                                     │
-│          │                                                              │
-│          │ Uses tools: get_dataset_info(), get_sample_rows()            │
-│          │ Decides: Query requires analysis → output [EXECUTE_ANALYSIS] │
-│          │                                                              │
-│          ▼                                                              │
-│  ┌────────────────┐                                                     │
-│  │    PLANNER     │                                                     │
-│  │    Agent       │                                                     │
-│  └───────┬────────┘                                                     │
-│          │                                                              │
-│          │ Creates: Analysis plan with step-by-step instructions        │
-│          │ Output: coding_prompt for next agent                         │
-│          │                                                              │
-│          ▼                                                              │
-│  ┌────────────────┐                                                     │
-│  │    CODING      │                                                     │
-│  │    Agent       │                                                     │
-│  └───────┬────────┘                                                     │
-│          │                                                              │
-│          │ Generates: Python code using pandas, matplotlib, seaborn     │
-│          │ Executes: In sandbox via execute_code_safely()               │
-│          │ Saves: Plots to outputs/ directory                           │
-│          │                                                              │
-│          ▼                                                              │
-│  ┌────────────────┐                                                     │
-│  │    SUMMARY     │                                                     │
-│  │    Agent       │                                                     │
-│  └───────┬────────┘                                                     │
-│          │                                                              │
-│          │ Interprets: stdout, generated plots, any errors              │
-│          │ Produces: User-friendly summary of findings                  │
-│          │                                                              │
-│          ▼                                                              │
-│        END                                                              │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-    │
-    ▼
-Return result dictionary
-    ├── success: true
-    ├── final_summary: "The correlation analysis reveals..."
-    ├── generated_code: "import pandas as pd..."
-    └── execution_result: {plots: ["plot_abc123_0.png"]}
-```
-
-### 3. Trace Output
-
-Throughout execution, events are written to `outputs/traces/<trace_id>/trace_events.jsonl`:
-
-```json
-{"event_id": "evt_...", "event_type": "agent_input", "agent_id": "interaction", "payload": {...}}
-{"event_id": "evt_...", "event_type": "tool_call", "agent_id": "interaction", "payload": {"tool_name": "llm.generate", "phase": "start"}}
-{"event_id": "evt_...", "event_type": "tool_call", "agent_id": "interaction", "payload": {"tool_name": "get_dataset_info", "phase": "start"}}
-{"event_id": "evt_...", "event_type": "agent_message", "agent_id": "interaction", "payload": {"to_agent_id": "planner"}}
-...
-```
-
----
-
-## Running the System
-
-### Prerequisites
+The server provides the REST API for the playground and trace viewer.
 
 ```bash
-# Install dependencies
+cd tracee
+
+# create venv and install dependencies
+uv venv
+source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
+uv pip install -e .
+
+# set API keys for playground LLM calls
+export OPENAI_API_KEY=your_key
+export ANTHROPIC_API_KEY=your_key  # optional
+
+# start server
+uvicorn server.app:app --reload --port 8000
+
+# verify it's running
+curl http://localhost:8000/
+```
+
+### 2. Run the Sample MAS
+
+The `sample_mas/` folder contains a data analysis multi-agent system for testing.
+
+```bash
 cd tracee/sample_mas
+
+# install dependencies (uv auto-creates venv if needed)
 uv pip install -r requirements.txt
 
-# Set OpenAI API key
+# set OpenAI key
 export OPENAI_API_KEY=your_key
+```
 
-# Optional: Enable LangSmith tracing
+**Enable LangSmith tracing (recommended):**
+
+```bash
 export LANGSMITH_API_KEY=your_langsmith_key
 export LANGSMITH_TRACING=true
 export LANGSMITH_PROJECT=data-analysis-agents
 ```
 
-### Run with Sample Data
+**Run with sample data:**
 
 ```bash
-# Interactive mode
+# interactive mode
 python main.py --sample
 
-# Single query
-python main.py --sample --query "Create a correlation heatmap of numeric columns"
+# single query
+python main.py --sample --query "Create a correlation heatmap"
 ```
 
-### Run with Your Own Data
+**Run with your own data:**
 
 ```bash
-# Interactive mode
-python main.py --dataset your_data.csv
-
-# Single query
-python main.py --dataset your_data.csv --query "Plot the distribution of the age column"
+python main.py --dataset your_data.csv --query "Plot the distribution of age"
 ```
 
-### Run Tests
-
-```bash
-python test_system.py
-```
+Traces are written to `outputs/traces/<trace_id>/trace_events.jsonl` and (if LangSmith is enabled) visible at https://smith.langchain.com/.
 
 ---
 
-## MAS Backbone
+## Core Components
 
-The **MAS Backbone** is the underlying tracing infrastructure that powers the observability in this multi-agent system. It provides data models, event emission APIs, and analysis utilities that are framework-agnostic and can be used with any LLM orchestration tool.
+### Event Sinks
 
-### Backbone Overview
+Events can be written to different destinations:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           FUTURE UI LAYER                                   │
-│                   (Playground, Trace Viewer, Evaluations)                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         MAS BACKBONE                                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │   Models    │  │  Adapters   │  │  Analysis   │  │       Utils         │ │
-│  │ (Pydantic)  │  │ (Event API) │  │  (Summary)  │  │   (ID generation)   │ │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          EXTERNAL SYSTEMS                                   │
-│              LangChain / LangGraph Agents, Storage (JSONL/SQLite)           │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+| Sink | Use Case |
+|------|----------|
+| `ListSink` | In-memory storage for tests |
+| `FileSink` | Write to JSONL file |
+| `HttpSink` | Post to server API |
 
-The backbone is a **headless data layer** — no UI, no server. It defines:
-- **What data structures exist** (models)
-- **How events get captured** (adapters)
-- **How to reconstruct what happened** (analysis)
+### RawCallbackHandler
+
+Captures LangChain events with minimal transformation. Events retain their original names:
+- `on_chain_start`, `on_chain_end`, `on_chain_error`
+- `on_llm_start`, `on_llm_end`, `on_llm_error`
+- `on_tool_start`, `on_tool_end`, `on_tool_error`
+
+### EventEmitter
+
+Manual event emission for custom events. Currently supports `prompt_resolved` for tracking which prompt version was used.
 
 ---
 
-### Backbone Directory Structure
+## Data Models
 
-```
-backbone/
-├── __init__.py              # Package exports (public API)
-├── pyproject.toml           # Python package configuration (uv/pip compatible)
-├── models/                  # Pydantic data models
-│   ├── __init__.py
-│   ├── prompt_artifact.py   # Authoring-side: PromptVersion, PromptComponent
-│   ├── execution_record.py  # Execution-side: ExecutionRecord, ModelConfig
-│   └── trace_event.py       # Trace layer: TraceEvent, EventType enum
-├── adapters/                # Integration points
-│   ├── __init__.py
-│   ├── event_api.py         # Manual event emission (EventEmitter)
-│   ├── sinks.py             # Event sinks (EventSink, ListSink, FileSink)
-│   └── langchain_callback.py# Auto-capture from LangChain/LangGraph
-├── analysis/                # Post-hoc analysis utilities
-│   ├── __init__.py
-│   └── trace_summary.py     # Reconstruct agent graph from events
-├── utils/                   # Shared utilities
-│   ├── __init__.py
-│   └── identifiers.py       # UUID generation, timestamps
-├── scripts/                 # Development/testing scripts
-│   ├── __init__.py
-│   └── generate_dummy_run.py# Creates example scenarios with events
-└── tests/                   # pytest test suite
-    ├── __init__.py
-    ├── test_models.py       # Serialization round-trip tests
-    ├── test_invariants.py   # Payload validation tests
-    ├── test_langchain.py    # Callback handler tests
-    ├── test_integration.py  # End-to-end workflow tests
-    └── fixtures/
-        └── sample_contract.json
-```
-
----
-
-### Core Concepts
-
-#### 1. Pydantic Models as the Schema Layer
-
-**Why Pydantic?**
-- **Validation at construction time**: Invalid data fails immediately, not later in a pipeline
-- **Serialization for free**: `.model_dump_json()` and `.model_validate_json()` handle JSON round-trips
-- **Type hints are documentation**: The code is self-documenting for IDE autocompletion
-
-Every model has `model_config = {"extra": "forbid"}` — this means if you pass an unexpected field, it errors. This catches typos and schema drift early.
-
-#### 2. Protocol-Based Abstraction (EventSink)
-
-```python
-class EventSink(Protocol):
-    def append(self, event: TraceEvent) -> None: ...
-```
-
-This is a **structural subtyping** pattern (duck typing with type hints). Any class with an `append(TraceEvent)` method satisfies this protocol. You don't need inheritance — just implement the method.
-
-**Why this matters**:
-- `ListSink` stores events in memory (for tests)
-- `FileSink` appends to a JSONL file (for persistence)
-
-#### 3. Callback Handler Pattern (LangChain Integration)
-
-LangChain uses the **Observer pattern** via callbacks. When an LLM runs, chain executes, or tool is called, LangChain invokes registered callbacks.
-
-`MASCallbackHandler` subscribes to these callbacks and translates them into `TraceEvent` objects. The key insight: **callbacks capture low-level execution events, NOT semantic agent communication**. That's why `emit_message()` is a manual API call.
-
-#### 4. JSONL as Append-Only Log
-
-Events are stored in JSONL (JSON Lines) format:
-```
-{"event_id": "...", "event_type": "agent_input", ...}
-{"event_id": "...", "event_type": "tool_call", ...}
-{"event_id": "...", "event_type": "agent_message", ...}
-```
-
----
-
-### Data Models
-
-#### Prompt Artifact: `backbone/models/prompt_artifact.py`
-
-**Purpose**: Defines the **authoring-side** data structures — what gets created in a Playground before execution.
-
-##### PromptComponentType Enum
-
-```python
-class PromptComponentType(str, Enum):
-    """Types of prompt sections that can be toggled on/off."""
-    role = "role"                    # "You are a..."
-    goal = "goal"                    # "Your objective is..."
-    constraints = "constraints"      # "Do not..."
-    io_rules = "io_rules"            # "Output format must be..."
-    examples = "examples"            # Few-shot examples
-    safety = "safety"                # Safety guardrails
-    tool_instructions = "tool_instructions"  # How to use tools
-```
-
-##### PromptComponent Model
-
-```python
-class PromptComponent(BaseModel):
-    type: PromptComponentType
-    content: str
-    enabled: bool = True  # Toggle components without deleting them
-```
-
-##### PromptVersion Model
-
-```python
-class PromptVersion(BaseModel):
-    prompt_id: str          # e.g., "prompt-planner-001"
-    version_id: str         # e.g., "v1.0.0" (immutable once created)
-    name: str               # Human-readable name
-    components: list[PromptComponent]
-    variables: dict[str, str] | None  # Template variables like {{max_steps}}
-    created_at: str         # ISO8601 timestamp
-```
-
-**Key invariant**: `PromptVersion` is **immutable** once created. Changes create new versions.
-
----
-
-#### Execution Record: `backbone/models/execution_record.py`
-
-**Purpose**: Captures **what actually happened** during a single execution run.
-
-##### ModelConfig Model
-
-```python
-class ModelConfig(BaseModel):
-    """LLM configuration used for this run."""
-    provider: str       # "openai", "anthropic", etc.
-    model_name: str     # "gpt-4", "claude-3", etc.
-    temperature: float
-    max_tokens: int
-    seed: int | None    # For reproducibility
-```
-
-##### Reference Models
-
-```python
-class PromptArtifactRef(BaseModel):
-    """Reference to a versioned prompt artifact."""
-    prompt_id: str
-    version_id: str
-    agent_id: str | None = None
-
-class ContractRef(BaseModel):
-    """Reference to a versioned contract."""
-    contract_id: str
-    contract_version: str
-    agent_id: str | None = None
-```
-
-##### ExecutionRecord Model
-
-```python
-class ExecutionRecord(BaseModel):
-    execution_id: str   # Unique run identifier
-    trace_id: str       # Links to TraceEvent stream
-    origin: Literal["playground", "prod", "sdk", "batch_eval"]
-    created_at: str
-    
-    llm_config: ModelConfig
-    input_payload: dict              # What was passed in
-    resolved_prompt_text: str        # REQUIRED: The actual text sent to LLM
-    
-    prompt_refs: list[PromptArtifactRef] | None  # Links to PromptVersion
-    contract_refs: list[ContractRef] | None      # Links to validation schemas
-    
-    # Environment context
-    git_commit: str | None
-    app_version: str | None
-    env: Literal["dev", "staging", "prod"] | None
-    tags: list[str] | None
-```
-
-**Critical invariant** (enforced by `@model_validator`):
-```python
-if not self.resolved_prompt_text.strip():
-    raise ValueError("resolved_prompt_text must not be empty")
-```
-
-This ensures every execution has a record of the exact prompt sent to the model — not a reference, the actual text.
-
----
-
-#### Trace Event: `backbone/models/trace_event.py`
-
-**Purpose**: Defines the **semantic event vocabulary** — what types of things can happen during execution.
-
-##### EventType Enum
-
-```python
-class EventType(str, Enum):
-    agent_input = "agent_input"           # Agent received input
-    agent_output = "agent_output"         # Agent produced output
-    agent_message = "agent_message"       # Agent-to-agent communication
-    agent_decision = "agent_decision"     # Agent made a routing decision
-    tool_call = "tool_call"               # Tool was invoked
-    contract_validation = "contract_validation"  # Schema was validated
-    error = "error"                        # Something went wrong
-```
-
-##### TraceEvent Model
+### TraceEvent
 
 ```python
 class TraceEvent(BaseModel):
-    event_id: str       # UUID for deduplication
-    trace_id: str       # Groups events in one trace
-    execution_id: str   # Links to ExecutionRecord
-    timestamp: str      # ISO8601
-    sequence: int | None  # Monotonic ordering within trace
-    
-    event_type: EventType
-    agent_id: str       # Which agent this event belongs to
-    
-    span_id: str | None         # For correlating start/end pairs
-    parent_span_id: str | None  # For nesting (e.g., tool within chain)
-    
-    refs: dict[str, Any]  # Namespaced metadata: refs["langchain"], refs["langgraph"]
-    payload: dict[str, Any]  # Event-specific data
-```
-
-##### Payload Validation Rules
-
-Different event types have different required fields (enforced by `@model_validator`):
-
-| Event Type | Required Payload Fields |
-|------------|------------------------|
-| `agent_message` | `to_agent_id`, (`message_summary` OR `payload_ref`) |
-| `contract_validation` | `contract_id`, `contract_version`, `validation_result.is_valid`, `validation_result.errors` |
-| `tool_call` | `tool_name`, `phase` (must be "start" or "end") |
-| `error` | `error_type` (one of: schema, tool, model, infra, logic), `message` |
-
-##### Valid Error Types
-
-```python
-ERROR_TYPES = {"schema", "tool", "model", "infra", "logic"}
-```
-
----
-
-### Event API and Sinks
-
-The manual event emission API lives in `backbone/adapters/event_api.py`. Event sinks are defined in `backbone/adapters/sinks.py`.
-
-#### EventSink Protocol
-
-```python
-class EventSink(Protocol):
-    """Protocol for receiving trace events."""
-    def append(self, event: TraceEvent) -> None:
-        """Append an event to the sink."""
-        ...
-```
-
-#### ListSink Implementation
-
-```python
-class ListSink:
-    """Stores events in a list (for tests)."""
-    def __init__(self) -> None:
-        self.events: list[TraceEvent] = []
-
-    def append(self, event: TraceEvent) -> None:
-        self.events.append(event)
-
-    def clear(self) -> None:
-        self.events.clear()
-```
-
-#### FileSink Implementation
-
-```python
-class FileSink:
-    """Writes events to a JSONL file (for production)."""
-    def __init__(self, path: Path | str) -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-
-    def append(self, event: TraceEvent) -> None:
-        with open(self.path, "a") as f:
-            f.write(event.model_dump_json() + "\n")
-```
-
-#### EventEmitter Class
-
-The main API for emitting trace events:
-
-```python
-class EventEmitter:
-    """Manual event emission API - shares sink with callback handler."""
-
-    def __init__(
-        self,
-        execution_id: str,
-        trace_id: str,
-        event_sink: EventSink,
-    ) -> None:
-        self.execution_id = execution_id
-        self.trace_id = trace_id
-        self.event_sink = event_sink
-        self._sequence = 0  # Internal counter for ordering
-```
-
-##### EventEmitter Methods
-
-| Method | Creates Event Type | Key Parameters |
-|--------|-------------------|----------------|
-| `emit()` | Any | `event_type`, `agent_id`, `payload` |
-| `emit_input()` | `agent_input` | `agent_id`, `input_data` |
-| `emit_output()` | `agent_output` | `agent_id`, `output_data` |
-| `emit_message()` | `agent_message` | `from_agent`, `to_agent`, `summary` |
-| `emit_decision()` | `agent_decision` | `agent_id`, `decision`, `reasoning` |
-| `emit_tool_call()` | `tool_call` | `agent_id`, `tool_name`, `phase` |
-| `emit_validation()` | `contract_validation` | `agent_id`, `contract_id`, `is_valid`, `errors` |
-| `emit_error()` | `error` | `agent_id`, `error_type`, `message` |
-
-##### emit() Method Details
-
-```python
-def emit(
-    self,
-    event_type: EventType,
-    agent_id: str,
-    refs: dict | None = None,
-    payload: dict | None = None,
-    span_id: str | None = None,
-    parent_span_id: str | None = None,
-) -> TraceEvent:
-    """Emit a trace event with the given parameters."""
-    event = TraceEvent(
-        event_id=generate_event_id(),
-        trace_id=self.trace_id,
-        execution_id=self.execution_id,
-        timestamp=utc_timestamp(),
-        sequence=self._next_sequence(),
-        event_type=event_type,
-        agent_id=agent_id,
-        span_id=span_id or generate_span_id(),
-        parent_span_id=parent_span_id,
-        refs=refs or {},
-        payload=payload or {},
-    )
-    self.event_sink.append(event)
-    return event
-```
-
-**Why return the event?** — To allow correlating start/end of a tool call:
-```python
-# Correlate start/end of a tool call
-start_event = emitter.emit_tool_call("agent", "search", "start")
-# ... later ...
-emitter.emit_tool_call("agent", "search", "end", span_id=start_event.span_id)
-```
-
----
-
-### LangChain Callback Handler
-
-Located in `backbone/adapters/langchain_callback.py`, this provides **automatic** event capture from LangChain/LangGraph execution.
-
-#### MASCallbackHandler Class
-
-```python
-class MASCallbackHandler(BaseCallbackHandler):
-    """Emits low-level execution events from LangChain/LangGraph.
-
-    Does NOT infer agent-to-agent messages (use manual API for that).
-
-    Callback Mapping:
-    - on_chain_start  → agent_input (only if chain = agent node)
-    - on_chain_end    → agent_output (only if chain = agent node)
-    - on_llm_start    → tool_call (phase=start, tool_name="llm.generate")
-    - on_llm_end      → tool_call (phase=end, tool_name="llm.generate")
-    - on_tool_start   → tool_call (phase=start)
-    - on_tool_end     → tool_call (phase=end)
-    - on_chain_error  → error (classified)
-    """
-```
-
-#### Internal State
-
-The callback handler maintains internal state for correlating events:
-
-```python
-self._run_span_map: dict[str, str] = {}   # run_id → span_id
-self._run_agent_map: dict[str, str] = {}  # run_id → agent_id
-```
-
-**Why track run_id → span_id?**
-LangChain passes a `run_id` for each execution unit. To correlate start/end events (e.g., `on_llm_start` and `on_llm_end`), we need to use the **same span_id**. The map ensures this.
-
-**Why track run_id → agent_id?**
-Nested callbacks (e.g., `on_llm_end`) don't receive metadata. By storing the agent_id from `on_chain_start`, child callbacks can look it up via `parent_run_id`.
-
-#### Key Callback Methods
-
-##### on_chain_start
-
-```python
-def on_chain_start(
-    self,
-    serialized: dict[str, Any],
-    inputs: dict[str, Any],
-    *,
-    run_id: UUID,
-    parent_run_id: UUID | None = None,
-    tags: list[str] | None = None,
-    metadata: dict[str, Any] | None = None,
-    **kwargs: Any,
-) -> None:
-    """Handle chain start - emit agent_input if this is an agent node."""
-    # Store agent ID for this run if provided
-    if metadata and ("agent_id" in metadata or "agent" in metadata):
-        agent_id = metadata.get("agent_id", metadata.get("agent", self.default_agent_id))
-        self._run_agent_map[str(run_id)] = agent_id
-
-    agent_id = self._get_agent_id(run_id, metadata)
-    refs = self._make_refs(run_id, parent_run_id, metadata)
-    # ... emit agent_input event
-```
-
-##### on_llm_start / on_llm_end
-
-```python
-def on_llm_start(self, serialized, prompts, *, run_id, ...):
-    """Handle LLM start - emit tool_call with phase=start."""
-    self.emitter.emit_tool_call(
-        agent_id,
-        tool_name="llm.generate",
-        phase="start",
-        tool_input={"prompts": prompts[:1]},  # truncate for brevity
-        refs=refs,
-        span_id=span_id,
-        parent_span_id=parent_span,
-    )
-
-def on_llm_end(self, response, *, run_id, ...):
-    """Handle LLM end - emit tool_call with phase=end."""
-    output_text = response.generations[0][0].text[:200]  # truncated
-    self.emitter.emit_tool_call(
-        agent_id,
-        tool_name="llm.generate",
-        phase="end",
-        tool_output={"text": output_text},
-        span_id=span_id,  # Same span_id as start
-    )
-```
-
-#### Error Classification
-
-The `_classify_error()` function maps exceptions to error types:
-
-```python
-def _classify_error(error: BaseException) -> str:
-    """Classify an error into one of the valid error types."""
-    error_name = type(error).__name__.lower()
-
-    if any(x in error_name for x in ["openai", "anthropic", "llm", "api", "rate"]):
-        return "model"
-    if any(x in error_name for x in ["tool", "function"]):
-        return "tool"
-    if any(x in error_name for x in ["timeout", "connection", "network", "http"]):
-        return "infra"
-    if any(x in error_name for x in ["validation", "schema", "parse", "json", "type"]):
-        return "schema"
-    return "logic"  # default
-```
-
-#### Key Design Decision
-
-The callback handler **does NOT emit `agent_message`**. Why?
-
-LangChain callbacks see execution events (chain started, LLM called, tool ran) but don't understand the **semantic relationship** between agents. The decision to hand off work from planner to executor is a domain concept — only the developer knows when that happens.
-
----
-
-### Trace Analysis
-
-Located in `backbone/analysis/trace_summary.py`, this provides **post-hoc analysis** — reconstructing what happened from a list of events.
-
-#### Data Classes
-
-```python
-@dataclass
-class AgentEdge:
-    """Represents communication between two agents."""
-    from_agent: str
-    to_agent: str
-    message_count: int
-
-@dataclass
-class FailedContract:
-    """Represents a failed contract validation."""
-    contract_id: str
-    contract_version: str
-    failure_count: int
-
-@dataclass
-class ToolUsage:
-    """Represents tool usage statistics."""
-    tool_name: str
-    call_count: int
-    avg_latency_ms: float | None = None
-```
-
-#### TraceSummary Class
-
-```python
-@dataclass
-class TraceSummary:
-    """Summary of a trace including agent communication and failures."""
+    event_id: str           # UUID
+    trace_id: str           # groups events in a trace
     execution_id: str
-    trace_id: str
-    agents: list[str]                    # All agents that participated
-    edges: list[AgentEdge]               # Who talked to whom
-    messages_by_edge: dict[tuple[str, str], int]  # Message counts
-    failures: list[dict]                 # All failures (errors + validation)
-    failed_contracts: list[FailedContract]  # Contracts that failed
-    tool_usage: list[ToolUsage]          # Tool statistics
-    event_count: int
+    timestamp: str          # ISO8601
+    sequence: int | None    # ordering within trace
+    event_type: str         # raw LangChain event or "prompt_resolved"
+    agent_id: str | None
+    span_id: str | None     # for correlating start/end pairs
+    parent_span_id: str | None
+    refs: dict[str, Any]    # namespaced: refs["langchain"], refs["langgraph"]
+    payload: dict[str, Any] # event-specific data
 ```
 
-#### trace_summary() Function
+### Prompt & PromptVersion
 
 ```python
-def trace_summary(events: list[TraceEvent]) -> TraceSummary:
-    """Reconstruct agent graph and detect failures from trace events.
+class Prompt(BaseModel):
+    prompt_id: str          # unique identifier
+    name: str               # display name
+    description: str | None
+    latest_version_id: str | None
+    created_at: str
+    updated_at: str
 
-    Args:
-        events: List of TraceEvent objects from a single trace.
+class PromptVersion(BaseModel):
+    prompt_id: str
+    version_id: str         # e.g., "v1", "v2"
+    name: str
+    components: list[PromptComponent]
+    variables: dict[str, str] | None
+    created_at: str
 
-    Returns:
-        TraceSummary with agent communication graph and failure information.
-    """
+    def resolve(self) -> str:
+        """Concatenate enabled components."""
 ```
 
-**What it does**:
-1. **Collects agents**: Every unique `agent_id` seen in events
-2. **Builds edges**: From `agent_message` events, extracts `from_agent` (the `agent_id`) and `to_agent` (from `payload.to_agent_id`)
-3. **Detects failures**: Both `error` events and `contract_validation` where `is_valid=False`
-4. **Computes tool latency**: Matches `tool_call` start/end pairs by `span_id`, calculates time difference
+### PromptComponent
 
-**Why this matters**: From a flat list of events, you can reconstruct:
-- The **communication graph** (who talked to whom)
-- The **failure locations** (which agent, which contract)
-- **Performance bottlenecks** (tool latencies)
+```python
+class PromptComponentType(str, Enum):
+    role = "role"
+    goal = "goal"
+    constraints = "constraints"
+    io_rules = "io_rules"
+    examples = "examples"
+    safety = "safety"
+    tool_instructions = "tool_instructions"
+
+class PromptComponent(BaseModel):
+    type: PromptComponentType
+    content: str
+    enabled: bool = True
+```
+
+### PlaygroundRun
+
+```python
+class PlaygroundRun(BaseModel):
+    run_id: str
+    prompt_id: str
+    version_id: str
+    model: str              # e.g., "gpt-4"
+    provider: str           # "openai" or "anthropic"
+    temperature: float
+    max_tokens: int | None
+    input_variables: dict[str, str]
+    resolved_prompt: str    # final text sent to LLM
+    output: str             # LLM response
+    latency_ms: float | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    total_tokens: int | None
+```
 
 ---
 
-### Utility Functions
+## SDK Usage
 
-Located in `backbone/utils/identifiers.py`, these provide consistent ID generation across the codebase.
+### Enable Tracing
 
 ```python
-def generate_execution_id() -> str:
-    """Generate a unique execution ID (UUID4)."""
-    return str(uuid.uuid4())
+from backbone.sdk import enable_tracing
 
-def generate_trace_id() -> str:
-    """Generate a unique trace ID (UUID4)."""
-    return str(uuid.uuid4())
+# send events to server
+with enable_tracing(base_url="http://localhost:8000") as ctx:
+    result = graph.invoke(state, config={"callbacks": ctx.callbacks})
 
-def generate_event_id() -> str:
-    """Generate a unique event ID (UUID4)."""
-    return str(uuid.uuid4())
+# or write to file
+with enable_tracing(output_dir="./traces") as ctx:
+    result = graph.invoke(state, config={"callbacks": ctx.callbacks})
+```
 
-def generate_span_id() -> str:
-    """Generate a span ID (16-char hex string for OpenTelemetry compatibility)."""
-    return uuid.uuid4().hex[:16]
+### Load Prompts
 
-def utc_timestamp() -> str:
-    """Generate an ISO8601 UTC timestamp."""
-    return datetime.now(timezone.utc).isoformat()
+```python
+from backbone.sdk import PromptLoader
+
+loader = PromptLoader(base_url="http://localhost:8000")
+
+# get resolved text (auto-emits prompt_resolved event if tracing active)
+system_prompt = loader.get("planner-prompt", "v2")
+
+# get full version object
+version = loader.get_version("planner-prompt", "latest")
+```
+
+### Combined Usage
+
+```python
+from backbone.sdk import enable_tracing, PromptLoader
+
+loader = PromptLoader()
+
+with enable_tracing(base_url="http://localhost:8000") as ctx:
+    # prompt_resolved event auto-emitted
+    system_prompt = loader.get("my-agent-prompt", "v1", agent_id="planner")
+    
+    # run agent with tracing
+    result = graph.invoke(
+        {"prompt": system_prompt, ...},
+        config={"callbacks": ctx.callbacks}
+    )
 ```
 
 ---
 
-### Design Patterns
+## API Reference
 
-#### 1. Inversion of Control (Dependency Injection)
+### Traces
 
-`EventEmitter` doesn't know where events go — it just calls `event_sink.append()`. The caller provides the sink:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/traces` | List all traces |
+| GET | `/api/traces/{trace_id}` | Get trace events |
+| GET | `/api/traces/{trace_id}/summary` | Get computed summary |
+| POST | `/api/traces/{trace_id}/events` | Append events |
+| DELETE | `/api/traces/{trace_id}` | Delete trace |
 
-```python
-# For tests
-sink = ListSink()
-emitter = EventEmitter(exec_id, trace_id, sink)
+### Prompts
 
-# For production
-sink = FileSink("/path/to/trace.jsonl")
-emitter = EventEmitter(exec_id, trace_id, sink)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/prompts` | List all prompts |
+| POST | `/api/prompts` | Create prompt |
+| GET | `/api/prompts/{id}` | Get prompt with versions |
+| DELETE | `/api/prompts/{id}` | Delete prompt |
+| POST | `/api/prompts/{id}/versions` | Create version |
+| GET | `/api/prompts/{id}/versions/{vid}` | Get version |
+| GET | `/api/prompts/{id}/versions/{vid}/resolve` | Get resolved text |
+| GET | `/api/prompts/{id}/latest` | Get latest version |
+
+### Playground
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/playground/run` | Execute prompt |
+| GET | `/api/playground/runs` | List runs |
+| GET | `/api/playground/runs/{id}` | Get run |
+
+### Model Configs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/model-configs` | List configs |
+| POST | `/api/model-configs` | Create config |
+| GET | `/api/model-configs/{id}` | Get config |
+| PATCH | `/api/model-configs/{id}` | Update config |
+| DELETE | `/api/model-configs/{id}` | Delete config |
+| POST | `/api/model-configs/{id}/set-default` | Set as default |
+
+---
+
+## UI Integration
+
+### Setup
+
+```bash
+# start server
+cd tracee
+uvicorn server.app:app --reload --port 8000
 ```
 
-#### 2. Validation at the Boundary
 
-All data validation happens in Pydantic models. By the time an object exists, it's guaranteed valid. No defensive checks scattered through the codebase.
 
-#### 3. Event Sourcing Lite
+### React Examples
 
-Events are the source of truth. The `TraceSummary` is a **derived view** computed from events. If you need a different view (e.g., timeline, agent-centric), write a new function that reads the same events.
+#### Fetch Traces
 
-#### 4. Namespace Isolation (refs dict)
+```tsx
+const API_BASE = "http://localhost:8000/api";
 
-Instead of flat fields like `langchain_run_id`, `langgraph_node`, etc., the `refs` dict uses namespaces:
+async function fetchTraces(): Promise<TraceMetadata[]> {
+  const res = await fetch(`${API_BASE}/traces`);
+  return res.json();
+}
 
-```python
-refs = {
-    "langchain": {"run_id": "...", "parent_run_id": "..."},
-    "langgraph": {"node": "planner", "state_keys": ["messages"]},
-    "prompt": {"prompt_id": "...", "version_id": "..."},
+async function fetchTraceEvents(traceId: string): Promise<TraceEvent[]> {
+  const res = await fetch(`${API_BASE}/traces/${traceId}`);
+  return res.json();
+}
+
+// usage in component
+function TraceList() {
+  const [traces, setTraces] = useState<TraceMetadata[]>([]);
+
+  useEffect(() => {
+    fetchTraces().then(setTraces);
+  }, []);
+
+  return (
+    <ul>
+      {traces.map((t) => (
+        <li key={t.trace_id}>
+          {t.trace_id} ({t.event_count} events)
+        </li>
+      ))}
+    </ul>
+  );
 }
 ```
 
-**Why?** New integrations don't change the schema. Just add a new namespace.
+#### Prompt Editor
+
+```tsx
+interface CreateVersionRequest {
+  name: string;
+  components: PromptComponent[];
+  variables?: Record<string, string>;
+}
+
+async function createPromptVersion(
+  promptId: string,
+  data: CreateVersionRequest
+): Promise<PromptVersion> {
+  const res = await fetch(`${API_BASE}/prompts/${promptId}/versions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+function PromptEditor({ promptId }: { promptId: string }) {
+  const [components, setComponents] = useState<PromptComponent[]>([
+    { type: "role", content: "", enabled: true },
+    { type: "goal", content: "", enabled: true },
+  ]);
+
+  const handleSave = async () => {
+    const version = await createPromptVersion(promptId, {
+      name: "Draft",
+      components,
+    });
+    console.log("Created version:", version.version_id);
+  };
+
+  return (
+    <div>
+      {components.map((comp, i) => (
+        <div key={i}>
+          <label>{comp.type}</label>
+          <textarea
+            value={comp.content}
+            onChange={(e) => {
+              const updated = [...components];
+              updated[i] = { ...comp, content: e.target.value };
+              setComponents(updated);
+            }}
+          />
+          <input
+            type="checkbox"
+            checked={comp.enabled}
+            onChange={(e) => {
+              const updated = [...components];
+              updated[i] = { ...comp, enabled: e.target.checked };
+              setComponents(updated);
+            }}
+          />
+        </div>
+      ))}
+      <button onClick={handleSave}>Save Version</button>
+    </div>
+  );
+}
+```
+
+#### Playground Runner
+
+```tsx
+interface RunRequest {
+  prompt_id: string;
+  version_id: string;
+  input_variables?: Record<string, string>;
+  model?: string;
+  provider?: string;
+  temperature?: number;
+}
+
+async function executeRun(data: RunRequest): Promise<PlaygroundRun> {
+  const res = await fetch(`${API_BASE}/playground/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  return json.run;
+}
+
+function PlaygroundRunner({ promptId }: { promptId: string }) {
+  const [output, setOutput] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+
+  const handleRun = async () => {
+    setLoading(true);
+    const run = await executeRun({
+      prompt_id: promptId,
+      version_id: "latest",
+      model: "gpt-4",
+      provider: "openai",
+      temperature: 0.7,
+    });
+    setOutput(run.output);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <button onClick={handleRun} disabled={loading}>
+        {loading ? "Running..." : "Run"}
+      </button>
+      <pre>{output}</pre>
+    </div>
+  );
+}
+```
+
+#### Trace Viewer
+
+```tsx
+function TraceViewer({ traceId }: { traceId: string }) {
+  const [events, setEvents] = useState<TraceEvent[]>([]);
+
+  useEffect(() => {
+    fetchTraceEvents(traceId).then(setEvents);
+  }, [traceId]);
+
+  // group events by span for tree view
+  const eventsBySpan = events.reduce((acc, event) => {
+    const span = event.span_id || "root";
+    if (!acc[span]) acc[span] = [];
+    acc[span].push(event);
+    return acc;
+  }, {} as Record<string, TraceEvent[]>);
+
+  return (
+    <div>
+      <h2>Trace: {traceId}</h2>
+      {events.map((event) => (
+        <div key={event.event_id} style={{ marginLeft: event.parent_span_id ? 20 : 0 }}>
+          <strong>{event.event_type}</strong>
+          <span> @ {event.timestamp}</span>
+          <pre>{JSON.stringify(event.payload, null, 2)}</pre>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+#### Model Config Selector
+
+```tsx
+interface SavedModelConfig {
+  config_id: string;
+  name: string;
+  provider: string;
+  model_name: string;
+  temperature: number;
+  is_default: boolean;
+}
+
+async function fetchModelConfigs(): Promise<SavedModelConfig[]> {
+  const res = await fetch(`${API_BASE}/model-configs`);
+  return res.json();
+}
+
+function ModelConfigSelector({
+  onSelect,
+}: {
+  onSelect: (config: SavedModelConfig) => void;
+}) {
+  const [configs, setConfigs] = useState<SavedModelConfig[]>([]);
+
+  useEffect(() => {
+    fetchModelConfigs().then(setConfigs);
+  }, []);
+
+  return (
+    <select onChange={(e) => {
+      const config = configs.find((c) => c.config_id === e.target.value);
+      if (config) onSelect(config);
+    }}>
+      <option value="">Select model config...</option>
+      {configs.map((c) => (
+        <option key={c.config_id} value={c.config_id}>
+          {c.name} ({c.model_name})
+        </option>
+      ))}
+    </select>
+  );
+}
+```
 
 ---
 
-### Integration Examples
+## Running
 
-#### Creating a Prompt Version
+```bash
+# install dependencies
+cd tracee
+pip install -e .
 
-```python
-from backbone.models.prompt_artifact import (
-    PromptComponent,
-    PromptComponentType,
-    PromptVersion,
-)
-from backbone.utils.identifiers import utc_timestamp
+# set API keys
+export OPENAI_API_KEY=your_key
+export ANTHROPIC_API_KEY=your_key  # optional
 
-# User builds a prompt in the UI
-prompt_version = PromptVersion(
-    prompt_id="my-planner-prompt",
-    version_id="v1.0.0",
-    name="My Planner Agent",
-    components=[
-        PromptComponent(type=PromptComponentType.role, content="You are a planning agent."),
-        PromptComponent(type=PromptComponentType.goal, content="Create a step-by-step plan."),
-        PromptComponent(type=PromptComponentType.constraints, content="Max 5 steps.", enabled=True),
-        PromptComponent(type=PromptComponentType.examples, content="Example: ...", enabled=False),
-    ],
-    variables={"max_steps": "5"},
-    created_at=utc_timestamp(),
-)
+# start server
+uvicorn server.app:app --reload --port 8000
 
-# Save to storage
-with open("prompts/my-planner-prompt-v1.json", "w") as f:
-    f.write(prompt_version.model_dump_json(indent=2))
+# health check
+curl http://localhost:8000/
 ```
-
-#### Setting Up Event Capture for a Run
-
-```python
-from backbone.adapters.event_api import EventEmitter
-from backbone.adapters.sinks import FileSink
-from backbone.adapters.langchain_callback import MASCallbackHandler
-from backbone.utils.identifiers import generate_execution_id, generate_trace_id
-
-# Generate IDs
-execution_id = generate_execution_id()
-trace_id = generate_trace_id()
-
-# Create output directory
-output_dir = Path(f"outputs/traces/{trace_id}")
-output_dir.mkdir(parents=True, exist_ok=True)
-
-# Set up event capture
-sink = FileSink(output_dir / "trace_events.jsonl")
-emitter = EventEmitter(execution_id, trace_id, sink)
-
-# Create callback handler (shares the same sink)
-callback = MASCallbackHandler(
-    execution_id=execution_id,
-    trace_id=trace_id,
-    event_sink=sink,
-    default_agent_id="planner",
-)
-```
-
-#### Running LangChain with Tracing
-
-```python
-from langchain_openai import ChatOpenAI
-
-# Resolve the prompt text (only enabled components)
-resolved_prompt = "\n\n".join(
-    c.content for c in prompt_version.components if c.enabled
-)
-
-# Run LangChain with callback
-llm = ChatOpenAI(model="gpt-4", temperature=0)
-response = llm.invoke(
-    resolved_prompt,
-    config={"callbacks": [callback], "metadata": {"agent_id": "planner"}},
-)
-
-# Emit semantic event manually (agent decided to hand off)
-emitter.emit_message(
-    from_agent="planner",
-    to_agent="executor",
-    summary=f"Sending plan with {len(response.content)} chars",
-)
-```
-
-#### Analyzing a Trace
-
-```python
-from backbone.analysis.trace_summary import trace_summary
-from backbone.models.trace_event import TraceEvent
-
-# Load events from JSONL
-events = []
-with open(output_dir / "trace_events.jsonl") as f:
-    for line in f:
-        events.append(TraceEvent.model_validate_json(line))
-
-# Generate summary
-summary = trace_summary(events)
-
-print(f"Agents: {summary.agents}")
-print(f"Edges: {[(e.from_agent, e.to_agent) for e in summary.edges]}")
-print(f"Failures: {summary.failures}")
-print(f"Tool usage: {[(t.tool_name, t.call_count) for t in summary.tool_usage]}")
-```
-
-#### Dummy Scenario Generation
-
-The `scripts/generate_dummy_run.py` script creates realistic test scenarios:
-
-**Scenario A: Failure Case**
-```
-planner receives input
-planner calls LLM
-planner makes decision
-planner outputs plan
-planner → executor (agent_message)
-executor receives plan
-executor validates contract → FAILS (missing 'tool' field)
-executor emits error
-```
-
-**Scenario B: Success Case**
-```
-Same as A, but plan includes 'tool' field
-executor validates contract → PASSES
-executor outputs results
-```
-
----
-
-## Summary
-
-This architecture guide covers two interconnected systems:
-
-### Sample MAS (Multi-Agent System)
-
-A **Data Analysis Multi-Agent System** demonstrating:
-1. **LangGraph for orchestration**: Stateful graph-based workflow with conditional routing
-2. **Specialized agents**: Each agent has a focused responsibility (interaction, planning, coding, summarization)
-3. **Tool integration**: Agents can use tools to inspect data and make informed decisions
-4. **Safe code execution**: Generated code runs in a sandboxed environment
-5. **Simple CLI**: Easy-to-use command-line interface for terminal-based execution
-
-### MAS Backbone
-
-The **underlying tracing infrastructure** providing:
-1. **Pydantic models**: Strict validation for prompts, executions, and events
-2. **Event emission API**: Manual (`EventEmitter`) and automatic (`MASCallbackHandler`)
-3. **Pluggable sinks**: `ListSink` for tests, `FileSink` for production
-4. **Trace analysis**: Reconstruct agent graphs and detect failures from events
-5. **Framework-agnostic design**: Works with any LLM orchestration tool
-
-### Key Insight: Separation of Concerns
-
-- **Authoring** (PromptVersion) vs **Execution** (ExecutionRecord)
-- **Automatic capture** (callbacks) vs **Semantic events** (manual emit)
-- **Storage** (sinks) vs **Analysis** (summary)
-
-This foundation enables future UIs (Playground, Trace Viewer, Evaluations) without changing core data models, and the architecture is extensible — you can add more agents, tools, or integrate additional tracing backends by following the established patterns.
