@@ -1,55 +1,37 @@
 """API routes for trace data."""
 
-import json
-import os
 from dataclasses import asdict
-from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backbone.analysis.trace_summary import TraceSummary, trace_summary
 from backbone.models.trace_event import TraceEvent
+from server.trace_db import (
+    TRACE_DB_PATH,
+    delete_trace,
+    get_trace,
+    insert_events,
+    list_traces,
+    load_events,
+)
 
 router = APIRouter()
-
-# configurable traces directory (stored alongside prompts in server/data/)
-DEFAULT_TRACES_DIR = Path(__file__).parent / "data" / "traces"
-TRACES_DIR = Path(os.getenv("TRACES_DIR", str(DEFAULT_TRACES_DIR)))
 
 
 class TraceMetadata(BaseModel):
     """Metadata about a trace."""
+
     trace_id: str
     event_count: int
-    created_at: str | None
-    file_size_bytes: int
+    created_at: str
+    updated_at: str
 
 
-def _get_trace_file(trace_id: str) -> Path:
-    """Get path to trace file, raise 404 if not found."""
-    trace_dir = TRACES_DIR / trace_id
-    trace_file = trace_dir / "trace_events.jsonl"
-    
-    if not trace_file.exists():
-        raise HTTPException(status_code=404, detail=f"Trace not found: {trace_id}")
-    
-    return trace_file
+class TraceIngestRequest(BaseModel):
+    """Request body for trace ingestion."""
 
-
-def _load_trace_events(trace_file: Path) -> list[TraceEvent]:
-    """Load trace events from a JSONL file."""
-    events = []
-    with open(trace_file) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            data = json.loads(line)
-            event = TraceEvent.model_validate(data)
-            events.append(event)
-    return events
+    events: list[dict]
 
 
 def _summary_to_dict(summary: TraceSummary) -> dict:
@@ -63,61 +45,74 @@ def _summary_to_dict(summary: TraceSummary) -> dict:
 
 
 @router.get("/traces")
-def list_traces() -> list[TraceMetadata]:
-    """List all available traces with metadata."""
-    traces = []
-    
-    if not TRACES_DIR.exists():
-        return traces
-    
-    for trace_dir in TRACES_DIR.iterdir():
-        if not trace_dir.is_dir():
-            continue
-        
-        trace_file = trace_dir / "trace_events.jsonl"
-        if not trace_file.exists():
-            continue
-        
-        # count events
-        event_count = 0
-        with open(trace_file) as f:
-            for line in f:
-                if line.strip():
-                    event_count += 1
-        
-        # get file stats
-        stat = trace_file.stat()
-        created_at = datetime.fromtimestamp(stat.st_mtime).isoformat()
-        
-        traces.append(TraceMetadata(
-            trace_id=trace_dir.name,
-            event_count=event_count,
-            created_at=created_at,
-            file_size_bytes=stat.st_size,
-        ))
-    
-    # sort by created_at descending (newest first)
-    traces.sort(key=lambda t: t.created_at or "", reverse=True)
-    
-    return traces
+def list_traces_endpoint(limit: int = 100, offset: int = 0) -> list[TraceMetadata]:
+    """List traces with metadata."""
+    rows = list_traces(limit=limit, offset=offset)
+    return [
+        TraceMetadata(
+            trace_id=row.trace_id,
+            event_count=row.event_count,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/traces/{trace_id}/events")
+def ingest_events(trace_id: str, request: TraceIngestRequest) -> dict:
+    """Append events to a trace."""
+    if not request.events:
+        return {"trace_id": trace_id, "inserted": 0}
+    events: list[TraceEvent] = []
+    for payload in request.events:
+        event = TraceEvent.model_validate(payload)
+        if event.trace_id != trace_id:
+            raise HTTPException(
+                status_code=400,
+                detail="trace_id mismatch between path and event payload",
+            )
+        events.append(event)
+    inserted = insert_events(trace_id, events)
+    return {"trace_id": trace_id, "inserted": inserted}
 
 
 @router.get("/traces/{trace_id}")
-def get_trace(trace_id: str) -> list[dict]:
-    """Get all events for a specific trace."""
-    trace_file = _get_trace_file(trace_id)
-    events = _load_trace_events(trace_file)
+def get_trace_events(trace_id: str, limit: int | None = None, offset: int = 0) -> list[dict]:
+    """Get raw events for a trace."""
+    trace = get_trace(trace_id)
+    if not trace:
+        raise HTTPException(status_code=404, detail=f"Trace not found: {trace_id}")
+    events = load_events(trace_id, limit=limit, offset=offset)
     return [event.model_dump() for event in events]
+
+
+@router.get("/traces/{trace_id}/events")
+def get_trace_events_explicit(
+    trace_id: str, limit: int | None = None, offset: int = 0
+) -> list[dict]:
+    """Get raw events for a trace."""
+    return get_trace_events(trace_id, limit=limit, offset=offset)
 
 
 @router.get("/traces/{trace_id}/summary")
 def get_trace_summary(trace_id: str) -> dict:
-    """Get computed summary for a specific trace."""
-    trace_file = _get_trace_file(trace_id)
-    events = _load_trace_events(trace_file)
-    
+    """Get computed summary for a trace."""
+    trace = get_trace(trace_id)
+    if not trace:
+        raise HTTPException(status_code=404, detail=f"Trace not found: {trace_id}")
+    events = load_events(trace_id)
     if not events:
         raise HTTPException(status_code=400, detail="Trace has no events")
-    
     summary = trace_summary(events)
     return _summary_to_dict(summary)
+
+
+@router.delete("/traces/{trace_id}")
+def delete_trace_endpoint(trace_id: str) -> dict:
+    """Delete a trace and all events."""
+    trace = get_trace(trace_id)
+    if not trace:
+        raise HTTPException(status_code=404, detail=f"Trace not found: {trace_id}")
+    delete_trace(trace_id)
+    return {"deleted": trace_id}

@@ -4,7 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from backbone.adapters.langchain_callback import RawCallbackHandler, ListSink
+from backbone.adapters.langchain_callback import RawCallbackHandler
+from backbone.adapters.sinks import ListSink
 from backbone.utils.identifiers import generate_execution_id, generate_trace_id
 
 

@@ -1,22 +1,8 @@
 """Event sink and manual event emission API."""
 
-from pathlib import Path
-
+from backbone.adapters.sinks import EventSink
 from backbone.models.trace_event import PROMPT_RESOLVED, TraceEvent
 from backbone.utils.identifiers import generate_event_id, generate_span_id, utc_timestamp
-
-
-class FileSink:
-    """Writes events to a JSONL file."""
-
-    def __init__(self, path: Path | str) -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-
-    def append(self, event: TraceEvent) -> None:
-        """Append an event to the file."""
-        with open(self.path, "a") as f:
-            f.write(event.model_dump_json() + "\n")
 
 
 class EventEmitter:
@@ -33,7 +19,7 @@ class EventEmitter:
         self,
         execution_id: str,
         trace_id: str,
-        event_sink,  # EventSink protocol
+        event_sink: EventSink,
     ) -> None:
         self.execution_id = execution_id
         self.trace_id = trace_id

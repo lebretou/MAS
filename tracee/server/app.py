@@ -7,12 +7,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.routes import router as trace_router
-from server.prompt_routes import router as prompt_router, PROMPTS_DIR
+from server.prompt_routes import router as prompt_router
 from server.playground_routes import router as playground_router
 from server.model_config_routes import router as model_config_router
-
-# configurable traces directory via environment variable (stored alongside prompts in server/data/)
-from server.routes import TRACES_DIR
+from server.trace_db import TRACE_DB_PATH
 
 from dotenv import load_dotenv
 load_dotenv()  # load environment variables from .env file
@@ -45,8 +43,7 @@ def root():
     return {
         "status": "ok",
         "version": "0.2.0",
-        "traces_dir": str(TRACES_DIR),
-        "prompts_dir": str(PROMPTS_DIR),
+        "trace_db": str(TRACE_DB_PATH),
         "endpoints": {
             "traces": "/api/traces",
             "prompts": "/api/prompts",

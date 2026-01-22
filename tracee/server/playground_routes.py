@@ -4,7 +4,6 @@ Provides endpoints to execute prompts against LLMs and track runs.
 Supports OpenAI and Anthropic (Claude) models.
 """
 
-import json
 import os
 import time
 from pathlib import Path
@@ -15,13 +14,15 @@ from pydantic import BaseModel
 from backbone.models.playground_run import PlaygroundRun, PlaygroundRunCreate
 from backbone.models.prompt_artifact import PromptVersion
 from backbone.utils.identifiers import generate_run_id, utc_timestamp
+from server.playground_db import get_run, insert_run, list_runs
+from server.prompt_db import get_latest_version as db_get_latest_version
+from server.prompt_db import get_prompt as db_get_prompt
+from server.prompt_db import get_version as db_get_version
 
 router = APIRouter()
 
 # Storage directories
 DEFAULT_DATA_DIR = Path(__file__).parent / "data"
-RUNS_DIR = Path(os.getenv("PLAYGROUND_RUNS_DIR", str(DEFAULT_DATA_DIR / "playground_runs")))
-PROMPTS_DIR = Path(os.getenv("PROMPTS_DIR", str(DEFAULT_DATA_DIR / "prompts")))
 MODEL_CONFIGS_DIR = Path(os.getenv("MODEL_CONFIGS_DIR", str(DEFAULT_DATA_DIR / "model_configs")))
 
 # LLM Client instances (lazily initialized)
@@ -59,61 +60,22 @@ def _get_anthropic_client():
     return _anthropic_client
 
 
-# --- Helper Functions ---
-
-
-def _get_runs_file() -> Path:
-    """Get path to the runs storage file."""
-    RUNS_DIR.mkdir(parents=True, exist_ok=True)
-    return RUNS_DIR / "runs.jsonl"
-
-
-def _load_all_runs() -> list[PlaygroundRun]:
-    """Load all playground runs from storage."""
-    runs_file = _get_runs_file()
-    if not runs_file.exists():
-        return []
-    
-    runs = []
-    with open(runs_file) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                runs.append(PlaygroundRun.model_validate_json(line))
-    
-    # Sort by created_at descending (newest first)
-    runs.sort(key=lambda r: r.created_at, reverse=True)
-    return runs
-
-
-def _save_run(run: PlaygroundRun) -> None:
-    """Append a run to storage."""
-    runs_file = _get_runs_file()
-    with open(runs_file, "a") as f:
-        f.write(run.model_dump_json() + "\n")
-
-
 def _load_prompt_version(prompt_id: str, version_id: str) -> PromptVersion:
     """Load a prompt version from storage."""
+    if not db_get_prompt(prompt_id):
+        raise HTTPException(status_code=404, detail=f"Prompt not found: {prompt_id}")
     if version_id == "latest":
-        # Load metadata to get latest version
-        metadata_file = PROMPTS_DIR / prompt_id / "metadata.json"
-        if not metadata_file.exists():
-            raise HTTPException(status_code=404, detail=f"Prompt not found: {prompt_id}")
-        
-        metadata = json.loads(metadata_file.read_text())
-        version_id = metadata.get("latest_version_id")
-        if not version_id:
+        version = db_get_latest_version(prompt_id)
+        if not version:
             raise HTTPException(status_code=404, detail=f"No versions for prompt: {prompt_id}")
-    
-    version_file = PROMPTS_DIR / prompt_id / "versions" / f"{version_id}.json"
-    if not version_file.exists():
+        return version
+    version = db_get_version(prompt_id, version_id)
+    if not version:
         raise HTTPException(
             status_code=404,
             detail=f"Version not found: {prompt_id}/{version_id}",
         )
-    
-    return PromptVersion.model_validate_json(version_file.read_text())
+    return version
 
 
 def _load_model_config(config_id: str) -> dict:
@@ -267,17 +229,13 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
     Takes a prompt reference and model configuration, runs the prompt
     against the LLM, and stores the result.
     """
-    # 1. Load prompt version
     version = _load_prompt_version(request.prompt_id, request.version_id)
     
-    # 2. Resolve prompt text
     resolved_prompt = version.resolve()
     
-    # 3. Substitute variables
     if request.input_variables:
         resolved_prompt = _substitute_variables(resolved_prompt, request.input_variables)
     
-    # 4. Get model configuration
     if request.model_config_id:
         config = _load_model_config(request.model_config_id)
         model = config["model_name"]
@@ -290,7 +248,6 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         temperature = request.temperature
         max_tokens = request.max_tokens
     
-    # 5. Call LLM
     start_time = time.time()
     response = await _call_llm(
         prompt=resolved_prompt,
@@ -301,7 +258,6 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
     )
     latency_ms = (time.time() - start_time) * 1000
     
-    # 6. Create PlaygroundRun record
     run = PlaygroundRun(
         run_id=generate_run_id(),
         created_at=utc_timestamp(),
@@ -323,8 +279,7 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         notes=request.notes,
     )
     
-    # 7. Save the run
-    _save_run(run)
+    insert_run(run)
     
     return PlaygroundRunResponse(run=run)
 
@@ -335,31 +290,19 @@ def list_playground_runs(
     limit: int = 50,
 ) -> list[PlaygroundRun]:
     """List playground runs, optionally filtered by prompt_id."""
-    runs = _load_all_runs()
-    
-    # Filter by prompt_id if specified
-    if prompt_id:
-        runs = [r for r in runs if r.prompt_id == prompt_id]
-    
-    # Apply limit
-    return runs[:limit]
+    return list_runs(limit=limit, prompt_id=prompt_id)
 
 
 @router.get("/playground/runs/{run_id}")
 def get_playground_run(run_id: str) -> PlaygroundRun:
     """Get a specific playground run by ID."""
-    runs = _load_all_runs()
-    
-    for run in runs:
-        if run.run_id == run_id:
-            return run
-    
-    raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+    run = get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+    return run
 
 
 @router.get("/playground/runs/prompt/{prompt_id}")
 def list_runs_for_prompt(prompt_id: str, limit: int = 20) -> list[PlaygroundRun]:
     """List all playground runs for a specific prompt."""
-    runs = _load_all_runs()
-    prompt_runs = [r for r in runs if r.prompt_id == prompt_id]
-    return prompt_runs[:limit]
+    return list_runs(limit=limit, prompt_id=prompt_id)

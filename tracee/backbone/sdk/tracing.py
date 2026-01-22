@@ -10,21 +10,18 @@ Example (so we do this in the config file of langgraph):
 
 from __future__ import annotations
 
-import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator
 
-from backbone.adapters.langchain_callback import RawCallbackHandler, EventSink, ListSink
-from backbone.adapters.event_api import FileSink
-from backbone.models.trace_event import PROMPT_RESOLVED, TraceEvent
+from backbone.adapters.event_api import EventEmitter
+from backbone.adapters.langchain_callback import RawCallbackHandler
+from backbone.adapters.sinks import EventSink, FileSink, HttpSink, ListSink
+from backbone.models.trace_event import TraceEvent
 from backbone.utils.identifiers import (
-    generate_event_id,
     generate_execution_id,
-    generate_span_id,
     generate_trace_id,
-    utc_timestamp,
 )
 
 
@@ -52,7 +49,7 @@ class TracingContext:
     execution_id: str
     callback_handler: RawCallbackHandler
     event_sink: EventSink
-    _sequence: int = 0
+    emitter: EventEmitter
     
     @property
     def callbacks(self) -> list:
@@ -62,12 +59,6 @@ class TracingContext:
             graph.invoke(state, config={"callbacks": ctx.callbacks})
         """
         return [self.callback_handler]
-    
-    def _next_sequence(self) -> int:
-        """Get the next sequence number."""
-        seq = self._sequence
-        self._sequence += 1
-        return seq
     
     def emit(
         self,
@@ -81,21 +72,12 @@ class TracingContext:
         This is currently only used for prompt_resolved events, but can be used
         for any custom event type if we have more in the future.
         """
-        event = TraceEvent(
-            event_id=generate_event_id(),
-            trace_id=self.trace_id,
-            execution_id=self.execution_id,
-            timestamp=utc_timestamp(),
-            sequence=self._next_sequence(),
-            event_type=event_type,
+        return self.emitter.emit(
+            event_type,
+            payload,
             agent_id=agent_id,
-            span_id=generate_span_id(),
-            parent_span_id=None,
-            refs=refs or {},
-            payload=payload,
+            refs=refs,
         )
-        self.event_sink.append(event)
-        return event
     
     def emit_prompt_resolved(
         self,
@@ -110,16 +92,14 @@ class TracingContext:
         
         This is called automatically by the prompt SDK when load_prompt() is used.
         """
-        payload: dict = {
-            "prompt_id": prompt_id,
-            "version_id": version_id,
-            "resolved_text": resolved_text,
-        }
-        if components:
-            payload["components"] = components
-        if variables_used:
-            payload["variables_used"] = variables_used
-        return self.emit(PROMPT_RESOLVED, payload, agent_id=agent_id)
+        return self.emitter.emit_prompt_resolved(
+            prompt_id=prompt_id,
+            version_id=version_id,
+            resolved_text=resolved_text,
+            agent_id=agent_id,
+            components=components,
+            variables_used=variables_used,
+        )
 
 
 @contextmanager
@@ -128,6 +108,7 @@ def enable_tracing(
     execution_id: str | None = None,
     output_dir: str | Path | None = None,
     output_file: str = "trace_events.jsonl",
+    base_url: str | None = None,
 ) -> Generator[TracingContext, None, None]:
     """Enable tracing for LangChain/LangGraph code.
     
@@ -141,6 +122,7 @@ def enable_tracing(
         output_dir: Directory to write trace files to (creates {trace_id}/ subdirectory)
                    If not provided, traces are stored in memory only.
         output_file: Name of the trace events file (default: trace_events.jsonl)
+        base_url: Base URL for the trace API (posts events to server)
     
     Yields:
         TracingContext with callbacks and emit methods
@@ -157,6 +139,10 @@ def enable_tracing(
         # custom trace ID
         with enable_tracing(trace_id="my-trace-123", output_dir="./traces") as ctx:
             result = graph.invoke(state, config={"callbacks": ctx.callbacks})
+
+        # send events to server
+        with enable_tracing(base_url="http://localhost:8000") as ctx:
+            result = graph.invoke(state, config={"callbacks": ctx.callbacks})
     """
     global _active_context
     
@@ -165,14 +151,21 @@ def enable_tracing(
     eid = execution_id or generate_execution_id()
     
     # create sink
-    if output_dir:
+    if base_url:
+        sink = HttpSink(base_url=base_url, trace_id=tid)
+    elif output_dir:
         output_path = Path(output_dir) / tid / output_file
-        sink: EventSink = FileSink(output_path)
+        sink = FileSink(output_path)
     else:
         sink = ListSink()
     
-    # create callback handler
+    # create callback handler this will take langchain raw events
     handler = RawCallbackHandler(
+        execution_id=eid,
+        trace_id=tid,
+        event_sink=sink,
+    )
+    emitter = EventEmitter( # this is for customized events
         execution_id=eid,
         trace_id=tid,
         event_sink=sink,
@@ -184,6 +177,7 @@ def enable_tracing(
         execution_id=eid,
         callback_handler=handler,
         event_sink=sink,
+        emitter=emitter,
     )
     
     # set global context for prompt SDK

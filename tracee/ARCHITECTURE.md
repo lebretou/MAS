@@ -1068,7 +1068,8 @@ backbone/
 │   └── trace_event.py       # Trace layer: TraceEvent, EventType enum
 ├── adapters/                # Integration points
 │   ├── __init__.py
-│   ├── event_api.py         # Manual event emission (EventEmitter, EventSink)
+│   ├── event_api.py         # Manual event emission (EventEmitter)
+│   ├── sinks.py             # Event sinks (EventSink, ListSink, FileSink)
 │   └── langchain_callback.py# Auto-capture from LangChain/LangGraph
 ├── analysis/                # Post-hoc analysis utilities
 │   ├── __init__.py
@@ -1300,7 +1301,7 @@ ERROR_TYPES = {"schema", "tool", "model", "infra", "logic"}
 
 ### Event API and Sinks
 
-Located in `backbone/adapters/event_api.py`, this provides the **manual event emission API** for events that can't be auto-captured from callbacks.
+The manual event emission API lives in `backbone/adapters/event_api.py`. Event sinks are defined in `backbone/adapters/sinks.py`.
 
 #### EventSink Protocol
 
@@ -1710,7 +1711,8 @@ with open("prompts/my-planner-prompt-v1.json", "w") as f:
 #### Setting Up Event Capture for a Run
 
 ```python
-from backbone.adapters.event_api import EventEmitter, FileSink
+from backbone.adapters.event_api import EventEmitter
+from backbone.adapters.sinks import FileSink
 from backbone.adapters.langchain_callback import MASCallbackHandler
 from backbone.utils.identifiers import generate_execution_id, generate_trace_id
 

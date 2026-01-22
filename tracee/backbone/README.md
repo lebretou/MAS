@@ -22,7 +22,8 @@ uv pip install -e "./backbone[dev]"
 ### Creating Events
 
 ```python
-from backbone.adapters.event_api import EventEmitter, ListSink
+from backbone.adapters.event_api import EventEmitter
+from backbone.adapters.sinks import ListSink
 from backbone.utils.identifiers import generate_execution_id, generate_trace_id
 
 # create event sink and emitter
@@ -44,7 +45,7 @@ emitter.emit_validation("executor", "contract-v1", "1.0.0", is_valid=True, error
 ```python
 from langchain_openai import ChatOpenAI
 from backbone.adapters.langchain_callback import MASCallbackHandler
-from backbone.adapters.event_api import ListSink
+from backbone.adapters.sinks import ListSink
 
 sink = ListSink()
 handler = MASCallbackHandler(

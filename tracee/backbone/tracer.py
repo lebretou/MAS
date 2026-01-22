@@ -8,8 +8,9 @@ For new code, prefer using the `enable_tracing()` context manager from
 
 from pathlib import Path
 
-from backbone.adapters.event_api import EventEmitter, FileSink
-from backbone.adapters.langchain_callback import RawCallbackHandler, ListSink, EventSink
+from backbone.adapters.event_api import EventEmitter
+from backbone.adapters.langchain_callback import RawCallbackHandler
+from backbone.adapters.sinks import EventSink, FileSink, ListSink
 from backbone.utils.identifiers import generate_execution_id, generate_trace_id
 
 

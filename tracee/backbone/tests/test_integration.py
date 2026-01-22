@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from backbone.adapters.event_api import EventEmitter, FileSink
-from backbone.adapters.langchain_callback import ListSink
+from backbone.adapters.event_api import EventEmitter
+from backbone.adapters.sinks import FileSink, ListSink
 from backbone.analysis.trace_summary import trace_summary
 from backbone.models.trace_event import PROMPT_RESOLVED, TraceEvent
 from backbone.sdk.tracing import enable_tracing, get_active_context

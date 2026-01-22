@@ -20,6 +20,7 @@ load_dotenv()
 
 # default output directory for traces
 TRACES_OUTPUT_DIR = Path(__file__).parent.parent.parent.parent / "server" / "data" / "traces"
+TRACE_API_URL = os.getenv("TRACE_API_URL")
 
 
 def get_langsmith_config():
@@ -52,6 +53,13 @@ def tracing_session(session_id: str = "default") -> Generator[TracingContext, No
         with tracing_session("my-session") as ctx:
             result = app.invoke(state, config={"callbacks": ctx.callbacks})
     """
+    if TRACE_API_URL:
+        with enable_tracing(base_url=TRACE_API_URL) as ctx:
+            print("✓ MAS Backbone tracing enabled (remote)")
+            print(f"  trace id: {ctx.trace_id}")
+            print(f"  session: {session_id}")
+            yield ctx
+        return
     with enable_tracing(output_dir=TRACES_OUTPUT_DIR) as ctx:
         print(f"✓ MAS Backbone tracing enabled")
         print(f"  trace id: {ctx.trace_id}")

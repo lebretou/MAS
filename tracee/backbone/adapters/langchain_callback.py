@@ -11,6 +11,7 @@ from uuid import UUID
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 
+from backbone.adapters.sinks import EventSink
 from backbone.models.trace_event import TraceEvent
 from backbone.utils.identifiers import generate_event_id, generate_span_id, utc_timestamp
 
@@ -27,29 +28,6 @@ def _sanitize_for_json(obj: Any) -> Any:
         return obj
     # for other types, convert to string
     return str(obj)
-
-
-class EventSink:
-    """Protocol for receiving trace events."""
-
-    def append(self, event: TraceEvent) -> None:
-        """Append an event to the sink."""
-        raise NotImplementedError
-
-
-class ListSink(EventSink):
-    """Stores events in a list."""
-
-    def __init__(self) -> None:
-        self.events: list[TraceEvent] = []
-
-    def append(self, event: TraceEvent) -> None:
-        """Append an event to the list."""
-        self.events.append(event)
-
-    def clear(self) -> None:
-        """Clear all events."""
-        self.events.clear()
 
 
 class RawCallbackHandler(BaseCallbackHandler):
