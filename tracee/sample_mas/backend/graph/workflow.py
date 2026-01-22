@@ -60,9 +60,9 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
     Returns:
         Dictionary with workflow results
     """
-    from backend.telemetry.config import get_callbacks
+    from backend.telemetry.config import tracing_session
     
-    # get dataset info upfront
+    # get dataset info upfront and store it in the state
     dataset_info = {
         "columns": list(dataset.columns),
         "dtypes": {col: str(dtype) for col, dtype in dataset.dtypes.items()},
@@ -71,63 +71,55 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
         "categorical_columns": list(dataset.select_dtypes(include=['object', 'category']).columns),
     }
     
-    callbacks = get_callbacks(session_id=session_id)
-    
-    # initialize state
-    initial_state = {
-        "dataset": dataset,
-        "dataset_path": dataset_path,
-        "dataset_info": dataset_info,
-        "messages": [HumanMessage(content=query)],
-        "user_query": query,
-        "relevance_decision": "",
-        "analysis_plan": "",
-        "coding_prompt": "",
-        "generated_code": "",
-        "execution_result": {},
-        "final_summary": "",
-        "next_agent": "interaction",
-        "session_id": session_id,
-        "callbacks": callbacks,
-    }
-    
-    # create and run workflow
-    app = create_workflow()
-    
-    try:
-        final_state = app.invoke(initial_state, config={"callbacks": callbacks})
+    with tracing_session(session_id=session_id) as ctx:
+        callbacks = ctx.callbacks
         
-        return {
-            "success": True,
-            "final_summary": final_state.get("final_summary", ""),
-            "relevance_decision": final_state.get("relevance_decision", ""),
-            "generated_code": final_state.get("generated_code", ""),
-            "execution_result": final_state.get("execution_result", {}),
-            "analysis_plan": final_state.get("analysis_plan", ""),
-            "messages": [{"role": msg.type, "content": msg.content} for msg in final_state.get("messages", [])],
+        # initialize state
+        initial_state = {
+            "dataset": dataset,
+            "dataset_path": dataset_path,
+            "dataset_info": dataset_info,
+            "messages": [HumanMessage(content=query)],
+            "user_query": query,
+            "relevance_decision": "",
+            "analysis_plan": "",
+            "coding_prompt": "",
+            "generated_code": "",
+            "execution_result": {},
+            "final_summary": "",
+            "next_agent": "interaction",
+            "session_id": session_id,
+            "callbacks": callbacks,
         }
         
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "final_summary": f"Workflow execution failed: {str(e)}",
-        }
+        # create and run workflow
+        app = create_workflow()
+        
+        try:
+            final_state = app.invoke(initial_state, config={"callbacks": callbacks})
+            
+            return {
+                "success": True,
+                "final_summary": final_state.get("final_summary", ""),
+                "relevance_decision": final_state.get("relevance_decision", ""),
+                "generated_code": final_state.get("generated_code", ""),
+                "execution_result": final_state.get("execution_result", {}),
+                "analysis_plan": final_state.get("analysis_plan", ""),
+                "messages": [{"role": msg.type, "content": msg.content} for msg in final_state.get("messages", [])],
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "final_summary": f"Workflow execution failed: {str(e)}",
+            }
 
 
 async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset_path: str = "uploaded", session_id: str = "default") -> dict:
-    """Run the complete analysis workflow asynchronously.
-    
-    Args:
-        dataset: The pandas DataFrame to analyze
-        query: User's query/request
-        dataset_path: Path or name of the dataset
-        session_id: Session identifier for tracking
-        
-    Returns:
-        Dictionary with workflow results
-    """
-    from backend.telemetry.config import get_callbacks
+    """Run the complete analysis workflow asynchronously."""
+
+    from backend.telemetry.config import tracing_session
     
     # get dataset info upfront
     dataset_info = {
@@ -138,45 +130,46 @@ async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset
         "categorical_columns": list(dataset.select_dtypes(include=['object', 'category']).columns),
     }
     
-    callbacks = get_callbacks(session_id=session_id)
-    
-    # initialize state
-    initial_state = {
-        "dataset": dataset,
-        "dataset_path": dataset_path,
-        "dataset_info": dataset_info,
-        "messages": [HumanMessage(content=query)],
-        "user_query": query,
-        "relevance_decision": "",
-        "analysis_plan": "",
-        "coding_prompt": "",
-        "generated_code": "",
-        "execution_result": {},
-        "final_summary": "",
-        "next_agent": "interaction",
-        "session_id": session_id,
-        "callbacks": callbacks,
-    }
-    
-    # create and run workflow
-    app = create_workflow()
-    
-    try:
-        final_state = await app.ainvoke(initial_state, config={"callbacks": callbacks})
+    with tracing_session(session_id=session_id) as ctx:
+        callbacks = ctx.callbacks
         
-        return {
-            "success": True,
-            "final_summary": final_state.get("final_summary", ""),
-            "relevance_decision": final_state.get("relevance_decision", ""),
-            "generated_code": final_state.get("generated_code", ""),
-            "execution_result": final_state.get("execution_result", {}),
-            "analysis_plan": final_state.get("analysis_plan", ""),
-            "messages": [{"role": msg.type, "content": msg.content} for msg in final_state.get("messages", [])],
+        # initialize state
+        initial_state = {
+            "dataset": dataset,
+            "dataset_path": dataset_path,
+            "dataset_info": dataset_info,
+            "messages": [HumanMessage(content=query)],
+            "user_query": query,
+            "relevance_decision": "",
+            "analysis_plan": "",
+            "coding_prompt": "",
+            "generated_code": "",
+            "execution_result": {},
+            "final_summary": "",
+            "next_agent": "interaction",
+            "session_id": session_id,
+            "callbacks": callbacks,
         }
         
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "final_summary": f"Workflow execution failed: {str(e)}",
-        }
+        # create and run workflow
+        app = create_workflow()
+        
+        try:
+            final_state = await app.ainvoke(initial_state, config={"callbacks": callbacks})
+            
+            return {
+                "success": True,
+                "final_summary": final_state.get("final_summary", ""),
+                "relevance_decision": final_state.get("relevance_decision", ""),
+                "generated_code": final_state.get("generated_code", ""),
+                "execution_result": final_state.get("execution_result", {}),
+                "analysis_plan": final_state.get("analysis_plan", ""),
+                "messages": [{"role": msg.type, "content": msg.content} for msg in final_state.get("messages", [])],
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "final_summary": f"Workflow execution failed: {str(e)}",
+            }

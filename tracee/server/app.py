@@ -8,14 +8,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from server.routes import router as trace_router
 from server.prompt_routes import router as prompt_router, PROMPTS_DIR
+from server.playground_routes import router as playground_router
+from server.model_config_routes import router as model_config_router
 
 # configurable traces directory via environment variable (stored alongside prompts in server/data/)
 from server.routes import TRACES_DIR
 
+from dotenv import load_dotenv
+load_dotenv()  # load environment variables from .env file
+
 app = FastAPI(
     title="Tracee API",
-    description="API server for serving MAS trace data and prompt management",
-    version="0.1.0",
+    description="API server for MAS trace data, prompt management, and playground",
+    version="0.2.0",
 )
 
 # CORS middleware for frontend development
@@ -30,6 +35,8 @@ app.add_middleware(
 # include routes
 app.include_router(trace_router, prefix="/api")
 app.include_router(prompt_router, prefix="/api")
+app.include_router(playground_router, prefix="/api")
+app.include_router(model_config_router, prefix="/api")
 
 
 @app.get("/")
@@ -37,8 +44,15 @@ def root():
     """Health check endpoint."""
     return {
         "status": "ok",
+        "version": "0.2.0",
         "traces_dir": str(TRACES_DIR),
         "prompts_dir": str(PROMPTS_DIR),
+        "endpoints": {
+            "traces": "/api/traces",
+            "prompts": "/api/prompts",
+            "playground": "/api/playground/run",
+            "model_configs": "/api/model-configs",
+        },
     }
 
 

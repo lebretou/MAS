@@ -1,10 +1,7 @@
-"""Tracing SDK - single entry point for enabling trace capture.
+"""Tracing SDK -  provides a simple way to enable tracing for LangChain/LangGraph
+applications.
 
-This module provides a simple way to enable tracing for LangChain/LangGraph
-applications. Just wrap your code with enable_tracing() and pass the callbacks
-to your LangChain components.
-
-Example:
+Example (so we do this in the config file of langgraph):
     from tracee.backbone.sdk import enable_tracing
     
     with enable_tracing() as ctx:
@@ -81,8 +78,8 @@ class TracingContext:
     ) -> TraceEvent:
         """Emit a custom trace event.
         
-        This is primarily used for prompt_resolved events, but can be used
-        for any custom event type.
+        This is currently only used for prompt_resolved events, but can be used
+        for any custom event type if we have more in the future.
         """
         event = TraceEvent(
             event_id=generate_event_id(),
@@ -206,47 +203,8 @@ def load_prompt(
 ) -> str:
     """Load a prompt and auto-emit prompt_resolved if tracing is active.
     
-    This is a convenience function that combines prompt loading with automatic
-    trace emission. If tracing is active (inside enable_tracing()), a
-    prompt_resolved event is automatically emitted.
-    
-    Args:
-        prompt_id: The prompt identifier
-        version_id: The version to load ("latest" for most recent)
-        agent_id: Optional agent ID to associate with the event
-        base_url: Base URL of the tracee server
-    
-    Returns:
-        The resolved prompt text
-    
-    Example:
-        with enable_tracing(output_dir="./traces") as ctx:
-            system_prompt = load_prompt("planner-system", agent_id="planner")
-            # ^ this automatically emits a prompt_resolved event
     """
     from backbone.sdk.prompt_loader import PromptLoader
     
     loader = PromptLoader(base_url=base_url)
-    version = loader.get_version(prompt_id, version_id)
-    resolved_text = version.resolve()
-    
-    # auto-emit if tracing is active
-    ctx = get_active_context()
-    if ctx:
-        ctx.emit_prompt_resolved(
-            prompt_id=prompt_id,
-            version_id=version.version_id,
-            resolved_text=resolved_text,
-            agent_id=agent_id,
-            components=[
-                {
-                    "type": c.type.value,
-                    "content": c.content,
-                    "enabled": c.enabled,
-                }
-                for c in version.components
-            ],
-            variables_used=version.variables,
-        )
-    
-    return resolved_text
+    return loader.get(prompt_id, version_id, agent_id)

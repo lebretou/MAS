@@ -1,4 +1,4 @@
-"""Trace summary analysis - extracts basic statistics from raw trace events.
+"""This file has some helper functions that get basic statistics from raw trace events.
 
 This module provides heuristic-based analysis of raw LangChain events.
 For semantic analysis (agent messages, decisions), see agent_analyzer.py.

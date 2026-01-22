@@ -1,9 +1,7 @@
 """
-Trace event models for raw events during execution.
+Trace event models for raw events (think of it as the log of actions performed by agents) during execution.
 
-Events are captured directly from LangChain/LangGraph callbacks with minimal
-transformation. Semantic analysis (agent messages, decisions, etc.) is performed
-by a separate analysis layer after capture.
+Events are captured directly from LangChain/LangGraph callbacks 
 
 For the data models, we choose pydantic, a library for data type validation.
 """
@@ -14,12 +12,13 @@ from pydantic import BaseModel, model_validator
 
 
 # the only custom event type we define - auto-emitted by prompt SDK
+# having this because LangChain doesn't tell you which prompt version/id was 
+# being executed only the raw input
 PROMPT_RESOLVED = "prompt_resolved"
 
 
 class TraceEvent(BaseModel):
-    """A raw event captured during execution.
-    
+    """
     Events are stored with their original LangChain event type names
     (e.g., 'on_llm_start', 'on_chain_end', 'on_tool_start').
     

@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from backbone.models.execution_record import ExecutionRecord, ModelConfig
 from backbone.models.trace_event import PROMPT_RESOLVED, TraceEvent
 from backbone.utils.identifiers import (
     generate_event_id,
@@ -14,67 +13,6 @@ from backbone.utils.identifiers import (
     generate_trace_id,
     utc_timestamp,
 )
-
-
-class TestExecutionRecordInvariants:
-    """Test ExecutionRecord validation rules."""
-
-    def test_rejects_empty_resolved_prompt_text(self):
-        """ExecutionRecord must reject empty resolved_prompt_text."""
-        with pytest.raises(ValidationError) as exc_info:
-            ExecutionRecord(
-                execution_id=generate_execution_id(),
-                trace_id=generate_trace_id(),
-                origin="playground",
-                created_at=utc_timestamp(),
-                llm_config=ModelConfig(
-                    provider="openai",
-                    model_name="gpt-4",
-                    temperature=0.0,
-                    max_tokens=1000,
-                ),
-                input_payload={},
-                resolved_prompt_text="",  # empty - should fail
-            )
-        assert "resolved_prompt_text must not be empty" in str(exc_info.value)
-
-    def test_rejects_whitespace_only_resolved_prompt_text(self):
-        """ExecutionRecord must reject whitespace-only resolved_prompt_text."""
-        with pytest.raises(ValidationError) as exc_info:
-            ExecutionRecord(
-                execution_id=generate_execution_id(),
-                trace_id=generate_trace_id(),
-                origin="playground",
-                created_at=utc_timestamp(),
-                llm_config=ModelConfig(
-                    provider="openai",
-                    model_name="gpt-4",
-                    temperature=0.0,
-                    max_tokens=1000,
-                ),
-                input_payload={},
-                resolved_prompt_text="   \n\t  ",  # whitespace only
-            )
-        assert "resolved_prompt_text must not be empty" in str(exc_info.value)
-
-    def test_requires_trace_id(self):
-        """ExecutionRecord must have a trace_id (not None)."""
-        # pydantic will reject None for a non-optional str field
-        with pytest.raises(ValidationError):
-            ExecutionRecord(
-                execution_id=generate_execution_id(),
-                trace_id=None,  # type: ignore
-                origin="playground",
-                created_at=utc_timestamp(),
-                llm_config=ModelConfig(
-                    provider="openai",
-                    model_name="gpt-4",
-                    temperature=0.0,
-                    max_tokens=1000,
-                ),
-                input_payload={},
-                resolved_prompt_text="Valid prompt",
-            )
 
 
 class TestPromptResolvedInvariants:

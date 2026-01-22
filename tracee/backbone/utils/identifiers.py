@@ -24,6 +24,16 @@ def generate_span_id() -> str:
     return uuid.uuid4().hex[:16]
 
 
+def generate_run_id() -> str:
+    """Generate a unique playground run ID (UUID4)."""
+    return str(uuid.uuid4())
+
+
+def generate_config_id() -> str:
+    """Generate a unique model config ID (UUID4)."""
+    return str(uuid.uuid4())
+
+
 def utc_timestamp() -> str:
     """Generate an ISO8601 UTC timestamp."""
     return datetime.now(timezone.utc).isoformat()

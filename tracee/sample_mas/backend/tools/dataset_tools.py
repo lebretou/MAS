@@ -1,17 +1,14 @@
+"""
+tools for our sample mas
+"""
 import pandas as pd
-from langchain_core.tools import tool
+from langchain_core.tools import tool 
 from typing import Any
 
 
 @tool
 def get_dataset_info(dataset: pd.DataFrame) -> dict:
-    """Get comprehensive dataset information including columns, types, shape, and basic statistics.
-    
-    Args:
-        dataset: The pandas DataFrame to analyze
-        
-    Returns:
-        A dictionary containing dataset metadata
+    """Get dataset information including columns, types, shape, and basic statistics.
     """
     return {
         "columns": list(dataset.columns),
@@ -26,13 +23,6 @@ def get_dataset_info(dataset: pd.DataFrame) -> dict:
 @tool
 def get_sample_rows(dataset: pd.DataFrame, n: int = 5) -> dict:
     """Get sample rows from the dataset.
-    
-    Args:
-        dataset: The pandas DataFrame to sample from
-        n: Number of rows to sample (default: 5)
-        
-    Returns:
-        A dictionary with sample rows as a list of dictionaries
     """
     sample = dataset.head(n)
     return {
@@ -44,13 +34,6 @@ def get_sample_rows(dataset: pd.DataFrame, n: int = 5) -> dict:
 @tool
 def search_dataset_columns(dataset: pd.DataFrame, keyword: str) -> dict:
     """Search for columns containing a specific keyword.
-    
-    Args:
-        dataset: The pandas DataFrame to search
-        keyword: The keyword to search for in column names
-        
-    Returns:
-        A dictionary with matching column names
     """
     matching_columns = [col for col in dataset.columns if keyword.lower() in col.lower()]
     return {

@@ -52,14 +52,14 @@ def _load_trace_events(trace_file: Path) -> list[TraceEvent]:
     return events
 
 
-# def _summary_to_dict(summary: TraceSummary) -> dict:
-#     """Convert TraceSummary to a JSON-serializable dict."""
-#     d = asdict(summary)
-#     # convert tuple keys in messages_by_edge to string keys
-#     d["messages_by_edge"] = {
-#         f"{k[0]}->{k[1]}": v for k, v in summary.messages_by_edge.items()
-#     }
-#     return d
+def _summary_to_dict(summary: TraceSummary) -> dict:
+    """Convert TraceSummary to a JSON-serializable dict."""
+    d = asdict(summary)
+    # convert tuple keys in messages_by_edge to string keys
+    d["messages_by_edge"] = {
+        f"{k[0]}->{k[1]}": v for k, v in summary.messages_by_edge.items()
+    }
+    return d
 
 
 @router.get("/traces")
@@ -110,14 +110,14 @@ def get_trace(trace_id: str) -> list[dict]:
     return [event.model_dump() for event in events]
 
 
-# @router.get("/traces/{trace_id}/summary")
-# def get_trace_summary(trace_id: str) -> dict:
-#     """Get computed summary for a specific trace."""
-#     trace_file = _get_trace_file(trace_id)
-#     events = _load_trace_events(trace_file)
+@router.get("/traces/{trace_id}/summary")
+def get_trace_summary(trace_id: str) -> dict:
+    """Get computed summary for a specific trace."""
+    trace_file = _get_trace_file(trace_id)
+    events = _load_trace_events(trace_file)
     
-#     if not events:
-#         raise HTTPException(status_code=400, detail="Trace has no events")
+    if not events:
+        raise HTTPException(status_code=400, detail="Trace has no events")
     
-#     summary = trace_summary(events)
-#     return _summary_to_dict(summary)
+    summary = trace_summary(events)
+    return _summary_to_dict(summary)

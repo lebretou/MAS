@@ -3,8 +3,6 @@
 Captures LangChain/LangGraph events with minimal transformation.
 Events are stored with their original event type names (e.g., 'on_llm_start').
 
-Semantic analysis (agent messages, decisions, etc.) is performed by a separate
-analysis layer after capture.
 """
 
 from typing import Any
@@ -18,7 +16,7 @@ from backbone.utils.identifiers import generate_event_id, generate_span_id, utc_
 
 
 def _sanitize_for_json(obj: Any) -> Any:
-    """Convert non-JSON-serializable objects to string representations."""
+    """Convert non-JSON-serializable objects such as pandas dataset objects to string representations."""
     if obj is None:
         return None
     if isinstance(obj, dict):

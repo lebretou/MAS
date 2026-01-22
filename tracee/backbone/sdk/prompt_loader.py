@@ -1,4 +1,8 @@
-"""Prompt loader SDK for referencing prompts in agent code."""
+"""Prompt loader SDK for referencing prompts in agent code.
+
+so that users can retrieve a prompt they created in the UI with one line of code
+system_prompt = loader.get("planner-prompt", "v2")
+"""
 
 from __future__ import annotations
 
@@ -7,15 +11,11 @@ import httpx
 from backbone.models.prompt_artifact import PromptVersion
 
 
-class PromptLoaderError(Exception):
-    """Error loading a prompt from the server."""
-    pass
-
 
 class PromptLoader:
-    """Load prompts from the server/storage for use in agent code.
+    """Load prompts from the server for use in agent code.
     
-    Provides caching to avoid repeated network calls for the same prompt.
+    Added caching to avoid repeated network calls for the same prompt.
     """
 
     def __init__(
@@ -23,25 +23,24 @@ class PromptLoader:
         base_url: str = "http://localhost:8000",
         timeout: float = 10.0,
     ) -> None:
-        """Initialize the prompt loader.
-        
+        """        
         Args:
             base_url: Base URL of the tracee server
             timeout: HTTP request timeout in seconds
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-        self._cache: dict[tuple[str, str], PromptVersion] = {}
+        self._cache: dict[tuple[str, str], PromptVersion] = {} # key is prompt id and version id
 
     def _fetch_version(self, prompt_id: str, version_id: str) -> PromptVersion:
         """Fetch a prompt version from the server."""
         cache_key = (prompt_id, version_id)
         
-        # Check cache first
+        # check cache first and see if it's a repeated request
         if cache_key in self._cache:
             return self._cache[cache_key]
         
-        # Fetch from server
+        # fetch from server
         url = f"{self.base_url}/api/prompts/{prompt_id}/versions/{version_id}"
         
         try:
@@ -57,7 +56,7 @@ class PromptLoader:
                 data = response.json()
                 version = PromptVersion.model_validate(data)
                 
-                # Cache for future use
+                # cache for future use
                 self._cache[cache_key] = version
                 return version
                 
@@ -67,7 +66,10 @@ class PromptLoader:
             ) from e
 
     def _fetch_latest(self, prompt_id: str) -> PromptVersion:
-        """Fetch the latest version of a prompt from the server."""
+        """
+        The option to fetch the latest version of a prompt from the server.
+        Having this since we store the latest version id with any prompt
+        """
         url = f"{self.base_url}/api/prompts/{prompt_id}/latest"
         
         try:
@@ -105,9 +107,6 @@ class PromptLoader:
             
         Returns:
             The PromptVersion object with all components
-            
-        Raises:
-            PromptLoaderError: If the prompt/version is not found or server error
         """
         if version_id == "latest":
             return self._fetch_latest(prompt_id)
@@ -120,12 +119,8 @@ class PromptLoader:
         agent_id: str | None = None,
     ) -> str:
         """Get resolved prompt text by ID and version.
-        
-        Auto-emits a prompt_resolved event if tracing is active.
-        
-        This is the simplest way to use prompts - just one line of code:
-        
-            system_prompt = loader.get("planner-prompt", "v2")
+        Most importantly this works with our TraceEvents 
+        so that when a trace is ongoing this will emit an event to the sink so that we know which agent used which prompt version.
         
         Args:
             prompt_id: The prompt identifier
@@ -134,14 +129,11 @@ class PromptLoader:
             
         Returns:
             The resolved prompt text (all enabled components concatenated)
-            
-        Raises:
-            PromptLoaderError: If the prompt/version is not found or server error
         """
         version = self.get_version(prompt_id, version_id)
         resolved_text = version.resolve()
         
-        # auto-emit if tracing is active
+        # check the context and emit if tracing is active
         from backbone.sdk.tracing import get_active_context
         ctx = get_active_context()
         if ctx:
@@ -165,8 +157,6 @@ class PromptLoader:
 
     def clear_cache(self) -> None:
         """Clear the prompt cache.
-        
-        Useful if prompts have been updated and you need fresh data.
         """
         self._cache.clear()
 

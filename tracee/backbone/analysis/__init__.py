@@ -6,11 +6,6 @@ from backbone.analysis.trace_summary import (
     TraceSummary,
     trace_summary,
 )
-from backbone.analysis.analyze_trace import (
-    load_trace_events,
-    format_summary,
-    summary_to_dict,
-)
 from backbone.analysis.agent_analyzer import (
     AgentAnalysis,
     AgentDecision,
@@ -28,10 +23,6 @@ __all__ = [
     "ToolUsage",
     "TraceSummary",
     "trace_summary",
-    # analyze_trace exports
-    "load_trace_events",
-    "format_summary",
-    "summary_to_dict",
     # agent_analyzer exports (LLM-powered, placeholder)
     "AgentAnalysis",
     "AgentDecision",

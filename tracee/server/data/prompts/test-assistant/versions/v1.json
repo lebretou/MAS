@@ -1,0 +1,26 @@
+{
+  "prompt_id": "test-assistant",
+  "version_id": "v1",
+  "name": "Initial version",
+  "components": [
+    {
+      "type": "role",
+      "content": "You are a helpful assistant.",
+      "enabled": true
+    },
+    {
+      "type": "goal",
+      "content": "Answer the user's question about {{topic}} clearly and concisely.",
+      "enabled": true
+    },
+    {
+      "type": "constraints",
+      "content": "Keep your response under 100 words.",
+      "enabled": true
+    }
+  ],
+  "variables": {
+    "topic": "default topic"
+  },
+  "created_at": "2026-01-21T18:14:59.358227+00:00"
+}

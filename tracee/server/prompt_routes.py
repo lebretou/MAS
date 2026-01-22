@@ -29,7 +29,6 @@ class CreatePromptRequest(BaseModel):
     """Request body for creating a new prompt."""
 
     prompt_id: str  # unique identifier
-    agent_name: str  # which agent uses this
     name: str  # display name
     description: str | None = None
 
@@ -53,7 +52,6 @@ class PromptListItem(BaseModel):
     """Summary item for listing prompts."""
 
     prompt_id: str
-    agent_name: str
     name: str
     description: str | None
     latest_version_id: str | None
@@ -172,7 +170,6 @@ def list_prompts() -> list[PromptListItem]:
         prompts.append(
             PromptListItem(
                 prompt_id=prompt.prompt_id,
-                agent_name=prompt.agent_name,
                 name=prompt.name,
                 description=prompt.description,
                 latest_version_id=prompt.latest_version_id,
@@ -200,7 +197,6 @@ def create_prompt(request: CreatePromptRequest) -> Prompt:
     now = utc_timestamp()
     prompt = Prompt(
         prompt_id=request.prompt_id,
-        agent_name=request.agent_name,
         name=request.name,
         description=request.description,
         created_at=now,
