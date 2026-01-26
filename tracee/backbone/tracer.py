@@ -10,7 +10,7 @@ from pathlib import Path
 
 from backbone.adapters.event_api import EventEmitter
 from backbone.adapters.langchain_callback import RawCallbackHandler
-from backbone.adapters.sinks import EventSink
+from backbone.adapters.sinks import EventSink, ListSink
 from backbone.sdk.tracing import _create_tracing_components
 
 

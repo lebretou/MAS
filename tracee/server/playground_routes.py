@@ -4,6 +4,7 @@ Provides endpoints to execute prompts against LLMs and track runs.
 Supports OpenAI and Anthropic (Claude) models.
 """
 
+import json
 import os
 import time
 from pathlib import Path

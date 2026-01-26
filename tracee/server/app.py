@@ -1,6 +1,7 @@
 """FastAPI application for serving trace and prompt data."""
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -16,16 +17,29 @@ from server.trace_db import TRACE_DB_PATH
 from dotenv import load_dotenv
 load_dotenv()  # load environment variables from .env file
 
+# CORS origins - configurable via environment variable
+# Use comma-separated values for multiple origins, or "*" for all (development only)
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database tables on startup."""
+    init_all()
+    yield
+
+
 app = FastAPI(
     title="Tracee API",
     description="API server for MAS trace data, prompt management, and playground",
     version="0.2.0",
+    lifespan=lifespan,
 )
 
-# CORS middleware for frontend development
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins for development
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,12 +50,6 @@ app.include_router(trace_router, prefix="/api")
 app.include_router(prompt_router, prefix="/api")
 app.include_router(playground_router, prefix="/api")
 app.include_router(model_config_router, prefix="/api")
-
-
-@app.on_event("startup")
-def startup():
-    """initialize database tables."""
-    init_all()
 
 
 @app.get("/")

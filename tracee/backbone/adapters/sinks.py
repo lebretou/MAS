@@ -61,5 +61,10 @@ class HttpSink(EventSink):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=self.timeout):
-            return None
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout):
+                pass
+        except (urllib.error.URLError, urllib.error.HTTPError):
+            # Silently ignore network errors to avoid crashing the agent
+            # In production, consider logging these errors
+            pass

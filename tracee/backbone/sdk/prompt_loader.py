@@ -11,6 +11,10 @@ import httpx
 from backbone.models.prompt_artifact import PromptVersion
 
 
+class PromptLoaderError(Exception):
+    """Exception raised when prompt loading fails."""
+    pass
+
 
 class PromptLoader:
     """Load prompts from the server for use in agent code.
