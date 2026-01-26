@@ -87,14 +87,6 @@ def get_trace_events(trace_id: str, limit: int | None = None, offset: int = 0) -
     return [event.model_dump() for event in events]
 
 
-@router.get("/traces/{trace_id}/events")
-def get_trace_events_explicit(
-    trace_id: str, limit: int | None = None, offset: int = 0
-) -> list[dict]:
-    """Get raw events for a trace."""
-    return get_trace_events(trace_id, limit=limit, offset=offset)
-
-
 @router.get("/traces/{trace_id}/summary")
 def get_trace_summary(trace_id: str) -> dict:
     """Get computed summary for a trace."""

@@ -1,8 +1,11 @@
 """Event sinks for trace storage."""
 
 import json
+import logging
 import urllib.request
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from backbone.models.trace_event import TraceEvent
 
@@ -64,7 +67,5 @@ class HttpSink(EventSink):
         try:
             with urllib.request.urlopen(req, timeout=self.timeout):
                 pass
-        except (urllib.error.URLError, urllib.error.HTTPError):
-            # Silently ignore network errors to avoid crashing the agent
-            # In production, consider logging these errors
-            pass
+        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+            logger.warning("failed to send trace event to %s: %s", url, e)

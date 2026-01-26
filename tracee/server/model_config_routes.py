@@ -118,6 +118,16 @@ def create_model_config(request: SavedModelConfigCreate) -> SavedModelConfig:
     return config
 
 
+@router.get("/model-configs/default")
+def get_default_model_config() -> SavedModelConfig:
+    """Get the default model configuration, if one is set."""
+    for config in _list_all_configs():
+        if config.is_default:
+            return config
+    
+    raise HTTPException(status_code=404, detail="No default model configuration set")
+
+
 @router.get("/model-configs/{config_id}")
 def get_model_config(config_id: str) -> SavedModelConfig:
     """Get a specific model configuration."""
@@ -156,16 +166,6 @@ def delete_model_config(config_id: str) -> dict:
     
     _delete_config_file(config_id)
     return {"deleted": config_id}
-
-
-@router.get("/model-configs/default")
-def get_default_model_config() -> SavedModelConfig:
-    """Get the default model configuration, if one is set."""
-    for config in _list_all_configs():
-        if config.is_default:
-            return config
-    
-    raise HTTPException(status_code=404, detail="No default model configuration set")
 
 
 @router.post("/model-configs/{config_id}/set-default")
