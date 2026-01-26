@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from server.routes import router as trace_router
+from server.trace_routes import router as trace_router
 from server.prompt_routes import router as prompt_router
 from server.playground_routes import router as playground_router
 from server.db import init_all
