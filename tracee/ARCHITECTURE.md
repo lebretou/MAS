@@ -269,6 +269,9 @@ uv pip install -r requirements.txt
 
 # set OpenAI key
 export OPENAI_API_KEY=your_key
+
+# set trace API URL so traces are visible in /api/traces (requires server running)
+export TRACE_API_URL=http://localhost:8000
 ```
 
 **Enable LangSmith tracing (recommended):**
