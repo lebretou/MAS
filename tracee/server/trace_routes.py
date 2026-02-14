@@ -1,6 +1,7 @@
 """API routes for trace data."""
 
 from dataclasses import asdict
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -34,6 +35,15 @@ class TraceIngestRequest(BaseModel):
     events: list[dict]
 
 
+_EST = timezone(timedelta(hours=-5))
+
+
+def _utc_to_est(iso_utc: str) -> str:
+    """convert a UTC ISO timestamp to EST for display."""
+    dt = datetime.fromisoformat(iso_utc)
+    return dt.astimezone(_EST).isoformat()
+
+
 def _summary_to_dict(summary: TraceSummary) -> dict:
     """Convert TraceSummary to a JSON-serializable dict."""
     d = asdict(summary)
@@ -52,8 +62,8 @@ def list_traces_endpoint(limit: int = 100, offset: int = 0) -> list[TraceMetadat
         TraceMetadata(
             trace_id=row.trace_id,
             event_count=row.event_count,
-            created_at=row.created_at,
-            updated_at=row.updated_at,
+            created_at=_utc_to_est(row.created_at),
+            updated_at=_utc_to_est(row.updated_at),
         )
         for row in rows
     ]
