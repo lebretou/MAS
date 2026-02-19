@@ -4,6 +4,7 @@ from backend.agents.interaction import create_interaction_agent
 from backend.agents.planner import create_planner_agent
 from backend.agents.coding import create_coding_agent
 from backend.agents.summary import create_summary_agent
+from backbone.sdk.graph_extractor import extract_and_register
 from langchain_core.messages import HumanMessage
 import pandas as pd
 
@@ -61,9 +62,16 @@ def create_workflow() -> StateGraph:
     workflow.add_edge("coding", "summary")
     workflow.add_edge("summary", END)
     
-    # compile the graph
     app = workflow.compile()
-    
+
+    extract_and_register(
+        compiled_graph=app,
+        graph_id="data-analysis-mas",
+        name="Data Analysis MAS",
+        description="Multi-agent system for interactive data analysis",
+        base_url="http://localhost:8000",
+    )
+
     return app
 
 

@@ -90,14 +90,21 @@ def extract_and_register(
     topology = extract_topology(compiled_graph, graph_id, name, description)
 
     url = f"{base_url.rstrip('/')}/api/graphs/{graph_id}"
-    with httpx.Client(timeout=timeout) as client:
-        response = client.put(url, json={
-            "graph_id": topology.graph_id,
-            "name": topology.name,
-            "description": topology.description,
-            "nodes": [n.model_dump() for n in topology.nodes],
-            "edges": [e.model_dump() for e in topology.edges],
-        })
-        response.raise_for_status()
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.put(url, json={
+                "graph_id": topology.graph_id,
+                "name": topology.name,
+                "description": topology.description,
+                "nodes": [n.model_dump() for n in topology.nodes],
+                "edges": [e.model_dump() for e in topology.edges],
+            })
+            response.raise_for_status()
+    except (httpx.ConnectError, httpx.HTTPStatusError) as exc:
+        import warnings
+        warnings.warn(
+            f"failed to register graph topology with server at {base_url}: {exc}",
+            stacklevel=2,
+        )
 
     return topology
