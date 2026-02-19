@@ -1,48 +1,9 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from backend.state.schema import AnalysisState
+from backbone.sdk.prompt_loader import PromptLoader
 
-
-PLANNER_SYSTEM_PROMPT = """You are a planning agent in a data analysis system. Your role is to:
-
-1. Create a detailed, step-by-step analysis plan based on the user's query
-2. Suggest appropriate visualizations using available tools
-3. Write a comprehensive prompt for the coding agent
-
-You have access to tools that let you:
-- Validate analysis plans
-- Suggest appropriate visualizations based on the query and dataset
-- List available libraries
-
-**Your output should include:**
-
-1. **Analysis Plan**: A clear, numbered list of steps to accomplish the user's request
-   - Step 1: Load and prepare data
-   - Step 2: Perform calculations/analysis
-   - Step 3: Create visualizations
-   - Step 4: Output results
-
-2. **Coding Instructions**: Detailed instructions for the coding agent, including:
-   - Which columns to use
-   - What calculations to perform
-   - What plots to create
-   - How to save figures (use plt.savefig('filename.png'))
-
-**Important Guidelines:**
-- Use only allowed libraries: pandas (pd), numpy (np), matplotlib.pyplot (plt), seaborn (sns), sklearn, scipy
-- The dataset is available as variable 'df' or 'dataset'
-- Always save plots using plt.savefig() before creating new figures
-- Include print statements for key results
-- Be specific about column names and operations
-
-Format your response as:
-
-## analysis plan
-[Numbered steps]
-
-## coding instructions
-[Detailed prompt for the coding agent]
-"""
+loader = PromptLoader(base_url="http://localhost:8000")
 
 
 def create_planner_agent(state: AnalysisState) -> AnalysisState:
@@ -73,7 +34,8 @@ def create_planner_agent(state: AnalysisState) -> AnalysisState:
     
     # execute agent
     try:
-        system_message = SystemMessage(content=PLANNER_SYSTEM_PROMPT)
+        system_prompt = loader.get("planner-prompt", agent_id="planner")
+        system_message = SystemMessage(content=system_prompt)
         user_message = HumanMessage(content=f"""User query: {state['user_query']}
 
                                                 Dataset information:

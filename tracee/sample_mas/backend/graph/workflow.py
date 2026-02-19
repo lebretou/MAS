@@ -17,11 +17,30 @@ def should_continue_to_planner(state: AnalysisState) -> str:
 def create_workflow() -> StateGraph:
     workflow = StateGraph(AnalysisState)
     
-    # in langgraph, nodes are the agents
-    workflow.add_node("interaction", create_interaction_agent)
-    workflow.add_node("planner", create_planner_agent)
-    workflow.add_node("coding", create_coding_agent)
-    workflow.add_node("summary", create_summary_agent)
+    workflow.add_node("interaction", create_interaction_agent, metadata={
+        "prompt_id": "interaction-prompt",
+        "model": "gpt-4.1-2025-04-14",
+        "temperature": 0,
+        "has_tools": True,
+    })
+    workflow.add_node("planner", create_planner_agent, metadata={
+        "prompt_id": "planner-prompt",
+        "model": "gpt-4o-mini",
+        "temperature": 0.3,
+        "has_tools": False,
+    })
+    workflow.add_node("coding", create_coding_agent, metadata={
+        "prompt_id": "coding-prompt",
+        "model": "gpt-4o-mini",
+        "temperature": 0,
+        "has_tools": False,
+    })
+    workflow.add_node("summary", create_summary_agent, metadata={
+        "prompt_id": "summary-prompt",
+        "model": "gpt-4o-mini",
+        "temperature": 0.5,
+        "has_tools": False,
+    })
     
     # starting point
     workflow.set_entry_point("interaction")

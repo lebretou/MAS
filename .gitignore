@@ -5,3 +5,4 @@ tracee/CLAUDE.md
 # python bytecode
 __pycache__/
 *.pyc
+tracee/server/data/tracee.db

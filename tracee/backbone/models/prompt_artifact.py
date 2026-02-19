@@ -12,14 +12,15 @@ class PromptComponentType(str, Enum):
     Zhongzheng will confirm on the exact components soon 
     """
 
-    # tentative
     role = "role"
-    goal = "goal"
     constraints = "constraints"
-    io_rules = "io_rules"
+    task = "task"
+    inputs = "inputs"
+    outputs = "outputs"
     examples = "examples"
     safety = "safety"
     tool_instructions = "tool_instructions"
+    external_information = "external_information"
 
 
 class PromptComponent(BaseModel):

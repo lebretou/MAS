@@ -3,62 +3,9 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from backend.state.schema import AnalysisState
 from backend.tools.execution_tools import execute_code_safely
 import os
+from backbone.sdk.prompt_loader import PromptLoader
 
-
-CODING_SYSTEM_PROMPT = """You are a coding agent in a data analysis system. Your role is to:
-
-1. Write executable Python code based on the analysis plan and instructions
-2. Ensure the code is safe, efficient, and follows best practices
-3. Use only allowed libraries and operations
-
-**Available Libraries:**
-- pandas (imported as pd)
-- numpy (imported as np)
-- matplotlib.pyplot (imported as plt)
-- seaborn (imported as sns)
-- sklearn (scikit-learn)
-- scipy
-
-**Dataset Access:**
-- The dataset is available as variable: `df` or `dataset`
-- Both refer to the same pandas DataFrame
-
-**Code Requirements:**
-- Use ONLY the allowed libraries above
-- Save all plots using plt.savefig('plot_name.png') before creating new figures
-- Use plt.figure() to create new figures if making multiple plots
-- Include print() statements for key results and statistics
-- Do NOT use: open(), file operations, imports other than allowed libraries
-- Validate that columns exist before using them
-
-**Code Structure:**
-Your response should be ONLY the Python code, without any markdown formatting or explanation.
-Do not include ```python or ``` markers.
-Just provide the raw executable code.
-
-Example structure:
-```
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# analysis code here
-result = df['column'].mean()
-print(f"Mean: {result}")
-
-# visualization
-plt.figure(figsize=(10, 6))
-plt.scatter(df['x'], df['y'])
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.title('X vs Y')
-plt.savefig('scatter_plot.png')
-plt.close()
-```
-
-You have access to tools to validate your code and check dataset columns.
-"""
+loader = PromptLoader(base_url="http://localhost:8000")
 
 
 def create_coding_agent(state: AnalysisState) -> AnalysisState:
@@ -82,7 +29,8 @@ def create_coding_agent(state: AnalysisState) -> AnalysisState:
     
     # execute agent to generate code
     try:
-        system_message = SystemMessage(content=CODING_SYSTEM_PROMPT)
+        system_prompt = loader.get("coding-prompt", agent_id="coding")
+        system_message = SystemMessage(content=system_prompt)
         user_message = HumanMessage(content=f"""Analysis Plan and Instructions:
 {state['coding_prompt']}
 

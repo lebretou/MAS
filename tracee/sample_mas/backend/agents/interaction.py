@@ -2,31 +2,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from backend.state.schema import AnalysisState
 from backend.tools.dataset_tools import create_dataset_tools_for_agent
+from backbone.sdk.prompt_loader import PromptLoader
 
-
-INTERACTION_SYSTEM_PROMPT = """You are an interaction agent in a data analysis system. Your role is to:
-
-1. Understand the user's query in the context of the provided dataset
-2. Use the available tools to inspect the dataset and understand its structure
-3. Determine if the user's query is relevant to the dataset and requires analysis/coding
-4. Answer simple questions about the dataset directly
-
-You have access to tools that let you:
-- Get dataset information (columns, types, shape, statistics)
-- Get sample rows from the dataset
-- Search for columns by keyword
-- Get statistics for specific columns
-
-**Decision Rules:**
-- If the user asks a simple question that you can answer using the tools (e.g., "What columns are in this dataset?", "How many rows?"), answer it directly.
-- If the user requests analysis, visualization, or ANY computation such as creating a plot, asking for correlations, etc. that requires code execution (e.g., "Plot X vs Y", "Run regression", "Calculate correlation"), respond with EXACTLY: [EXECUTE_ANALYSIS]
-- If the user's query is completely unrelated to data analysis or the dataset, politely explain that you can only help with dataset-related queries.
-
-**Important:**
-- Always use tools to inspect the dataset before making decisions
-- Be conversational and helpful
-- When you decide analysis is needed, output ONLY the token: [EXECUTE_ANALYSIS]
-"""
+loader = PromptLoader(base_url="http://localhost:8000")
 
 
 def create_interaction_agent(state: AnalysisState) -> AnalysisState:
@@ -50,8 +28,9 @@ def create_interaction_agent(state: AnalysisState) -> AnalysisState:
     )
     llm_with_tools = llm.bind_tools(tools)
     
-    # create prompt
-    system_message = SystemMessage(content=INTERACTION_SYSTEM_PROMPT)
+    # load prompt from server (cached after first call)
+    system_prompt = loader.get("interaction-prompt", agent_id="interaction")
+    system_message = SystemMessage(content=system_prompt)
     user_message = HumanMessage(content=f"Dataset path: {state.get('dataset_path', 'uploaded_dataset')}\n\nUser query: {state['user_query']}")
     
     # execute agent with tool calling

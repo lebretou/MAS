@@ -34,7 +34,7 @@ class PromptLoader:
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-        self._cache: dict[tuple[str, str], PromptVersion] = {} # key is prompt id and version id
+        self._cache: dict[tuple[str, str], PromptVersion] = {}
 
     def _fetch_version(self, prompt_id: str, version_id: str) -> PromptVersion:
         """Fetch a prompt version from the server."""

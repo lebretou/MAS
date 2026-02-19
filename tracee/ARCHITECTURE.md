@@ -16,7 +16,8 @@ Tracee is a developer tool for building and debugging multi-agent systems (MAS).
 8. [Data Models](#data-models)
 9. [SDK Usage](#sdk-usage)
 10. [API Reference](#api-reference)
-11. [UI Integration](#ui-integration)
+11. [Graph Visualization Architecture](#graph-visualization-architecture)
+12. [UI Integration](#ui-integration)
 
 ---
 
@@ -53,26 +54,28 @@ A structured view of agent execution for debugging. Instead of reading raw logs:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                           UI (Future)                               │
-│            Trace Viewer · Prompt Editor · Playground                │
+│                           UI (React)                                │
+│   Graph Visualizer · Trace Viewer · Prompt Editor · Playground      │
 └─────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        FastAPI Server                               │
-│   /api/traces · /api/prompts · /api/playground · /api/model-configs │
+│  /api/traces · /api/prompts · /api/playground · /api/model-configs  │
+│  /api/graphs · /api/agents                                          │
 └─────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        SQLite Storage                               │
-│              traces · prompts · prompt_versions · playground_runs   │
+│    traces · prompts · prompt_versions · playground_runs             │
+│    graphs · agent_registry                                          │
 └─────────────────────────────────────────────────────────────────────┘
                                   ▲
                                   │
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        SDK (Agent Code)                             │
-│          enable_tracing() · PromptLoader · RawCallbackHandler       │
+│  enable_tracing() · PromptLoader · GraphExtractor · Callbacks       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -197,35 +200,50 @@ Tracee's `RawCallbackHandler` subscribes to these callbacks and captures them as
 
 ```
 tracee/
-├── backbone/                    # Core tracing library
+├── backbone/                        # core tracing library
 │   ├── adapters/
-│   │   ├── event_api.py         # EventEmitter for manual events
-│   │   ├── langchain_callback.py# RawCallbackHandler for LangChain
-│   │   └── sinks.py             # ListSink, FileSink, HttpSink
+│   │   ├── event_api.py             # EventEmitter for manual events
+│   │   ├── langchain_callback.py    # RawCallbackHandler for LangChain
+│   │   └── sinks.py                 # ListSink, FileSink, HttpSink
 │   ├── analysis/
-│   │   └── trace_summary.py     # Reconstruct agent graphs from events
+│   │   └── trace_summary.py         # reconstruct agent graphs from events
 │   ├── models/
-│   │   ├── prompt_artifact.py   # Prompt, PromptVersion, PromptComponent
-│   │   ├── playground_run.py    # PlaygroundRun model
-│   │   ├── saved_model_config.py# SavedModelConfig model
-│   │   └── trace_event.py       # TraceEvent model
+│   │   ├── agent_registry.py        # AgentRegistryEntry model
+│   │   ├── graph_topology.py        # GraphTopology, GraphNode, GraphEdge
+│   │   ├── prompt_artifact.py       # Prompt, PromptVersion, PromptComponent
+│   │   ├── playground_run.py        # PlaygroundRun model
+│   │   ├── saved_model_config.py    # SavedModelConfig model
+│   │   └── trace_event.py           # TraceEvent model
 │   ├── sdk/
-│   │   ├── tracing.py           # enable_tracing() context manager
-│   │   └── prompt_loader.py     # PromptLoader for agent code
+│   │   ├── graph_extractor.py       # extract_topology(), extract_and_register()
+│   │   ├── prompt_loader.py         # PromptLoader for agent code
+│   │   └── tracing.py               # enable_tracing() context manager
 │   ├── utils/
-│   │   └── identifiers.py       # UUID generation, timestamps
-│   └── tracer.py                # Tracer class (legacy wrapper)
+│   │   └── identifiers.py           # UUID generation, timestamps
+│   └── tracer.py                    # Tracer class (legacy wrapper)
 ├── server/
-│   ├── app.py                   # FastAPI application
-│   ├── db.py                    # Database initialization
-│   ├── routes.py                # Trace endpoints
-│   ├── prompt_routes.py         # Prompt endpoints
-│   ├── playground_routes.py     # Playground endpoints
-│   ├── model_config_routes.py   # Model config endpoints
-│   ├── trace_db.py              # Trace SQLite operations
-│   ├── prompt_db.py             # Prompt SQLite operations
-│   └── playground_db.py         # Playground SQLite operations
-└── sample_mas/                  # Example multi-agent system
+│   ├── app.py                       # FastAPI application
+│   ├── db.py                        # database initialization
+│   ├── agent_db.py                  # agent registry SQLite operations
+│   ├── agent_routes.py              # agent registry endpoints
+│   ├── graph_db.py                  # graph topology SQLite operations
+│   ├── graph_routes.py              # graph topology endpoints
+│   ├── trace_routes.py              # trace endpoints
+│   ├── prompt_routes.py             # prompt endpoints
+│   ├── prompt_db.py                 # prompt SQLite operations
+│   ├── playground_routes.py         # playground endpoints
+│   ├── playground_db.py             # playground SQLite operations
+│   ├── model_config_routes.py       # model config endpoints
+│   └── trace_db.py                  # trace SQLite operations
+├── sample_mas/                      # example multi-agent system
+│   ├── backend/
+│   │   ├── agents/                  # agent implementations (use PromptLoader)
+│   │   ├── graph/workflow.py        # LangGraph workflow with node metadata
+│   │   ├── state/schema.py          # AnalysisState TypedDict
+│   │   ├── tools/                   # dataset tools, execution tools
+│   │   └── telemetry/               # tracing configuration
+│   └── main.py                      # CLI entry point
+└── playground-ui/                   # React frontend
 ```
 
 ---
@@ -374,17 +392,63 @@ class PromptVersion(BaseModel):
 ```python
 class PromptComponentType(str, Enum):
     role = "role"
-    goal = "goal"
     constraints = "constraints"
-    io_rules = "io_rules"
+    task = "task"
+    inputs = "inputs"
+    outputs = "outputs"
     examples = "examples"
     safety = "safety"
     tool_instructions = "tool_instructions"
+    external_information = "external_information"
 
 class PromptComponent(BaseModel):
     type: PromptComponentType
     content: str
     enabled: bool = True
+```
+
+### GraphTopology, GraphNode, GraphEdge
+
+Represents the static structure of a LangGraph workflow, decoupled from LangGraph's internal types for persistence and UI rendering.
+
+```python
+class GraphNode(BaseModel):
+    node_id: str                    # matches the name used in add_node()
+    label: str                      # display name
+    node_type: str = "agent"        # "agent", "start", or "end"
+    prompt_id: str | None = None    # linked prompt artifact
+    metadata: dict | None = None    # model, temperature, has_tools, etc.
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    conditional: bool = False       # true for conditional_edges
+    label: str | None = None        # edge label for conditional branches
+
+class GraphTopology(BaseModel):
+    graph_id: str
+    name: str
+    description: str | None
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    created_at: str
+    updated_at: str
+```
+
+### AgentRegistryEntry
+
+Links an agent node to its prompt, model config, and metadata. Populated automatically when a graph topology is registered.
+
+```python
+class AgentRegistryEntry(BaseModel):
+    agent_id: str                       # matches the node_id in the graph
+    prompt_id: str | None = None        # prompt artifact used by this agent
+    prompt_version_id: str | None = None
+    model: str | None = None            # e.g. "gpt-4.1-2025-04-14"
+    temperature: float | None = None
+    has_tools: bool = False
+    metadata: dict | None = None
+    updated_at: str
 ```
 
 ### PlaygroundRun
@@ -427,32 +491,66 @@ with enable_tracing(output_dir="./traces") as ctx:
 
 ### Load Prompts
 
+Prompts are loaded lazily inside agent functions (not at module level) to avoid a hard server dependency at import time. The `agent_id` parameter links runtime prompt resolution to the agent registry.
+
 ```python
 from backbone.sdk import PromptLoader
 
 loader = PromptLoader(base_url="http://localhost:8000")
 
-# get resolved text (auto-emits prompt_resolved event if tracing active)
-system_prompt = loader.get("planner-prompt", "v2")
+# inside your agent function — lazy loading
+def create_planner_agent(state):
+    system_prompt = loader.get("planner-prompt", agent_id="planner")
+    # ... use system_prompt
+```
 
-# get full version object
-version = loader.get_version("planner-prompt", "latest")
+### Extract and Register Graph Topology
+
+After compiling a LangGraph workflow, extract its topology and register it with the server. This populates both the graph topology and the agent registry in a single step.
+
+```python
+from backbone.sdk.graph_extractor import extract_and_register
+
+# compile the workflow
+app = workflow.compile()
+
+# extract topology and register with the server
+topology = extract_and_register(
+    compiled_graph=app,
+    graph_id="data-analysis-mas",
+    name="Data Analysis MAS",
+    description="Multi-agent system for data analysis",
+    base_url="http://localhost:8000",
+)
+```
+
+The extractor reads metadata from `workflow.add_node()` calls:
+
+```python
+workflow.add_node("planner", create_planner_agent, metadata={
+    "prompt_id": "planner-prompt",
+    "model": "gpt-4.1-2025-04-14",
+    "temperature": 0,
+    "has_tools": False,
+})
 ```
 
 ### Combined Usage
 
 ```python
 from backbone.sdk import enable_tracing, PromptLoader
+from backbone.sdk.graph_extractor import extract_and_register
 
 loader = PromptLoader()
 
+# 1. register graph topology + agents at definition time
+app = workflow.compile()
+extract_and_register(app, "my-graph", "My MAS", base_url="http://localhost:8000")
+
+# 2. run with tracing
 with enable_tracing(base_url="http://localhost:8000") as ctx:
-    # prompt_resolved event auto-emitted
-    system_prompt = loader.get("my-agent-prompt", "v1", agent_id="planner")
-    
-    # run agent with tracing
-    result = graph.invoke(
-        {"prompt": system_prompt, ...},
+    result = app.invoke(
+        initial_state,
         config={"callbacks": ctx.callbacks}
     )
 ```
@@ -492,6 +590,24 @@ with enable_tracing(base_url="http://localhost:8000") as ctx:
 | GET | `/api/playground/runs` | List runs |
 | GET | `/api/playground/runs/{id}` | Get run |
 
+### Graphs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/graphs` | List all graph topologies |
+| GET | `/api/graphs/{graph_id}` | Get graph with nodes and edges |
+| PUT | `/api/graphs/{graph_id}` | Upsert graph (also registers agents) |
+| DELETE | `/api/graphs/{graph_id}` | Delete graph |
+
+### Agents
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/agents` | List all registered agents |
+| GET | `/api/agents/{agent_id}` | Get agent with prompt and model info |
+| PUT | `/api/agents/{agent_id}` | Upsert agent registry entry |
+| DELETE | `/api/agents/{agent_id}` | Delete agent entry |
+
 ### Model Configs
 
 | Method | Endpoint | Description |
@@ -502,6 +618,51 @@ with enable_tracing(base_url="http://localhost:8000") as ctx:
 | PATCH | `/api/model-configs/{id}` | Update config |
 | DELETE | `/api/model-configs/{id}` | Delete config |
 | POST | `/api/model-configs/{id}/set-default` | Set as default |
+
+---
+
+## Graph Visualization Architecture
+
+The graph visualization system enables a react-flow-based UI to render the complete MAS architecture, including agent nodes, edges, and their associated prompts.
+
+### Two-Layer UI Model
+
+The UI is designed around two layers:
+
+1. **Intent Layer** — the complete graph topology with all agent metadata and prompts. This represents the full architecture as defined by the developer, regardless of which agents get activated at runtime. Populated at graph definition time via `extract_and_register()`.
+
+2. **Execution Layer** — the actual runtime trace. Built from `TraceEvent` objects captured during `graph.invoke()`. Shows which agents were actually called, their LLM inputs/outputs, tool invocations, and timing. This layer overlays on the intent layer to show which parts of the graph were exercised.
+
+### Registration Flow
+
+```
+Developer defines graph          SDK extracts topology       Server stores + auto-registers
+─────────────────────────  →  ───────────────────────  →  ─────────────────────────────────
+
+workflow.add_node(               extract_and_register()      PUT /api/graphs/{id}
+  "planner",                       ↓                           ├── store GraphTopology
+  create_planner_agent,          reads nodes, edges,           └── for each agent node:
+  metadata={                     metadata from compiled              PUT /api/agents/{id}
+    "prompt_id": "...",          graph via get_graph()                 with prompt_id, model,
+    "model": "gpt-4.1",                                              temperature, has_tools
+    ...
+  }
+)
+```
+
+### Why Register at Graph Definition Time?
+
+LangGraph workflows can contain conditional edges where some agents are never called during a particular run. If agent-prompt bindings were only recorded at runtime (when `PromptLoader.get()` fires), the intent layer would be incomplete — only showing agents that happened to execute. By registering at graph definition time, the UI always has the full picture.
+
+### Connecting Agents to Prompts
+
+Each agent node carries a `prompt_id` in its metadata, linking it to a prompt artifact stored via `/api/prompts`. This allows the UI to:
+
+- fetch the prompt's components (role, constraints, task, etc.) for each agent node
+- display prompt component icons/badges on the graph visualization
+- let users click an agent node to inspect or edit its prompt
+
+The mapping is maintained in the `agent_registry` table and kept in sync automatically when a graph topology is upserted.
 
 ---
 

@@ -7,6 +7,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from server.agent_routes import router as agent_router
+from server.graph_routes import router as graph_router
 from server.trace_routes import router as trace_router
 from server.prompt_routes import router as prompt_router
 from server.playground_routes import router as playground_router
@@ -50,6 +52,8 @@ app.include_router(trace_router, prefix="/api")
 app.include_router(prompt_router, prefix="/api")
 app.include_router(playground_router, prefix="/api")
 app.include_router(model_config_router, prefix="/api")
+app.include_router(agent_router, prefix="/api")
+app.include_router(graph_router, prefix="/api")
 
 
 @app.get("/")
@@ -64,6 +68,8 @@ def root():
             "prompts": "/api/prompts",
             "playground": "/api/playground/run",
             "model_configs": "/api/model-configs",
+            "agents": "/api/agents",
+            "graphs": "/api/graphs",
         },
     }
 

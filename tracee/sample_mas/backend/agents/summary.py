@@ -2,29 +2,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from backend.state.schema import AnalysisState
+from backbone.sdk.prompt_loader import PromptLoader
 
-
-SUMMARY_SYSTEM_PROMPT = """You are a summary agent in a data analysis system. Your role is to:
-
-1. Interpret the results from the code execution
-2. Create a clear, user-friendly summary of the analysis
-3. Highlight key findings and insights
-
-**Your summary should:**
-- Be concise but informative (2-4 paragraphs)
-- Explain what analysis was performed
-- Present key numerical results clearly
-- Mention any visualizations that were created
-- Note any issues or limitations if the code failed
-
-**Tone:**
-- Professional but accessible
-- Avoid technical jargon where possible
-- Focus on insights, not just mechanics
-
-**Format:**
-Start with what was done, then present findings, then conclude with visualizations or next steps.
-"""
+loader = PromptLoader(base_url="http://localhost:8000")
 
 
 def create_summary_agent(state: AnalysisState) -> AnalysisState:
@@ -77,9 +57,10 @@ Standard Error:
 {execution_result.get('stderr', 'No error details')}
 """
     
-    # create prompt
+    # load prompt from server (cached after first call)
+    system_prompt = loader.get("summary-prompt", agent_id="summary")
     prompt = ChatPromptTemplate.from_messages([
-        ("system", SUMMARY_SYSTEM_PROMPT),
+        ("system", system_prompt),
         ("human", "{context}\n\nPlease provide a clear summary of the analysis results for the user.")
     ])
     
