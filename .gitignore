@@ -6,3 +6,6 @@ tracee/CLAUDE.md
 __pycache__/
 *.pyc
 tracee/server/data/tracee.db
+
+# local sandbox for prototyping
+tracee/sandbox/

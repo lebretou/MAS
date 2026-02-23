@@ -23,6 +23,7 @@ class UpsertGraphRequest(BaseModel):
     description: str | None = None
     nodes: list[GraphNode]
     edges: list[GraphEdge]
+    state_schema: dict | None = None
 
 
 @router.get("/graphs")
@@ -59,6 +60,7 @@ def upsert_graph(graph_id: str, request: UpsertGraphRequest) -> GraphTopology:
         description=request.description,
         nodes=request.nodes,
         edges=request.edges,
+        state_schema=request.state_schema,
         created_at=existing.created_at if existing else now,
         updated_at=now,
     )

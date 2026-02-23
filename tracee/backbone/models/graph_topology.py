@@ -34,5 +34,6 @@ class GraphTopology(BaseModel):
     description: str | None = None
     nodes: list[GraphNode]
     edges: list[GraphEdge]
+    state_schema: dict | None = None
     created_at: str
     updated_at: str

@@ -1,11 +1,13 @@
-export type PromptComponentType = 
+export type PromptComponentType =
   | "role"
-  | "goal"
   | "constraints"
-  | "io_rules"
+  | "task"
+  | "inputs"
+  | "outputs"
   | "examples"
   | "safety"
-  | "tool_instructions";
+  | "tool_instructions"
+  | "external_information";
 
 export interface PromptComponent {
   type: PromptComponentType;

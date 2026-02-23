@@ -9,6 +9,7 @@ Usage in user code (e.g. after create_workflow()):
 
 from __future__ import annotations
 
+import typing
 import httpx
 
 from backbone.models.graph_topology import GraphEdge, GraphNode, GraphTopology
@@ -18,6 +19,42 @@ from backbone.utils.identifiers import utc_timestamp
 # langgraph synthetic node ids
 _START = "__start__"
 _END = "__end__"
+
+
+def _extract_state_schema(compiled_graph) -> dict | None:
+    """best-effort extraction of the state TypedDict into a JSON-schema-like dict."""
+    schema_cls = getattr(getattr(compiled_graph, "builder", None), "schema", None)
+    if schema_cls is None:
+        return None
+
+    hints = typing.get_type_hints(schema_cls, include_extras=True)
+    if not hints:
+        return None
+
+    properties: dict[str, dict] = {}
+    for field_name, annotation in hints.items():
+        origin = typing.get_origin(annotation)
+
+        # unwrap Annotated
+        if origin is typing.Annotated:
+            args = typing.get_args(annotation)
+            annotation = args[0] if args else annotation
+            origin = typing.get_origin(annotation)
+
+        type_str = getattr(annotation, "__name__", None) or str(annotation)
+        if origin is not None:
+            args = typing.get_args(annotation)
+            arg_strs = [getattr(a, "__name__", str(a)) for a in args] if args else []
+            base = getattr(origin, "__name__", str(origin))
+            type_str = f"{base}[{', '.join(arg_strs)}]" if arg_strs else base
+
+        properties[field_name] = {"type": type_str}
+
+    return {
+        "type": "object",
+        "description": getattr(schema_cls, "__doc__", None) or "",
+        "properties": properties,
+    }
 
 
 def extract_topology(
@@ -61,6 +98,8 @@ def extract_topology(
             label=label,
         ))
 
+    state_schema = _extract_state_schema(compiled_graph)
+
     now = utc_timestamp()
     return GraphTopology(
         graph_id=graph_id,
@@ -68,6 +107,7 @@ def extract_topology(
         description=description,
         nodes=nodes,
         edges=edges,
+        state_schema=state_schema,
         created_at=now,
         updated_at=now,
     )
@@ -98,6 +138,7 @@ def extract_and_register(
                 "description": topology.description,
                 "nodes": [n.model_dump() for n in topology.nodes],
                 "edges": [e.model_dump() for e in topology.edges],
+                "state_schema": topology.state_schema,
             })
             response.raise_for_status()
     except (httpx.ConnectError, httpx.HTTPStatusError) as exc:
