@@ -85,7 +85,6 @@ html, body, #root {
   max-width: 320px;
   font-size: 13px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
   transition: box-shadow 0.2s ease, opacity 0.3s ease;
 }
 
@@ -105,6 +104,7 @@ html, body, #root {
   padding: 16px;
   background: #ffffff;
   border-bottom: 1px solid #f0f0f0;
+  border-radius: 20px 20px 0 0;
 }
 
 .agent-node__icon-wrapper {
@@ -186,6 +186,8 @@ html, body, #root {
 .agent-node__components {
   border-top: 1px solid #f0f0f0;
   background: #fafafa;
+  border-radius: 0 0 20px 20px;
+  overflow: hidden;
 }
 
 .agent-node__components-header {
