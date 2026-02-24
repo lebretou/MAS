@@ -9,6 +9,7 @@ Usage in user code (e.g. after create_workflow()):
 
 from __future__ import annotations
 
+import re
 import typing
 import httpx
 
@@ -21,9 +22,18 @@ _START = "__start__"
 _END = "__end__"
 
 
+def _normalize_id_part(value: str) -> str:
+    normalized = re.sub(r"[^a-zA-Z0-9_-]+", "-", value).strip("-").lower()
+    return normalized or "branch"
+
+
 def _extract_state_schema(compiled_graph) -> dict | None:
     """best-effort extraction of the state TypedDict into a JSON-schema-like dict."""
-    schema_cls = getattr(getattr(compiled_graph, "builder", None), "schema", None)
+    builder = getattr(compiled_graph, "builder", None)
+    schema_cls = getattr(builder, "state_schema", None)
+    if schema_cls is None:
+        # fallback for older graph builder versions
+        schema_cls = getattr(builder, "schema", None)
     if schema_cls is None:
         return None
 
@@ -88,12 +98,40 @@ def extract_topology(
             metadata=meta if meta else None,
         ))
 
+    existing_node_ids = {node.node_id for node in nodes}
+    conditional_end_nodes: dict[tuple[str, str], str] = {}
     edges: list[GraphEdge] = []
-    for edge in lc_graph.edges:
+    for idx, edge in enumerate(lc_graph.edges):
         label = str(edge.data) if edge.data is not None else None
+        target = edge.target
+
+        if edge.conditional and edge.target == _END:
+            branch_key = label or f"branch-{idx}"
+            branch_signature = (edge.source, branch_key)
+            conditional_end_id = conditional_end_nodes.get(branch_signature)
+            if conditional_end_id is None:
+                source_part = _normalize_id_part(edge.source)
+                branch_part = _normalize_id_part(branch_key)
+                base_node_id = f"__end__conditional__{source_part}__{branch_part}"
+                conditional_end_id = base_node_id
+                suffix = 1
+                while conditional_end_id in existing_node_ids:
+                    conditional_end_id = f"{base_node_id}-{suffix}"
+                    suffix += 1
+
+                conditional_end_nodes[branch_signature] = conditional_end_id
+                existing_node_ids.add(conditional_end_id)
+                nodes.append(GraphNode(
+                    node_id=conditional_end_id,
+                    label="End",
+                    node_type="end",
+                ))
+
+            target = conditional_end_id
+
         edges.append(GraphEdge(
             source=edge.source,
-            target=edge.target,
+            target=target,
             conditional=edge.conditional,
             label=label,
         ))

@@ -5,6 +5,7 @@ import { fetchGraphs } from "../api/graphs";
 import { fetchLatestVersion } from "../api/prompts";
 import type { GraphNodeData, GraphEdgeData } from "../types/node-data";
 import type { JsonSchema } from "../types/schema";
+import type { GraphTopology } from "../types/graph";
 import { getLayoutedElements } from "../features/graph-viewer/layout";
 
 interface UseGraphResult {
@@ -12,6 +13,7 @@ interface UseGraphResult {
   edges: Edge<GraphEdgeData>[];
   stateSchema: JsonSchema | null;
   graphId: string | null;
+  graphInfo: GraphTopology | null;
   graphIds: string[];
   loading: boolean;
   error: string | null;
@@ -23,6 +25,7 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
   const [edges, setEdges] = useState<Edge<GraphEdgeData>[]>([]);
   const [stateSchema, setStateSchema] = useState<JsonSchema | null>(null);
   const [graphId, setGraphId] = useState<string | null>(requestedGraphId ?? null);
+  const [graphInfo, setGraphInfo] = useState<GraphTopology | null>(null);
   const [graphIds, setGraphIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,14 +44,18 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
       targetId = ids[0];
     }
     if (!targetId) {
+      setGraphInfo(null);
       setLoading(false);
       setError("no graphs registered");
       return;
     }
     setGraphId(targetId);
+    const selectedGraphInfo = allGraphs.find((g) => g.graph_id === targetId) ?? null;
+    setGraphInfo(selectedGraphInfo);
 
     const topology = await fetchGraph(targetId);
     setStateSchema((topology.state_schema as JsonSchema) ?? null);
+    setGraphInfo(topology);
 
     // build raw react-flow nodes
     const rawNodes: Node<GraphNodeData>[] = topology.nodes.map((n) => {
@@ -118,5 +125,5 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
     });
   }, [load]);
 
-  return { nodes, edges, stateSchema, graphId, graphIds, loading, error, refetch: load };
+  return { nodes, edges, stateSchema, graphId, graphInfo, graphIds, loading, error, refetch: load };
 }

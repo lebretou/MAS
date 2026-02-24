@@ -2,17 +2,18 @@ import { useCallback, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
-  Controls,
   ConnectionLineType,
   useNodesState,
   useEdgesState,
   type NodeTypes,
+  Panel,
 } from "@xyflow/react";
 import { AgentNode } from "./nodes/AgentNode";
 import { TerminalNode } from "./nodes/TerminalNode";
 import { AgentDetailPanel } from "./panels/AgentDetailPanel";
 import { StateSchemaPanel } from "./panels/StateSchemaPanel";
 import { LayerToggle } from "./controls/LayerToggle";
+import { GraphInfoPanel } from "./controls/GraphInfoPanel";
 import { GraphSelector } from "./controls/GraphSelector";
 import { TraceSelector } from "./controls/TraceSelector";
 import { useSidebar } from "../../context/SidebarContext";
@@ -30,7 +31,7 @@ export function GraphViewer() {
   const { selectedTraceId } = useLayer();
   const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
 
-  const { nodes: baseNodes, edges: baseEdges, stateSchema, graphId, graphIds, loading, error } =
+  const { nodes: baseNodes, edges: baseEdges, stateSchema, graphId, graphInfo, graphIds, loading, error } =
     useGraph(selectedGraphId);
 
   const displayNodes = useTraceOverlay(selectedTraceId, baseNodes);
@@ -70,7 +71,7 @@ export function GraphViewer() {
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <ReactFlow
-        key={`${graphId}-${selectedTraceId}`}
+        key={graphId ?? "no-graph"}
         nodes={displayNodes}
         edges={baseEdges}
         onNodesChange={onNodesChange}
@@ -81,15 +82,18 @@ export function GraphViewer() {
         onInit={(instance) => {
           reactFlowRef.current = instance;
         }}
+        proOptions={{ hideAttribution: true }}
         fitView
       >
         <Background gap={24} size={1} />
-        <Controls />
-        <LayerToggle />
+        <Panel position="top-left" className="left-controls-panel">
+          <LayerToggle />
+          <GraphInfoPanel graph={graphInfo} />
+          <TraceSelector />
+        </Panel>
         {graphIds.length > 1 && (
           <GraphSelector selectedGraphId={graphId} onSelect={handleGraphSelect} />
         )}
-        <TraceSelector />
         {!selectedNode && stateSchema && <StateSchemaPanel schema={stateSchema} />}
       </ReactFlow>
       {selectedNode && <AgentDetailPanel onRequestClose={handlePanelDismiss} />}

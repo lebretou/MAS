@@ -24,9 +24,9 @@ export function StateSchemaPanel({ schema }: Props) {
     <Panel position="top-right" className="state-schema-panel">
       <div className="state-schema-panel__header">
         <h3 className="state-schema-panel__title">State Schema</h3>
-        {schema.description && (
+        {/* {schema.description && (
           <p className="state-schema-panel__subtitle">{schema.description}</p>
-        )}
+        )} */}
       </div>
       <div className="state-schema-panel__content">
         {Object.entries(properties).map(([key, propSchema]) => {
