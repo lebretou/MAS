@@ -23,6 +23,8 @@ class AnalysisState(TypedDict):
     generated_code: str
     execution_result: dict  # stdout, plots, errors
     final_summary: str
+    rag_context: str
+    retry_count: int
     
     # control flow
     next_agent: str  # which agent to route to next

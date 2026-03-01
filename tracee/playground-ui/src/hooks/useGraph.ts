@@ -70,6 +70,7 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
               model: meta.model as string | undefined,
               temperature: meta.temperature as number | undefined,
               hasTools: meta.has_tools as boolean | undefined,
+              hasRetry: false,
             }
           : undefined,
       };
@@ -93,6 +94,23 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
       data: { conditional: e.conditional, label: e.label ?? undefined },
     }));
 
+    // hide self-loop retry edges in the graph and mark node badge instead
+    const visibleEdges = rawEdges.filter((e) => {
+      const isSelfLoop = e.source === e.target;
+      if (!isSelfLoop) {
+        return true;
+      }
+
+      const sourceNode = rawNodes.find((n) => n.id === e.source);
+      if (sourceNode?.data?.metadata) {
+        sourceNode.data.metadata = {
+          ...sourceNode.data.metadata,
+          hasRetry: true,
+        };
+      }
+      return false;
+    });
+
     // hydrate prompt components for agent nodes
     // nodes without prompt id are dropped
     const agentNodes = rawNodes.filter((n) => n.data.promptId);
@@ -108,11 +126,12 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
           ...agentNodes[i].data,
           promptVersionId: version.version_id,
           components: version.components,
+          outputSchema: (version.output_schema as JsonSchema) ?? undefined,
         };
       }
     }
 
-    const { nodes: layouted, edges: layoutedEdges } = getLayoutedElements(rawNodes, rawEdges, "LR");
+    const { nodes: layouted, edges: layoutedEdges } = getLayoutedElements(rawNodes, visibleEdges, "LR");
     setNodes(layouted);
     setEdges(layoutedEdges);
     setLoading(false);

@@ -155,9 +155,58 @@ class PromptLoader:
                     for c in version.components
                 ],
                 variables_used=version.variables,
+                output_schema=version.output_schema,
             )
         
         return resolved_text
+
+    def get_with_schema(
+        self,
+        prompt_id: str,
+        version_id: str = "latest",
+        agent_id: str | None = None,
+    ) -> tuple[str, dict | None]:
+        """Get resolved prompt text and output schema.
+
+        Convenience method for the common LangChain structured output pattern:
+            text, schema = loader.get_with_schema("my-prompt")
+            llm = ChatOpenAI(model="gpt-4o")
+            if schema:
+                llm = llm.with_structured_output(schema)
+
+        Args:
+            prompt_id: The prompt identifier
+            version_id: The version to load ("latest" for most recent)
+            agent_id: Optional agent ID for trace event association
+
+        Returns:
+            Tuple of (resolved_text, output_schema) where output_schema is
+            None if not defined on the version.
+        """
+        version = self.get_version(prompt_id, version_id)
+        resolved_text = version.resolve()
+
+        from backbone.sdk.tracing import get_active_context
+        ctx = get_active_context()
+        if ctx:
+            ctx.emit_prompt_resolved(
+                prompt_id=prompt_id,
+                version_id=version.version_id,
+                resolved_text=resolved_text,
+                agent_id=agent_id,
+                components=[
+                    {
+                        "type": c.type.value,
+                        "content": c.content,
+                        "enabled": c.enabled,
+                    }
+                    for c in version.components
+                ],
+                variables_used=version.variables,
+                output_schema=version.output_schema,
+            )
+
+        return resolved_text, version.output_schema
 
     def clear_cache(self) -> None:
         """Clear the prompt cache.

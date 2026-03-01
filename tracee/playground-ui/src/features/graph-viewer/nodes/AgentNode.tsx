@@ -40,7 +40,14 @@ export function AgentNode({ id, data, sourcePosition, targetPosition }: NodeProp
         </div>
         <div className="agent-node__header-text">
           <span className="agent-node__label">{label}</span>
-          {metadata?.hasTools && <span className="agent-node__badge">tools</span>}
+          {(metadata?.hasTools || metadata?.hasRetry) && (
+            <div className="agent-node__badges">
+              {metadata?.hasTools && <span className="agent-node__badge">tools</span>}
+              {metadata?.hasRetry && (
+                <span className="agent-node__badge agent-node__badge--retry">retry</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

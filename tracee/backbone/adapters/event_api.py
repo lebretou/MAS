@@ -78,6 +78,7 @@ class EventEmitter:
         agent_id: str | None = None,
         components: list[dict] | None = None,
         variables_used: dict[str, str] | None = None,
+        output_schema: dict | None = None,
         refs: dict | None = None,
     ) -> TraceEvent:
         """Emit a prompt_resolved event when a prompt is loaded.
@@ -92,6 +93,7 @@ class EventEmitter:
             agent_id: Optional agent that loaded this prompt
             components: Optional list of component dicts with type, content, enabled
             variables_used: Optional dict of template variables that were substituted
+            output_schema: Optional JSON Schema dict for structured output
             refs: Optional additional references
         """
         payload: dict = {
@@ -103,4 +105,6 @@ class EventEmitter:
             payload["components"] = components
         if variables_used:
             payload["variables_used"] = variables_used
+        if output_schema:
+            payload["output_schema"] = output_schema
         return self.emit(PROMPT_RESOLVED, payload, agent_id=agent_id, refs=refs)

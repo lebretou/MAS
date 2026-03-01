@@ -41,6 +41,9 @@ class PlaygroundRun(BaseModel):
     completion_tokens: int | None = None
     total_tokens: int | None = None
 
+    # structured output
+    output_schema_used: bool = False
+
     # optional: link to model config if using a saved configuration
     model_config_id: str | None = None
 

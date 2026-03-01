@@ -30,6 +30,7 @@ export interface PromptVersion {
   name: string;
   components: PromptComponent[];
   variables?: Record<string, string> | null;
+  output_schema?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -43,4 +44,5 @@ export interface CreateVersionRequest {
   name: string;
   components: PromptComponent[];
   variables?: Record<string, string> | null;
+  output_schema?: Record<string, unknown> | null;
 }

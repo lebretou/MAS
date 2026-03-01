@@ -87,6 +87,7 @@ class TracingContext:
         agent_id: str | None = None,
         components: list[dict] | None = None,
         variables_used: dict[str, str] | None = None,
+        output_schema: dict | None = None,
     ) -> TraceEvent:
         """Emit a prompt_resolved event.
         
@@ -99,6 +100,7 @@ class TracingContext:
             agent_id=agent_id,
             components=components,
             variables_used=variables_used,
+            output_schema=output_schema,
         )
 
 

@@ -87,6 +87,39 @@ def _load_model_config(config_id: str) -> dict:
     return json.loads(config_file.read_text())
 
 
+def _build_openai_response_format(schema: dict) -> dict:
+    """Build OpenAI response_format from a JSON Schema dict."""
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": schema.get("title", "output"),
+            "schema": schema,
+            "strict": True,
+        },
+    }
+
+
+def _build_anthropic_schema_tool(schema: dict) -> dict:
+    """Build an Anthropic tool definition that forces structured output."""
+    return {
+        "name": "structured_output",
+        "description": "Return the response in the required structured format.",
+        "input_schema": schema,
+    }
+
+
+def _extract_anthropic_structured_content(content_blocks: list) -> str:
+    """Extract structured JSON from Anthropic tool_use response blocks."""
+    for block in content_blocks:
+        if getattr(block, "type", None) == "tool_use":
+            return json.dumps(block.input)
+    # fallback to text if no tool_use block found
+    return "".join(
+        getattr(block, "text", "") for block in content_blocks
+        if getattr(block, "type", None) == "text"
+    )
+
+
 def _substitute_variables(template: str, variables: dict[str, str]) -> str:
     """Substitute {{variable}} placeholders in the template.
     
@@ -105,12 +138,12 @@ async def _call_openai(
     model: str,
     temperature: float,
     max_tokens: int | None,
+    output_schema: dict | None = None,
 ) -> dict:
     """Call OpenAI API and return standardized response."""
     client = _get_openai_client()
     
     try:
-        # Build request parameters
         params = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
@@ -118,10 +151,11 @@ async def _call_openai(
         }
         if max_tokens:
             params["max_tokens"] = max_tokens
+        if output_schema:
+            params["response_format"] = _build_openai_response_format(output_schema)
         
         response = await client.chat.completions.create(**params)
         
-        # Extract response data
         content = response.choices[0].message.content or ""
         usage = response.usage
         
@@ -145,28 +179,37 @@ async def _call_anthropic(
     model: str,
     temperature: float,
     max_tokens: int | None,
+    output_schema: dict | None = None,
 ) -> dict:
     """Call Anthropic API and return standardized response."""
     client = _get_anthropic_client()
     
     try:
-        # anthropic requires max_tokens
         effective_max_tokens = max_tokens or 4096
         
-        response = await client.messages.create(
-            model=model,
-            max_tokens=effective_max_tokens,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        params = {
+            "model": model,
+            "max_tokens": effective_max_tokens,
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+
+        # force structured output via tool use
+        if output_schema:
+            params["tools"] = [_build_anthropic_schema_tool(output_schema)]
+            params["tool_choice"] = {"type": "tool", "name": "structured_output"}
+
+        response = await client.messages.create(**params)
         
-        # Extract response data
-        content = ""
-        if response.content:
+        if output_schema and response.content:
+            content = _extract_anthropic_structured_content(response.content)
+        elif response.content:
             content = "".join(
                 block.text for block in response.content 
                 if hasattr(block, "text")
             )
+        else:
+            content = ""
         
         usage = response.usage
         
@@ -191,6 +234,7 @@ async def _call_llm(
     provider: str,
     temperature: float,
     max_tokens: int | None,
+    output_schema: dict | None = None,
 ) -> dict:
     """Call the appropriate LLM based on provider.
     
@@ -204,9 +248,9 @@ async def _call_llm(
     provider_lower = provider.lower()
     
     if provider_lower == "openai":
-        return await _call_openai(prompt, model, temperature, max_tokens)
+        return await _call_openai(prompt, model, temperature, max_tokens, output_schema)
     elif provider_lower == "anthropic":
-        return await _call_anthropic(prompt, model, temperature, max_tokens)
+        return await _call_anthropic(prompt, model, temperature, max_tokens, output_schema)
     else:
         raise HTTPException(
             status_code=400,
@@ -233,6 +277,7 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
     version = _load_prompt_version(request.prompt_id, request.version_id)
     
     resolved_prompt = version.resolve()
+    output_schema = version.output_schema
     
     if request.input_variables:
         resolved_prompt = _substitute_variables(resolved_prompt, request.input_variables)
@@ -256,6 +301,7 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         provider=provider,
         temperature=temperature,
         max_tokens=max_tokens,
+        output_schema=output_schema,
     )
     latency_ms = (time.time() - start_time) * 1000
     
@@ -271,6 +317,7 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         input_variables=request.input_variables,
         resolved_prompt=resolved_prompt,
         output=response["content"],
+        output_schema_used=output_schema is not None,
         latency_ms=latency_ms,
         prompt_tokens=response["usage"]["prompt_tokens"],
         completion_tokens=response["usage"]["completion_tokens"],

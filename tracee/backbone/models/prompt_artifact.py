@@ -63,6 +63,7 @@ class PromptVersion(BaseModel):
 
     components: list[PromptComponent]
     variables: dict[str, str] | None = None # we will support placeholders/variables
+    output_schema: dict | None = None  # JSON Schema for structured LLM output
     created_at: str
 
     def resolve(self) -> str:

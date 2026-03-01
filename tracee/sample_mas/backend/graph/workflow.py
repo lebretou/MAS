@@ -9,10 +9,43 @@ from langchain_core.messages import HumanMessage
 import pandas as pd
 
 
-def should_continue_to_planner(state: AnalysisState) -> str:
+def should_continue_to_next_node(state: AnalysisState) -> str:
     if state.get("relevance_decision") == "relevant":
         return "planner"
     return "end"
+
+
+def should_retry_coding(state: AnalysisState) -> str:
+    execution_success = state.get("execution_result", {}).get("success", False)
+    if execution_success:
+        return "summary"
+    if state.get("next_agent") == "coding":
+        return "coding"
+    return "summary"
+
+
+def should_continue_after_planner(state: AnalysisState) -> str:
+    if state.get("next_agent") == "end" or not state.get("coding_prompt"):
+        return "end"
+    return "coding"
+
+
+def _serialize_messages(messages: list) -> list[dict]:
+    serialized = []
+    for msg in messages:
+        if isinstance(msg, dict):
+            content = msg.get("content", "")
+            role = msg.get("role", msg.get("type", "unknown"))
+        else:
+            content = msg.content
+            role = msg.type
+        if isinstance(content, list):
+            content = " ".join(
+                item.get("text", str(item)) if isinstance(item, dict) else str(item)
+                for item in content
+            )
+        serialized.append({"role": role, "content": str(content)})
+    return serialized
 
 
 def create_workflow() -> StateGraph:
@@ -26,9 +59,9 @@ def create_workflow() -> StateGraph:
     })
     workflow.add_node("planner", create_planner_agent, metadata={
         "prompt_id": "planner-prompt",
-        "model": "gpt-4o-mini",
-        "temperature": 0.3,
-        "has_tools": False,
+        "model": "o3-mini",
+        "reasoning_effort": "medium",
+        "has_tools": True,
     })
     workflow.add_node("coding", create_coding_agent, metadata={
         "prompt_id": "coding-prompt",
@@ -50,7 +83,7 @@ def create_workflow() -> StateGraph:
     # agent can determine whether to proceed with other agents
     workflow.add_conditional_edges(
         "interaction",
-        should_continue_to_planner,
+        should_continue_to_next_node,
         {
             "planner": "planner",
             "end": END
@@ -58,8 +91,22 @@ def create_workflow() -> StateGraph:
     )
     
     # manually defines the rest of the paths
-    workflow.add_edge("planner", "coding")
-    workflow.add_edge("coding", "summary")
+    workflow.add_conditional_edges(
+        "planner",
+        should_continue_after_planner,
+        {
+            "coding": "coding",
+            "end": END,
+        }
+    )
+    workflow.add_conditional_edges(
+        "coding",
+        should_retry_coding,
+        {
+            "coding": "coding",
+            "summary": "summary",
+        }
+    )
     workflow.add_edge("summary", END)
     
     app = workflow.compile()
@@ -114,6 +161,8 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
             "generated_code": "",
             "execution_result": {},
             "final_summary": "",
+            "rag_context": "",
+            "retry_count": 0,
             "next_agent": "interaction",
             "session_id": session_id,
             "callbacks": callbacks,
@@ -132,7 +181,9 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
                 "generated_code": final_state.get("generated_code", ""),
                 "execution_result": final_state.get("execution_result", {}),
                 "analysis_plan": final_state.get("analysis_plan", ""),
-                "messages": [{"role": msg.type, "content": msg.content} for msg in final_state.get("messages", [])],
+                "rag_context": final_state.get("rag_context", ""),
+                "retry_count": final_state.get("retry_count", 0),
+                "messages": _serialize_messages(final_state.get("messages", [])),
             }
             
         except Exception as e:
@@ -140,6 +191,13 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
                 "success": False,
                 "error": str(e),
                 "final_summary": f"Workflow execution failed: {str(e)}",
+                "relevance_decision": "",
+                "generated_code": "",
+                "execution_result": {},
+                "analysis_plan": "",
+                "rag_context": "",
+                "retry_count": 0,
+                "messages": [],
             }
 
 
@@ -173,6 +231,8 @@ async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset
             "generated_code": "",
             "execution_result": {},
             "final_summary": "",
+            "rag_context": "",
+            "retry_count": 0,
             "next_agent": "interaction",
             "session_id": session_id,
             "callbacks": callbacks,
@@ -191,7 +251,9 @@ async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset
                 "generated_code": final_state.get("generated_code", ""),
                 "execution_result": final_state.get("execution_result", {}),
                 "analysis_plan": final_state.get("analysis_plan", ""),
-                "messages": [{"role": msg.type, "content": msg.content} for msg in final_state.get("messages", [])],
+                "rag_context": final_state.get("rag_context", ""),
+                "retry_count": final_state.get("retry_count", 0),
+                "messages": _serialize_messages(final_state.get("messages", [])),
             }
             
         except Exception as e:
@@ -199,4 +261,11 @@ async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset
                 "success": False,
                 "error": str(e),
                 "final_summary": f"Workflow execution failed: {str(e)}",
+                "relevance_decision": "",
+                "generated_code": "",
+                "execution_result": {},
+                "analysis_plan": "",
+                "rag_context": "",
+                "retry_count": 0,
+                "messages": [],
             }

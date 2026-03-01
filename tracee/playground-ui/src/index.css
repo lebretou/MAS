@@ -147,11 +147,27 @@ html, body, #root {
   font-weight: 500;
 }
 
+.agent-node__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agent-node__badge--retry {
+  background: #fef3c7;
+  color: #b45309;
+}
+
 .agent-node__body {
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.agent-node__body--with-ops {
+  padding-bottom: 10px;
 }
 
 .agent-node__row {
@@ -170,6 +186,63 @@ html, body, #root {
   color: #374151;
   text-align: right;
   font-weight: 500;
+}
+
+.agent-node__retry-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-node__retry-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.agent-node__ops {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agent-node__components--ops {
+  border-top: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.agent-node__components--ops .agent-node__ops {
+  padding: 0 16px 12px;
+}
+
+.agent-node__op-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #4b5563;
+  font-size: 11px;
+  max-width: 100%;
+}
+
+.agent-node__op-chip--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.agent-node__op-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.agent-node__op-more {
+  font-size: 11px;
+  color: #6b7280;
+  align-self: center;
 }
 
 .agent-node__value.prompt-link {
@@ -608,6 +681,63 @@ html, body, #root {
   margin: 0;
   font-size: 13px;
   color: #6b7280;
+}
+
+.side-panel__ops-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-panel__op-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #ffffff;
+}
+
+.side-panel__op-row.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.side-panel__op-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.side-panel__op-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.side-panel__op-label {
+  font-size: 12px;
+  color: #1f2937;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-panel__op-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.side-panel__op-pill {
+  font-size: 10px;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 1px 6px;
+  text-transform: lowercase;
 }
 
 /* ── schema table ──────────────────────────────────── */
