@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from backbone.models.playground_run import PlaygroundRun, PlaygroundRunCreate
 from backbone.models.prompt_artifact import (
     PromptComponent,
     PromptComponentType,
@@ -56,6 +57,129 @@ class TestPromptArtifactRoundTrip:
         assert restored.name == version.name
         assert len(restored.components) == 2
         assert restored.variables == version.variables
+
+
+class TestOutputSchema:
+    """Tests for PromptVersion.output_schema and resolve() injection."""
+
+    def _make_version(self, output_schema=None):
+        return PromptVersion(
+            prompt_id="test-prompt",
+            version_id="v1",
+            name="Test",
+            components=[
+                PromptComponent(type=PromptComponentType.role, content="You are a helpful assistant."),
+                PromptComponent(type=PromptComponentType.goal, content="Answer the question."),
+            ],
+            created_at=utc_timestamp(),
+            output_schema=output_schema,
+        )
+
+    def test_resolve_without_schema_is_unchanged(self):
+        """resolve() with no output_schema returns the same plain text as before."""
+        version = self._make_version()
+        assert version.resolve() == "You are a helpful assistant.\n\nAnswer the question."
+
+    def test_resolve_with_schema_appends_block(self):
+        """resolve() appends a JSON Schema block after components when output_schema is set."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Full name"},
+                "age":  {"type": "number"},
+            },
+            "required": ["name"],
+        }
+        version = self._make_version(output_schema=schema)
+        resolved = version.resolve()
+
+        assert resolved.startswith("You are a helpful assistant.\n\nAnswer the question.\n\n")
+        assert "Respond with a JSON object that conforms to the following JSON Schema:" in resolved
+        assert "```json" in resolved
+        assert '"type": "object"' in resolved
+        assert '"name"' in resolved
+
+    def test_invalid_schema_missing_type_raises(self):
+        """output_schema missing 'type' raises ValueError at construction."""
+        with pytest.raises(ValueError, match="output_schema must have top-level"):
+            self._make_version(output_schema={"properties": {"name": {"type": "string"}}})
+
+    def test_invalid_schema_missing_properties_raises(self):
+        """output_schema missing 'properties' raises ValueError at construction."""
+        with pytest.raises(ValueError, match="output_schema must have top-level"):
+            self._make_version(output_schema={"type": "object"})
+
+    def test_model_validate_with_null_schema(self):
+        """model_validate with output_schema: null (existing payloads) works without error."""
+        data = {
+            "prompt_id": "p1",
+            "version_id": "v1",
+            "name": "Test",
+            "components": [{"type": "role", "content": "Hello", "enabled": True}],
+            "output_schema": None,
+            "created_at": utc_timestamp(),
+        }
+        version = PromptVersion.model_validate(data)
+        assert version.output_schema is None
+
+    def test_model_validate_with_valid_schema(self):
+        """model_validate with a valid output_schema dict deserializes correctly."""
+        schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
+        data = {
+            "prompt_id": "p1",
+            "version_id": "v1",
+            "name": "Test",
+            "components": [{"type": "role", "content": "Hello", "enabled": True}],
+            "output_schema": schema,
+            "created_at": utc_timestamp(),
+        }
+        version = PromptVersion.model_validate(data)
+        assert version.output_schema == schema
+
+    def test_round_trip_with_schema(self):
+        """PromptVersion with output_schema serializes and deserializes cleanly."""
+        schema = {"type": "object", "properties": {"result": {"type": "boolean"}}}
+        version = self._make_version(output_schema=schema)
+        restored = PromptVersion.model_validate_json(version.model_dump_json())
+        assert restored.output_schema == schema
+
+    def test_playground_run_accepts_output_schema(self):
+        """PlaygroundRun accepts output_schema field without extra-field rejection."""
+        schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
+        run = PlaygroundRun(
+            run_id="run-1",
+            created_at=utc_timestamp(),
+            prompt_id="p1",
+            version_id="v1",
+            model="gpt-4",
+            provider="openai",
+            input_variables={},
+            resolved_prompt="Hello",
+            output_schema=schema,
+            output="{}",
+        )
+        assert run.output_schema == schema
+
+    def test_playground_run_output_schema_defaults_none(self):
+        """PlaygroundRun.output_schema defaults to None for existing records."""
+        run = PlaygroundRun(
+            run_id="run-2",
+            created_at=utc_timestamp(),
+            prompt_id="p1",
+            version_id="v1",
+            model="gpt-4",
+            provider="openai",
+            input_variables={},
+            resolved_prompt="Hello",
+            output="{}",
+        )
+        assert run.output_schema is None
+
+    def test_playground_run_create_accepts_output_schema(self):
+        """PlaygroundRunCreate accepts output_schema in the request body."""
+        schema = {"type": "object", "properties": {"score": {"type": "number"}}}
+        req = PlaygroundRunCreate(prompt_id="p1", output_schema=schema)
+        assert req.output_schema == schema
 
 
 class TestTraceEventRoundTrip:

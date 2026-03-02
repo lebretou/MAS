@@ -4,6 +4,7 @@ Provides endpoints to execute prompts against LLMs and track runs.
 Supports OpenAI and Anthropic (Claude) models.
 """
 
+import asyncio
 import json
 import os
 import time
@@ -230,8 +231,11 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
     Takes a prompt reference and model configuration, runs the prompt
     against the LLM, and stores the result.
     """
-    version = _load_prompt_version(request.prompt_id, request.version_id)
-    
+    version = await asyncio.to_thread(_load_prompt_version, request.prompt_id, request.version_id)
+
+    if request.output_schema is not None:
+        version = version.model_copy(update={"output_schema": request.output_schema})
+
     resolved_prompt = version.resolve()
     
     if request.input_variables:
@@ -270,6 +274,7 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         max_tokens=max_tokens,
         input_variables=request.input_variables,
         resolved_prompt=resolved_prompt,
+        output_schema=request.output_schema,
         output=response["content"],
         latency_ms=latency_ms,
         prompt_tokens=response["usage"]["prompt_tokens"],
@@ -280,7 +285,7 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         notes=request.notes,
     )
     
-    insert_run(run)
+    await asyncio.to_thread(insert_run, run)
     
     return PlaygroundRunResponse(run=run)
 

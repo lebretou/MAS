@@ -16,6 +16,7 @@ export interface PlaygroundRun {
 
     input_variables: Record<string, string>;
     resolved_prompt: string;
+    output_schema: Record<string, unknown> | null;
     output: string; // LLM response
 
     latency_ms: number | null;
@@ -37,6 +38,7 @@ export interface PlaygroundRunCreate {
     prompt_id: string;
     version_id?: string;
     input_variables?: Record<string, string>;
+    output_schema?: Record<string, unknown> | null;
 
     // inline model config (used if model_config_id is None)
     model?: string;

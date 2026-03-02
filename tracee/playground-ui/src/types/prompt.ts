@@ -28,7 +28,23 @@ export interface PromptVersion {
   name: string;
   components: PromptComponent[];
   variables?: Record<string, string> | null;
+  output_schema: Record<string, unknown> | null;
   created_at: string;
+}
+
+export interface PromptListItem {
+  prompt_id: string;
+  name: string;
+  description: string | null;
+  latest_version_id: string | null;
+  version_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromptWithVersions {
+  prompt: Prompt;
+  versions: PromptVersion[];
 }
 
 export interface CreatePromptRequest {
@@ -41,4 +57,14 @@ export interface CreateVersionRequest {
   name: string;
   components: PromptComponent[];
   variables?: Record<string, string> | null;
+  output_schema?: Record<string, unknown> | null;
+}
+
+export type SchemaPropertyType = 'string' | 'number' | 'integer' | 'boolean' | 'null';
+
+export interface SchemaProperty {
+  name: string;
+  type: SchemaPropertyType;
+  description: string;
+  required: boolean;
 }

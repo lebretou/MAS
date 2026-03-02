@@ -1,10 +1,12 @@
 import axios, { AxiosResponse } from 'axios';
 import { PlaygroundRun, PlaygroundRunCreate, PlaygroundRunResponse } from '../types/playground';
-import { 
-  Prompt, 
-  PromptVersion, 
-  CreatePromptRequest, 
-  CreateVersionRequest, 
+import {
+  Prompt,
+  PromptVersion,
+  PromptListItem,
+  PromptWithVersions,
+  CreatePromptRequest,
+  CreateVersionRequest,
 } from '../types/prompt';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -14,27 +16,28 @@ const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    timeout: 120000, // 2-minute timeout — LLM calls can be slow
 });
 
 export const playgroundAPI = {
 
     createRun: async (data: PlaygroundRunCreate): Promise<PlaygroundRun> => {
-        const response: AxiosResponse<PlaygroundRunResponse> = await api.post('/api/playground/run/', data);
+        const response: AxiosResponse<PlaygroundRunResponse> = await api.post('/api/playground/run', data);
         return response.data.run;
     },
 
     getAllRuns: async (): Promise<PlaygroundRun[]> => {
-        const response: AxiosResponse<PlaygroundRun[]> = await api.get('/api/playground/runs/');
+        const response: AxiosResponse<PlaygroundRun[]> = await api.get('/api/playground/runs');
         return response.data;
     },
 
     getRun: async (runId: string): Promise<PlaygroundRun> => {
-        const response: AxiosResponse<PlaygroundRun> = await api.get(`/api/playground/runs/${runId}/`);
+        const response: AxiosResponse<PlaygroundRun> = await api.get(`/api/playground/runs/${runId}`);
         return response.data;
     },
 
     getRunsByPrompt: async (promptId: string): Promise<PlaygroundRun[]> => {
-        const response: AxiosResponse<PlaygroundRun[]> = await api.get(`/api/playground/runs/?prompt_id=${promptId}`);
+        const response: AxiosResponse<PlaygroundRun[]> = await api.get(`/api/playground/runs?prompt_id=${promptId}`);
         return response.data;
     }
 };
@@ -51,13 +54,13 @@ export const promptAPI = {
     return response.data;
   },
 
-  getAllPrompts: async (): Promise<Prompt[]> => {
-    const response: AxiosResponse<Prompt[]> = await api.get('/api/prompts');
+  getAllPrompts: async (): Promise<PromptListItem[]> => {
+    const response: AxiosResponse<PromptListItem[]> = await api.get('/api/prompts');
     return response.data;
   },
 
-  getPrompt: async (promptId: string): Promise<Prompt> => {
-    const response: AxiosResponse<Prompt> = await api.get(`/api/prompts/${promptId}`);
+  getPrompt: async (promptId: string): Promise<PromptWithVersions> => {
+    const response: AxiosResponse<PromptWithVersions> = await api.get(`/api/prompts/${promptId}`);
     return response.data;
   },
 

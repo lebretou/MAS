@@ -42,6 +42,7 @@ class CreateVersionRequest(BaseModel):
     name: str  # version label/name
     components: list[PromptComponent]
     variables: dict[str, str] | None = None
+    output_schema: dict | None = None
 
 
 class PromptWithVersions(BaseModel):
@@ -165,6 +166,7 @@ def create_version(prompt_id: str, request: CreateVersionRequest) -> PromptVersi
         name=request.name,
         components=request.components,
         variables=request.variables,
+        output_schema=request.output_schema,
         created_at=now,
     )
     
