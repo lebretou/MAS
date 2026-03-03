@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { GraphNodeData } from "../../../types/node-data";
 import iconCode from "../../../assets/icon-code.svg";
 import iconError from "../../../assets/icon-error.svg";
@@ -19,11 +20,6 @@ const operationIconMap = {
   subgraph_call: iconChain,
   error: iconError,
 } as const;
-
-function truncateLabel(label: string): string {
-  if (label.length <= 16) return label;
-  return `${label.slice(0, 13)}...`;
-}
 
 export function ExecutionContent({ data }: Props) {
   const exec = data.execution;
@@ -82,19 +78,23 @@ export function ExecutionContent({ data }: Props) {
           <div className="agent-node__components-header">
             <span className="agent-node__components-label">OPERATIONS</span>
           </div>
-          <div className="agent-node__ops">
-            {exec.operations?.slice(0, 5).map((operation) => (
-              <span
-                key={operation.id}
-                className={`agent-node__op-chip${operation.status === "error" ? " agent-node__op-chip--error" : ""}`}
-                title={operation.label}
-              >
-                <img src={operationIconMap[operation.type]} alt="" className="agent-node__op-icon" />
-                <span>{truncateLabel(operation.label)}</span>
-              </span>
+          <div className="agent-node__timeline">
+            {exec.operations?.slice(0, 5).map((operation, index, arr) => (
+              <Fragment key={operation.id}>
+                <span
+                  className={`agent-node__timeline-node${operation.status === "error" ? " agent-node__timeline-node--error" : ""}`}
+                  title={operation.label}
+                >
+                  <img src={operationIconMap[operation.type]} alt="" className="agent-node__timeline-icon" />
+                </span>
+                {index < arr.length - 1 && <div className="agent-node__timeline-line" />}
+              </Fragment>
             ))}
             {(exec.operations?.length ?? 0) > 5 && (
-              <span className="agent-node__op-more">+{(exec.operations?.length ?? 0) - 5}</span>
+              <>
+                <div className="agent-node__timeline-line" />
+                <span className="agent-node__op-more">+{(exec.operations?.length ?? 0) - 5}</span>
+              </>
             )}
           </div>
         </div>

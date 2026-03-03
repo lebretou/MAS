@@ -46,6 +46,71 @@ function buildOperationLabel(value: unknown, fallback: string): string {
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
+function parseEscapedString(value: string): string {
+  return value
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, "\\");
+}
+
+function parseMaybeJsonString(value: string): unknown {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return trimmed;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+function parseLangchainContentEnvelope(value: string): unknown {
+  const marker = "content='";
+  const start = value.indexOf(marker);
+  if (start < 0) return parseMaybeJsonString(value);
+  let i = start + marker.length;
+  let content = "";
+  while (i < value.length) {
+    const ch = value[i];
+    if (ch === "\\" && i + 1 < value.length) {
+      content += ch + value[i + 1];
+      i += 2;
+      continue;
+    }
+    if (ch === "'") {
+      const remainder = value.slice(i + 1).trimStart();
+      if (remainder.length === 0 || /^,?\s*\w+=/.test(remainder)) break;
+    }
+    content += ch;
+    i += 1;
+  }
+  if (!content) return parseMaybeJsonString(value);
+  const decoded = parseEscapedString(content);
+  return parseMaybeJsonString(decoded);
+}
+
+function normalizePayloadValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  if (value.includes("content='")) return parseLangchainContentEnvelope(value);
+  return parseMaybeJsonString(value);
+}
+
+function getEventTags(event: TraceEvent): string[] {
+  const rawTags = event.payload?.tags;
+  if (!Array.isArray(rawTags)) return [];
+  return rawTags.filter((tag): tag is string => typeof tag === "string");
+}
+
+function getRunMeta(event: TraceEvent): { runId?: string; parentRunId?: string } {
+  return {
+    runId: getRunIdFromEvent(event),
+    parentRunId: getParentRunIdFromEvent(event),
+  };
+}
+
 function eventExplicitlyBelongsToNode(event: TraceEvent, nodeId: string): boolean {
   const hintAgentId = getHintAgentIdFromEvent(event);
   if (hintAgentId === nodeId) return true;
@@ -58,6 +123,12 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
   const byNode = new Map<string, TraceEvent[]>();
   const runToNode = new Map<string, string>();
   const spanToNode = new Map<string, string>();
+  const runParent = new Map<string, string>();
+  for (const event of events) {
+    const runId = getRunIdFromEvent(event);
+    const parentRunId = getParentRunIdFromEvent(event);
+    if (runId && parentRunId) runParent.set(runId, parentRunId);
+  }
 
   function resolveAgentNodeId(event: TraceEvent): string | undefined {
     const hintAgentId = getHintAgentIdFromEvent(event);
@@ -104,20 +175,45 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       continue;
     }
 
-    const hasError = nodeEvents.some((e) => e.event_type.endsWith("_error"));
-
-    // compute latency from first to last event
-    const timestamps = nodeEvents.map((e) => parseTimestampMs(e.timestamp)).sort((a, b) => a - b);
-    const latencyMs = timestamps.length >= 2
-      ? timestamps[timestamps.length - 1] - timestamps[0]
-      : undefined;
-
     const orderedEvents = [...nodeEvents].sort((a, b) => {
       const sequenceA = a.sequence ?? Number.MAX_SAFE_INTEGER;
       const sequenceB = b.sequence ?? Number.MAX_SAFE_INTEGER;
       if (sequenceA !== sequenceB) return sequenceA - sequenceB;
       return parseTimestampMs(a.timestamp) - parseTimestampMs(b.timestamp);
     });
+
+    const rootRunIds = new Set(
+      orderedEvents
+        .filter((event) => event.event_type === "on_chain_start" && eventExplicitlyBelongsToNode(event, nodeId))
+        .map((event) => getRunIdFromEvent(event))
+        .filter((runId): runId is string => Boolean(runId)),
+    );
+
+    function belongsToNodeRunTree(event: TraceEvent): boolean {
+      if (eventExplicitlyBelongsToNode(event, nodeId)) return true;
+      const runId = getRunIdFromEvent(event);
+      if (!runId || rootRunIds.size === 0) return false;
+      let cursor: string | undefined = runId;
+      while (cursor) {
+        if (rootRunIds.has(cursor)) return true;
+        cursor = runParent.get(cursor);
+      }
+      return false;
+    }
+
+    const scopedEvents = orderedEvents.filter(belongsToNodeRunTree);
+    if (scopedEvents.length === 0) {
+      overlay.set(nodeId, { invoked: false });
+      continue;
+    }
+
+    const hasError = scopedEvents.some((e) => e.event_type.endsWith("_error"));
+
+    // compute latency from first to last event
+    const timestamps = scopedEvents.map((e) => parseTimestampMs(e.timestamp)).sort((a, b) => a - b);
+    const latencyMs = timestamps.length >= 2
+      ? timestamps[timestamps.length - 1] - timestamps[0]
+      : undefined;
 
     const llmStartsBySpan = new Map<string, TraceEvent>();
     const toolStartsBySpan = new Map<string, TraceEvent>();
@@ -127,7 +223,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
     let completionTokensTotal = 0;
     let hasAnyTokenUsage = false;
 
-    for (const event of orderedEvents) {
+    for (const event of scopedEvents) {
       if (event.event_type === "on_llm_start" && event.span_id) {
         llmStartsBySpan.set(event.span_id, event);
       }
@@ -147,6 +243,10 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
         const opLatency = start
           ? parseTimestampMs(event.timestamp) - parseTimestampMs(start.timestamp)
           : undefined;
+        const startTags = start ? getEventTags(start) : [];
+        const endTags = getEventTags(event);
+        const inputPayload = start?.payload?.input ?? start?.payload?.messages ?? start?.payload?.prompts;
+        const outputPayload = event.payload?.output_text ?? event.payload?.output;
 
         operations.push({
           id: event.event_id,
@@ -155,6 +255,17 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
           status: "success",
           latencyMs: opLatency,
           tokenCount: promptTokens + completionTokens,
+          input: normalizePayloadValue(inputPayload),
+          output: normalizePayloadValue(outputPayload),
+          metadata: {
+            modelName,
+            finishReason: event.payload?.response_metadata
+              ? (event.payload.response_metadata as Record<string, unknown>).finish_reason
+              : undefined,
+            tokenUsage,
+            tags: [...startTags, ...endTags],
+            ...getRunMeta(event),
+          },
         });
       }
 
@@ -164,27 +275,45 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
         const opLatency = start
           ? parseTimestampMs(event.timestamp) - parseTimestampMs(start.timestamp)
           : undefined;
+        const startInput = start?.payload?.input;
+        const endOutput = event.payload?.output;
+        const startTags = start ? getEventTags(start) : [];
+        const endTags = getEventTags(event);
         operations.push({
           id: event.event_id,
           type: classifyToolOperation(toolName),
           label: toolName,
           status: "success",
           latencyMs: opLatency,
+          input: normalizePayloadValue(startInput),
+          output: normalizePayloadValue(endOutput),
+          metadata: {
+            tags: [...startTags, ...endTags],
+            ...getRunMeta(event),
+          },
         });
       }
 
       if (event.event_type.endsWith("_error")) {
         const errorType = buildOperationLabel(event.payload?.error_type, event.event_type);
+        const errorMessage = typeof event.payload?.error_message === "string"
+          ? event.payload.error_message
+          : undefined;
         operations.push({
           id: event.event_id,
           type: "error",
           label: errorType,
           status: "error",
+          errorMessage,
+          metadata: {
+            tags: getEventTags(event),
+            ...getRunMeta(event),
+          },
         });
       }
     }
 
-    const nodeAttemptCount = orderedEvents.filter((event) => {
+    const nodeAttemptCount = scopedEvents.filter((event) => {
       if (event.event_type !== "on_chain_start") return false;
       if (!eventExplicitlyBelongsToNode(event, nodeId)) return false;
       const parentRunId = getParentRunIdFromEvent(event);
@@ -194,8 +323,8 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       if (parentSpanNodeId === nodeId) return false;
       return true;
     }).length;
-    const llmStart = orderedEvents.find((event) => event.event_type === "on_llm_start");
-    const llmEnd = [...orderedEvents].reverse().find((event) => event.event_type === "on_llm_end");
+    const llmStart = scopedEvents.find((event) => event.event_type === "on_llm_start");
+    const llmEnd = [...scopedEvents].reverse().find((event) => event.event_type === "on_llm_end");
     const llmInput = llmStart?.payload?.input
       ? JSON.stringify(llmStart.payload.input, null, 2).slice(0, 2000)
       : llmStart?.payload?.prompts
@@ -217,7 +346,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       llmInput,
       llmOutput,
       operations,
-      events: nodeEvents,
+      events: scopedEvents,
     });
   }
 

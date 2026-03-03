@@ -17,6 +17,10 @@ export interface AgentOperation {
   status: "success" | "error";
   latencyMs?: number;
   tokenCount?: number;
+  input?: unknown;
+  output?: unknown;
+  metadata?: Record<string, unknown>;
+  errorMessage?: string;
 }
 
 export interface ExecutionData {
