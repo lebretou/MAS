@@ -8,6 +8,10 @@ import iconRag from "../../../assets/icon-rag.svg";
 import iconState from "../../../assets/icon-state.svg";
 import iconTool from "../../../assets/icon-tool.svg";
 import iconChain from "../../../assets/icon-chain.svg";
+import {
+  hasOutputSchemaProperties,
+  resolveOutputCandidateForSchema,
+} from "../../../utils/schema-validation";
 
 const operationIconMap: Record<AgentOperation["type"], string> = {
   llm_call: iconLlm,
@@ -74,7 +78,8 @@ function unescapeNewlines(s: string): string {
   return s.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\r/g, "\r");
 }
 
-function formatForLog(value: unknown): { empty: boolean; text: string } {
+function formatForLog(value: unknown, options?: { full?: boolean }): { empty: boolean; text: string } {
+  const isFull = options?.full === true;
   if (value == null) return { empty: true, text: "" };
   if (value === "") return { empty: true, text: "" };
   if (Array.isArray(value) && value.length === 0) return { empty: true, text: "" };
@@ -86,21 +91,38 @@ function formatForLog(value: unknown): { empty: boolean; text: string } {
     return { empty: true, text: "" };
 
   if (typeof value === "string") {
-    const truncated = truncateText(value, 4000);
+    const displayValue = isFull ? value : truncateText(value, 4000);
     const trimmed = value.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
       let parsed: unknown;
       try {
         parsed = JSON.parse(trimmed);
       } catch {
-        return { empty: false, text: unescapeNewlines(truncated) };
+        return { empty: false, text: unescapeNewlines(displayValue) };
       }
       return { empty: false, text: JSON.stringify(parsed, null, 2) };
     }
-    return { empty: false, text: unescapeNewlines(truncated) };
+    return { empty: false, text: unescapeNewlines(displayValue) };
   }
-  const text = JSON.stringify(sanitizeForDisplay(value), null, 2);
+  const text = isFull
+    ? JSON.stringify(value, null, 2)
+    : JSON.stringify(sanitizeForDisplay(value), null, 2);
   return { empty: false, text };
+}
+
+function resolveDisplayedOutputCandidate(node: GraphNodeData, exec: NonNullable<GraphNodeData["execution"]>) {
+  if (node.outputSchema && hasOutputSchemaProperties(node.outputSchema)) {
+    return resolveOutputCandidateForSchema(exec.events, node.outputSchema, exec.llmOutputValue);
+  }
+
+  const lastLlmOperation = [...(exec.operations ?? [])]
+    .reverse()
+    .find((operation) => operation.type === "llm_call");
+
+  return {
+    value: exec.llmOutputValue ?? exec.llmOutput,
+    eventId: lastLlmOperation?.id,
+  };
 }
 
 function computeSegmentWidths(operations: AgentOperation[], totalPx: number): number[] {
@@ -180,6 +202,15 @@ export function ExecutionDetails({ node }: Props) {
   const activeSegmentId = selectedSegment || (operations.length > 0 ? operations[0].id : null);
   const activeItem = operations.find((item) => item.id === activeSegmentId);
   const widths = computeSegmentWidths(operations, barWidth);
+  const resolvedOutputCandidate = resolveDisplayedOutputCandidate(node, exec);
+  const shouldShowResolvedOutput = Boolean(
+    activeItem
+      && resolvedOutputCandidate.eventId
+      && activeItem.id === resolvedOutputCandidate.eventId,
+  );
+  const resolvedOutputLog = shouldShowResolvedOutput
+    ? formatForLog(resolvedOutputCandidate.value, { full: true })
+    : { empty: true, text: "" };
 
   // the hovered segment for the floating icon tooltip, if it's too thin
   const tooltipItem = hoveredSegment ? operations.find((op) => op.id === hoveredSegment) : null;
@@ -234,6 +265,15 @@ export function ExecutionDetails({ node }: Props) {
           )}
         </div>
       </section>
+
+      {!resolvedOutputLog.empty && (
+        <section className="side-panel__section">
+          <h3 className="side-panel__section-title">output</h3>
+          <div className="side-panel__card">
+            <pre className="side-panel__pre">{resolvedOutputLog.text}</pre>
+          </div>
+        </section>
+      )}
 
       {operations.length > 0 && (
         <section className="side-panel__section">

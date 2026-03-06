@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -39,7 +39,13 @@ export function GraphViewer() {
   const { nodes: displayNodes, frames, activeFrame, error: playbackError } =
     useTracePlayback(selectedTraceId, baseNodes, activeFrameIndex);
 
-  const [, , onNodesChange] = useNodesState(displayNodes);
+  // when scrubber is on a specific frame, clear node selection so only the active-frame highlight shows
+  const flowNodes = useMemo(() => {
+    if (activeFrameIndex == null) return displayNodes;
+    return displayNodes.map((n) => ({ ...n, selected: false }));
+  }, [displayNodes, activeFrameIndex]);
+
+  const [, , onNodesChange] = useNodesState(flowNodes);
   const [, , onEdgesChange] = useEdgesState(baseEdges);
 
   const reactFlowRef = useRef<{
@@ -101,7 +107,7 @@ export function GraphViewer() {
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <ReactFlow
         key={graphId ?? "no-graph"}
-        nodes={displayNodes}
+        nodes={flowNodes}
         edges={baseEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -118,7 +124,7 @@ export function GraphViewer() {
         <Panel position="top-left" className="left-controls-panel">
           <LayerToggle />
           <GraphInfoPanel graph={graphInfo} />
-          <TraceSelector />
+          <TraceSelector nodes={baseNodes} edges={baseEdges} />
         </Panel>
         {graphIds.length > 1 && (
           <GraphSelector selectedGraphId={graphId} onSelect={handleGraphSelect} />

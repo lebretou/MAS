@@ -18,3 +18,35 @@ export interface TraceMetadata {
   created_at: string;
   updated_at: string;
 }
+
+export interface TraceSummaryEdge {
+  from_agent: string;
+  to_agent: string;
+  message_count: number;
+}
+
+export interface TraceSummaryFailure {
+  type: string;
+  agent_id?: string | null;
+  error_type?: string | null;
+  message?: string | null;
+  timestamp: string;
+}
+
+export interface TraceSummaryUsage {
+  tool_name: string;
+  call_count: number;
+  avg_latency_ms?: number | null;
+}
+
+export interface TraceSummary {
+  execution_id: string;
+  trace_id: string;
+  agents: string[];
+  edges: TraceSummaryEdge[];
+  messages_by_edge: Record<string, number>;
+  failures: TraceSummaryFailure[];
+  tool_usage: TraceSummaryUsage[];
+  llm_usage: TraceSummaryUsage[];
+  event_count: number;
+}

@@ -247,10 +247,10 @@ class RawCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> None:
         """Capture LLM end event."""
-        # extract generation text (truncated)
+        # extract generation text
         output_text = ""
         if response.generations and response.generations[0]:
-            output_text = response.generations[0][0].text[:500]
+            output_text = response.generations[0][0].text
 
         # extract token usage if available
         token_usage = None

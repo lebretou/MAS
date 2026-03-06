@@ -48,6 +48,7 @@ export interface ExecutionData {
   retryCount?: number;
   llmInput?: string;
   llmOutput?: string;
+  llmOutputValue?: unknown;
   operations?: AgentOperation[];
   events?: TraceEvent[];
 }

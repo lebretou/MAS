@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
-import { fetchTraces } from "../../../api/traces";
+import type { Edge, Node } from "@xyflow/react";
+import { fetchTraceSummary, fetchTraces } from "../../../api/traces";
 import { useLayer } from "../../../context/LayerContext";
-import type { TraceMetadata } from "../../../types/trace";
+import type { GraphEdgeData, GraphNodeData } from "../../../types/node-data";
+import type { TraceMetadata, TraceSummary } from "../../../types/trace";
 import iconTraces from "../../../assets/icon-traces.svg";
+import { TraceMinimapPreview } from "./TraceMinimapPreview";
+
+interface TraceSelectorProps {
+  nodes: Node<GraphNodeData>[];
+  edges: Edge<GraphEdgeData>[];
+}
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "n/a";
@@ -26,22 +34,59 @@ function calculateLatency(created: string, updated: string): string {
   return `${(diff / 1000).toFixed(2)}s`;
 }
 
-export function TraceSelector() {
+export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
   const { layer, selectedTraceId, setSelectedTraceId } = useLayer();
   const [traces, setTraces] = useState<TraceMetadata[]>([]);
+  const [summaries, setSummaries] = useState<Record<string, TraceSummary>>({});
 
   useEffect(() => {
-    if (layer === "execution") {
-      fetchTraces()
-        .then((items) => {
-          const sorted = [...items].sort(
-            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-          );
-          setTraces(sorted);
+    if (layer !== "execution") {
+      setTraces([]);
+      return;
+    }
+    let cancelled = false;
+    fetchTraces()
+      .then((items) => {
+        if (cancelled) return;
+        const sorted = [...items].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        setTraces(sorted);
+      })
+      .catch(() => {
+        if (!cancelled) setTraces([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [layer]);
+
+  useEffect(() => {
+    if (layer !== "execution") {
+      setSummaries({});
+      return;
+    }
+    if (traces.length === 0) {
+      setSummaries({});
+      return;
+    }
+
+    let cancelled = false;
+    setSummaries({});
+    for (const trace of traces) {
+      fetchTraceSummary(trace.trace_id)
+        .then((summary) => {
+          if (cancelled) return;
+          setSummaries((current) => ({ ...current, [trace.trace_id]: summary }));
         })
         .catch(() => {});
     }
-  }, [layer]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [layer, traces]);
 
   useEffect(() => {
     if (layer !== "execution") return;
@@ -93,6 +138,7 @@ export function TraceSelector() {
                     {calculateLatency(t.created_at, t.updated_at)}
                   </span>
                 </div>
+                <TraceMinimapPreview nodes={nodes} edges={edges} summary={summaries[t.trace_id]} />
               </button>
             );
           })

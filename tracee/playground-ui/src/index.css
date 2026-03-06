@@ -98,7 +98,8 @@ html, body, #root {
 }
 
 .agent-node--active-frame {
-  border-color: #3b82f6;
+  border-color: #219ebc;
+  background: #eef2ff;
   box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1), 0 4px 8px -2px rgba(0, 0, 0, 0.05);
 }
 
@@ -169,6 +170,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  background: #ffffff;
 }
 
 .agent-node__body--with-ops {
@@ -273,6 +275,34 @@ html, body, #root {
   color: #6b7280;
 }
 
+.agent-node__schema-validation {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 12px;
+  flex-wrap: wrap;
+}
+
+.agent-node__schema-square {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #d1d5db;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
+.agent-node__schema-square--valid {
+  background: #10b981;
+}
+
+.agent-node__schema-square--invalid {
+  background: #ef4444;
+}
+
+.agent-node__schema-square--missing {
+  background: #9ca3af;
+}
+
 .agent-node__value.prompt-link {
   color: #219ebc;
   cursor: pointer;
@@ -374,6 +404,16 @@ html, body, #root {
 .react-flow__edge-path {
   stroke: #9ca3af;
   stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #219ebc;
+}
+
+.react-flow__node.selected .agent-node {
+  border-color: #219ebc;
+  background: #eef2ff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .react-flow__edge-textbg {
@@ -1078,7 +1118,7 @@ html, body, #root {
 }
 
 .state-schema-panel__header {
-  padding: 16px 20px 12px;
+  padding: 12px 16px;
   background: #ffffff;
 }
 
@@ -1108,7 +1148,7 @@ html, body, #root {
 .state-schema-panel__table-header {
   display: flex;
   align-items: center;
-  padding: 8px 20px;
+  padding: 8px 16px;
   background: #f8fafc;
   border-top: 1px solid #f1f5f9;
   border-bottom: 1px solid #e2e8f0;
@@ -1135,7 +1175,7 @@ html, body, #root {
 .state-schema-panel__row {
   display: flex;
   align-items: center;
-  padding: 12px 20px;
+  padding: 12px 16px;
   background: #ffffff;
   cursor: pointer;
   transition: background-color 0.15s ease;
@@ -1218,7 +1258,7 @@ html, body, #root {
 }
 
 .state-schema-panel__value-container {
-  padding: 0 20px 16px;
+  padding: 0 16px 16px;
   background: #f8fafc;
 }
 
@@ -1701,4 +1741,16 @@ html, body, #root {
   font-size: 11px;
   font-weight: 500;
   color: #10b981;
+}
+
+.trace-selector-item__preview {
+  height: 38px;
+  overflow: hidden;
+}
+
+.trace-minimap {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
 }

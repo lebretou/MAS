@@ -8,6 +8,8 @@ import iconRetry from "../../../assets/icon-retry.svg";
 import iconState from "../../../assets/icon-state.svg";
 import iconTool from "../../../assets/icon-tool.svg";
 import iconChain from "../../../assets/icon-chain.svg";
+import { SchemaValidationIndicator } from "./SchemaValidationIndicator";
+import { hasOutputSchemaProperties } from "../../../utils/schema-validation";
 
 interface Props {
   data: GraphNodeData;
@@ -36,6 +38,11 @@ const operationLabelMap: Record<AgentOperationType, string> = {
 export function ExecutionContent({ data }: Props) {
   const exec = data.execution;
   const hasOperations = Boolean(exec?.operations && exec.operations.length > 0);
+  const hasSchemaValidation = Boolean(
+    data.outputSchema
+      && hasOutputSchemaProperties(data.outputSchema)
+      && (exec?.llmOutputValue != null || (exec?.events?.length ?? 0) > 0),
+  );
   const totalOperations = exec?.operations?.length ?? 0;
   const hasHiddenOperations = totalOperations > 4;
   const visibleOperations = exec?.operations?.slice(0, hasHiddenOperations ? 3 : 4) ?? [];
@@ -91,31 +98,40 @@ export function ExecutionContent({ data }: Props) {
         )}
       </div>
 
-      {hasOperations && (
+      {(hasOperations || hasSchemaValidation) && (
         <div className="agent-node__components agent-node__components--ops">
-          <div className="agent-node__components-header">
-            <span className="agent-node__components-label">OPERATIONS</span>
-          </div>
-          <div className="agent-node__timeline">
-            {visibleOperations.map((operation, index, arr) => (
-              <Fragment key={operation.id}>
-                <span
-                  className={`agent-node__timeline-node${operation.status === "error" ? " agent-node__timeline-node--error" : ""}`}
-                  title={operation.label}
-                >
-                  <img src={operationIconMap[operation.type]} alt="" className="agent-node__timeline-icon" />
-                  <span className="agent-node__timeline-label">{operationLabelMap[operation.type]}</span>
-                </span>
-                {index < arr.length - 1 && <div className="agent-node__timeline-line" />}
-              </Fragment>
-            ))}
-            {hiddenOperations > 0 && (
-              <>
-                <div className="agent-node__timeline-line" />
-                <span className="agent-node__op-more">+{hiddenOperations}</span>
-              </>
-            )}
-          </div>
+          {hasOperations && (
+            <>
+              <div className="agent-node__components-header">
+                <span className="agent-node__components-label">OPERATIONS</span>
+              </div>
+              <div className="agent-node__timeline">
+                {visibleOperations.map((operation, index, arr) => (
+                  <Fragment key={operation.id}>
+                    <span
+                      className={`agent-node__timeline-node${operation.status === "error" ? " agent-node__timeline-node--error" : ""}`}
+                      title={operation.label}
+                    >
+                      <img src={operationIconMap[operation.type]} alt="" className="agent-node__timeline-icon" />
+                      <span className="agent-node__timeline-label">{operationLabelMap[operation.type]}</span>
+                    </span>
+                    {index < arr.length - 1 && <div className="agent-node__timeline-line" />}
+                  </Fragment>
+                ))}
+                {hiddenOperations > 0 && (
+                  <>
+                    <div className="agent-node__timeline-line" />
+                    <span className="agent-node__op-more">+{hiddenOperations}</span>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+          <SchemaValidationIndicator
+            outputSchema={data.outputSchema}
+            outputValue={exec?.llmOutputValue}
+            events={exec?.events}
+          />
         </div>
       )}
     </>

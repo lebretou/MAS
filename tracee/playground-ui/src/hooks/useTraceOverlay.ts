@@ -374,6 +374,9 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       : llmStart?.payload?.prompts
       ? JSON.stringify(llmStart.payload.prompts, null, 2).slice(0, 2000)
       : undefined;
+    const llmOutputValue = llmEnd
+      ? normalizePayloadValue(llmEnd.payload?.output_text ?? llmEnd.payload?.output)
+      : undefined;
     const llmOutput = llmEnd?.payload?.output_text
       ? String(llmEnd.payload.output_text).slice(0, 2000)
       : llmEnd?.payload?.output
@@ -389,6 +392,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       retryCount: nodeAttemptCount,
       llmInput,
       llmOutput,
+      llmOutputValue,
       operations,
       events: scopedEvents,
     });
