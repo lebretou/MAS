@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -15,11 +15,12 @@ import { StateSchemaPanel } from "./panels/StateSchemaPanel";
 import { LayerToggle } from "./controls/LayerToggle";
 import { GraphInfoPanel } from "./controls/GraphInfoPanel";
 import { GraphSelector } from "./controls/GraphSelector";
+import { FrameScrubber } from "./controls/FrameScrubber";
 import { TraceSelector } from "./controls/TraceSelector";
 import { useSidebar } from "../../context/SidebarContext";
 import { useLayer } from "../../context/LayerContext";
 import { useGraph } from "../../hooks/useGraph";
-import { useTraceOverlay } from "../../hooks/useTraceOverlay";
+import { useTracePlayback } from "../../hooks/useTracePlayback";
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
@@ -27,14 +28,16 @@ const nodeTypes: NodeTypes = {
 };
 
 export function GraphViewer() {
-  const { selectedNode, closeSidebar } = useSidebar();
+  const { selectedNode, selectedNodeId, syncSelectedNode, closeSidebar } = useSidebar();
   const { selectedTraceId } = useLayer();
   const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
+  const [activeFrameIndex, setActiveFrameIndex] = useState<number | null>(null);
 
   const { nodes: baseNodes, edges: baseEdges, stateSchema, graphId, graphInfo, graphIds, loading, error } =
     useGraph(selectedGraphId);
 
-  const displayNodes = useTraceOverlay(selectedTraceId, baseNodes);
+  const { nodes: displayNodes, frames, activeFrame, error: playbackError } =
+    useTracePlayback(selectedTraceId, baseNodes, activeFrameIndex);
 
   const [, , onNodesChange] = useNodesState(displayNodes);
   const [, , onEdgesChange] = useEdgesState(baseEdges);
@@ -49,8 +52,34 @@ export function GraphViewer() {
   }, [closeSidebar]);
 
   const handleGraphSelect = useCallback((id: string) => {
+    closeSidebar();
     setSelectedGraphId(id);
-  }, []);
+  }, [closeSidebar]);
+
+  useEffect(() => {
+    setActiveFrameIndex(null);
+  }, [selectedTraceId]);
+
+  useEffect(() => {
+    if (!selectedTraceId) {
+      setActiveFrameIndex(null);
+      return;
+    }
+    setActiveFrameIndex((current) => {
+      if (current == null) return null;
+      return Math.min(current, frames.length - 1);
+    });
+  }, [selectedTraceId, frames]);
+
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    const liveNode = displayNodes.find((node) => node.id === selectedNodeId);
+    if (liveNode) {
+      syncSelectedNode(liveNode.data);
+      return;
+    }
+    closeSidebar();
+  }, [displayNodes, selectedNodeId, syncSelectedNode, closeSidebar]);
 
   if (loading) {
     return (
@@ -94,7 +123,21 @@ export function GraphViewer() {
         {graphIds.length > 1 && (
           <GraphSelector selectedGraphId={graphId} onSelect={handleGraphSelect} />
         )}
-        {!selectedNode && stateSchema && <StateSchemaPanel schema={stateSchema} />}
+        {playbackError && (
+          <Panel position="bottom-right" className="trace-playback-error">
+            failed to load trace playback
+          </Panel>
+        )}
+        {!selectedNode && stateSchema && <StateSchemaPanel schema={stateSchema} activeFrame={activeFrame} />}
+        {!selectedNode && selectedTraceId && frames.length > 0 && (
+          <Panel position="bottom-center">
+            <FrameScrubber
+              frames={frames}
+              activeFrameIndex={activeFrameIndex}
+              onChange={setActiveFrameIndex}
+            />
+          </Panel>
+        )}
       </ReactFlow>
       {selectedNode && <AgentDetailPanel onRequestClose={handlePanelDismiss} />}
     </div>

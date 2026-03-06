@@ -1,4 +1,5 @@
 import type { GraphTopology } from "../../../types/graph";
+import iconDetailedInfo from "../../../assets/icon-detailedinfo.svg";
 
 interface Props {
   graph: GraphTopology | null;
@@ -24,7 +25,10 @@ export function GraphInfoPanel({ graph }: Props) {
   return (
     <section className="graph-info-card" aria-label="Graph information">
       <header className="graph-info-card__header">
-        <h3 className="graph-info-card__title">Graph Details</h3>
+        <h3 className="graph-info-card__title">
+          <img src={iconDetailedInfo} alt="" className="graph-info-card__title-icon" aria-hidden />
+          Graph Details
+        </h3>
       </header>
       <div className="graph-info-card__content">
         <div className="graph-info-card__row">

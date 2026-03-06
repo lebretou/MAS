@@ -8,7 +8,23 @@ export type AgentOperationType =
   | "rag_retrieve"
   | "code_exec"
   | "subgraph_call"
+  | "state_update"
   | "error";
+
+export interface ExecutionFrame {
+  index: number;
+  nodeId: string | null;
+  label: string;
+  timestamp: string;
+  eventId: string;
+  eventOrder: number;
+  endSequence: number;
+  latencyMs: number;
+  changedKeys: string[];
+  stateSnapshot: Record<string, unknown>;
+}
+
+export type NodeFrameState = "active" | "completed" | "upcoming" | "idle";
 
 export interface AgentOperation {
   id: string;
@@ -51,6 +67,9 @@ export interface GraphNodeData extends Record<string, unknown> {
     hasRetry?: boolean;
   };
   execution?: ExecutionData;
+  playback?: {
+    frameState: NodeFrameState;
+  };
 }
 
 export interface GraphEdgeData extends Record<string, unknown> {

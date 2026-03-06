@@ -11,13 +11,14 @@ type AgentNodeType = Node<GraphNodeData, "agent">;
 export function AgentNode({ id, data, sourcePosition, targetPosition }: NodeProps<AgentNodeType>) {
   const { openSidebar } = useSidebar();
   const { getNode, setCenter, getZoom } = useReactFlow();
-  const { layer } = useLayer();
-  const { label, metadata, execution } = data;
+  const { layer, selectedTraceId } = useLayer();
+  const { label, metadata, execution, playback } = data;
 
-  const dimmed = layer === "execution" && (!execution || !execution.invoked);
+  const dimmed = layer === "execution" && (playback ? (playback.frameState === "upcoming" || playback.frameState === "idle") : (!execution || !execution.invoked));
+  const activeFrame = layer === "execution" && playback?.frameState === "active";
 
   const handleNodeClick = () => {
-    openSidebar(data);
+    openSidebar(id, data);
     const node = getNode(id);
     if (!node) return;
     const targetZoom = Math.max(getZoom(), 1.2);
@@ -33,7 +34,10 @@ export function AgentNode({ id, data, sourcePosition, targetPosition }: NodeProp
   };
 
   return (
-    <div className={`agent-node${dimmed ? " agent-node--dimmed" : ""}`} onClick={handleNodeClick}>
+    <div
+      className={`agent-node${dimmed ? " agent-node--dimmed" : ""}${activeFrame ? " agent-node--active-frame" : ""}`}
+      onClick={handleNodeClick}
+    >
       <div className="agent-node__header">
         <div className="agent-node__icon-wrapper">
           <img src={cognitionIcon} alt="" className="agent-node__icon" />

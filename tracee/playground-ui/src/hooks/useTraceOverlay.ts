@@ -33,6 +33,16 @@ function parseTimestampMs(timestamp: string): number {
   return new Date(timestamp).getTime();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function diffStateKeys(previousState: Record<string, unknown>, nextState: Record<string, unknown>): string[] {
+  return Array.from(new Set([...Object.keys(previousState), ...Object.keys(nextState)]))
+    .filter((key) => JSON.stringify(previousState[key]) !== JSON.stringify(nextState[key]))
+    .sort();
+}
+
 function classifyToolOperation(toolName: string): AgentOperationType {
   const normalized = toolName.toLowerCase();
   if (/(retrieve|rag|search|vector|embed)/.test(normalized)) return "rag_retrieve"; // can this be improved?
@@ -217,6 +227,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
 
     const llmStartsBySpan = new Map<string, TraceEvent>();
     const toolStartsBySpan = new Map<string, TraceEvent>();
+    const topLevelStartsByRunId = new Map<string, TraceEvent>();
     const operations: AgentOperation[] = [];
 
     let promptTokensTotal = 0;
@@ -229,6 +240,16 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       }
       if (event.event_type === "on_tool_start" && event.span_id) {
         toolStartsBySpan.set(event.span_id, event);
+      }
+      if (event.event_type === "on_chain_start") {
+        const runId = getRunIdFromEvent(event);
+        if (!runId || !eventExplicitlyBelongsToNode(event, nodeId)) continue;
+        const parentRunId = getParentRunIdFromEvent(event);
+        const parentRunNodeId = parentRunId ? runToNode.get(parentRunId) : undefined;
+        if (parentRunNodeId === nodeId) continue;
+        const parentSpanNodeId = event.parent_span_id ? spanToNode.get(event.parent_span_id) : undefined;
+        if (parentSpanNodeId === nodeId) continue;
+        topLevelStartsByRunId.set(runId, event);
       }
       if (event.event_type === "on_llm_end") {
         const tokenUsage = event.payload?.token_usage as Record<string, unknown> | undefined;
@@ -289,6 +310,29 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
           output: normalizePayloadValue(endOutput),
           metadata: {
             tags: [...startTags, ...endTags],
+            ...getRunMeta(event),
+          },
+        });
+      }
+
+      if (event.event_type === "on_chain_end") {
+        const runId = getRunIdFromEvent(event);
+        const start = runId ? topLevelStartsByRunId.get(runId) : undefined;
+        const previousState = start?.payload?.inputs;
+        const nextState = event.payload?.outputs;
+        if (!isRecord(previousState) || !isRecord(nextState)) continue;
+        const changedKeys = diffStateKeys(previousState, nextState);
+        if (changedKeys.length === 0) continue;
+
+        operations.push({
+          id: event.event_id,
+          type: "state_update",
+          label: "state update",
+          status: "success",
+          input: previousState,
+          output: nextState,
+          metadata: {
+            changedKeys,
             ...getRunMeta(event),
           },
         });

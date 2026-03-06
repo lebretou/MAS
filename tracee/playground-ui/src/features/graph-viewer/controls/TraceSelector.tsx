@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchTraces } from "../../../api/traces";
 import { useLayer } from "../../../context/LayerContext";
 import type { TraceMetadata } from "../../../types/trace";
+import iconTraces from "../../../assets/icon-traces.svg";
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "n/a";
@@ -58,7 +59,10 @@ export function TraceSelector() {
   return (
     <section className="trace-selector-card">
       <header className="trace-selector-card__header">
-        <h3 className="trace-selector-card__title">Execution Traces</h3>
+        <h3 className="trace-selector-card__title">
+          <img src={iconTraces} alt="" className="trace-selector-card__title-icon" aria-hidden />
+          Execution Traces
+        </h3>
       </header>
       <div className="trace-selector-card__list">
         {traces.length === 0 ? (

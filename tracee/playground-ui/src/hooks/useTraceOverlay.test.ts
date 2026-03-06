@@ -30,6 +30,12 @@ describe("computeOverlay", () => {
           langgraph: { node: nodeId },
           langchain: { run_id: "run-attempt-1" },
         },
+        payload: {
+          inputs: {
+            messages: ["hello"],
+            next_agent: null,
+          },
+        },
       }),
       makeEvent({
         event_id: "e2",
@@ -75,15 +81,36 @@ describe("computeOverlay", () => {
       }),
       makeEvent({
         event_id: "e6",
+        event_type: "on_chain_end",
+        timestamp: "2026-03-01T00:00:04.500Z",
+        refs: {
+          langgraph: { node: nodeId },
+          langchain: { run_id: "run-attempt-1" },
+        },
+        payload: {
+          outputs: {
+            messages: ["hello", "world"],
+            next_agent: "planning",
+          },
+        },
+      }),
+      makeEvent({
+        event_id: "e7",
         event_type: "on_chain_start",
         timestamp: "2026-03-01T00:00:05.000Z",
         refs: {
           langgraph: { node: nodeId },
           langchain: { run_id: "run-attempt-2" },
         },
+        payload: {
+          inputs: {
+            messages: ["hello", "world"],
+            next_agent: "planning",
+          },
+        },
       }),
       makeEvent({
-        event_id: "e7",
+        event_id: "e8",
         event_type: "on_chain_start",
         timestamp: "2026-03-01T00:00:05.500Z",
         refs: {
@@ -106,6 +133,14 @@ describe("computeOverlay", () => {
     expect(exec?.operations).toEqual([
       expect.objectContaining({ type: "llm_call", label: "gpt-4.1", status: "success", tokenCount: 19 }),
       expect.objectContaining({ type: "rag_retrieve", label: "retrieve_analysis_context_tool", status: "success" }),
+      expect.objectContaining({
+        type: "state_update",
+        label: "state update",
+        status: "success",
+        metadata: expect.objectContaining({
+          changedKeys: ["messages", "next_agent"],
+        }),
+      }),
     ]);
   });
 

@@ -1,10 +1,11 @@
 import { Fragment } from "react";
-import type { GraphNodeData } from "../../../types/node-data";
+import type { AgentOperationType, GraphNodeData } from "../../../types/node-data";
 import iconCode from "../../../assets/icon-code.svg";
 import iconError from "../../../assets/icon-error.svg";
 import iconLlm from "../../../assets/icon-llm.svg";
 import iconRag from "../../../assets/icon-rag.svg";
 import iconRetry from "../../../assets/icon-retry.svg";
+import iconState from "../../../assets/icon-state.svg";
 import iconTool from "../../../assets/icon-tool.svg";
 import iconChain from "../../../assets/icon-chain.svg";
 
@@ -18,19 +19,36 @@ const operationIconMap = {
   rag_retrieve: iconRag,
   code_exec: iconCode,
   subgraph_call: iconChain,
+  state_update: iconState,
   error: iconError,
 } as const;
+
+const operationLabelMap: Record<AgentOperationType, string> = {
+  llm_call: "LLM",
+  tool_call: "Tool",
+  rag_retrieve: "RAG",
+  code_exec: "Code",
+  subgraph_call: "Sub",
+  state_update: "State",
+  error: "Error",
+};
 
 export function ExecutionContent({ data }: Props) {
   const exec = data.execution;
   const hasOperations = Boolean(exec?.operations && exec.operations.length > 0);
+  const totalOperations = exec?.operations?.length ?? 0;
+  const hasHiddenOperations = totalOperations > 4;
+  const visibleOperations = exec?.operations?.slice(0, hasHiddenOperations ? 3 : 4) ?? [];
+  const hiddenOperations = totalOperations - visibleOperations.length;
 
   if (!exec || !exec.invoked) {
+    const frameState = data.playback?.frameState;
+    const statusLabel = frameState === "upcoming" ? "not yet invoked" : "not invoked";
     return (
       <div className="agent-node__body">
         <div className="agent-node__row">
           <span className="agent-node__key">status</span>
-          <span className="agent-node__value" style={{ color: "#9ca3af" }}>not invoked</span>
+          <span className="agent-node__value" style={{ color: "#9ca3af" }}>{statusLabel}</span>
         </div>
       </div>
     );
@@ -79,21 +97,22 @@ export function ExecutionContent({ data }: Props) {
             <span className="agent-node__components-label">OPERATIONS</span>
           </div>
           <div className="agent-node__timeline">
-            {exec.operations?.slice(0, 5).map((operation, index, arr) => (
+            {visibleOperations.map((operation, index, arr) => (
               <Fragment key={operation.id}>
                 <span
                   className={`agent-node__timeline-node${operation.status === "error" ? " agent-node__timeline-node--error" : ""}`}
                   title={operation.label}
                 >
                   <img src={operationIconMap[operation.type]} alt="" className="agent-node__timeline-icon" />
+                  <span className="agent-node__timeline-label">{operationLabelMap[operation.type]}</span>
                 </span>
                 {index < arr.length - 1 && <div className="agent-node__timeline-line" />}
               </Fragment>
             ))}
-            {(exec.operations?.length ?? 0) > 5 && (
+            {hiddenOperations > 0 && (
               <>
                 <div className="agent-node__timeline-line" />
-                <span className="agent-node__op-more">+{(exec.operations?.length ?? 0) - 5}</span>
+                <span className="agent-node__op-more">+{hiddenOperations}</span>
               </>
             )}
           </div>
