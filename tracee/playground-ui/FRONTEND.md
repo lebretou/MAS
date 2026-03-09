@@ -13,6 +13,8 @@ Tracee is a developer tool for building and debugging multi-agent systems. The *
 | **dagre** (`@dagrejs/dagre`) | Graph layout algorithm. Given a set of nodes and edges, it computes x/y positions so the graph looks tidy. |
 | **axios** | HTTP client for making API calls to the backend. |
 | **react-router-dom** | Client-side routing. Lets the app show different pages (Graph Viewer, Playground) without full page reloads. |
+| **Vitest** | Test runner. Unit tests live in `src/**/*.test.ts`; run with `npm run test`. |
+| **ajv** | Schema validation. Used in the execution layer to validate trace output against each agent’s output schema (see `utils/schema-validation`). |
 
 ## Prerequisites
 
@@ -43,6 +45,13 @@ This starts Vite on `http://localhost:5173`. The Vite config (`vite.config.ts`) 
 | `npm run build` | Production build (runs TypeScript type-check, then Vite bundling) |
 | `npx tsc -b` | Type-check without producing build output -- useful for catching errors quickly |
 | `npm run preview` | Serve the production build locally for testing |
+| `npm run test` | Run unit tests (Vitest) |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run lint` | Run ESLint |
+
+### Testing
+
+Unit tests live in `src/**/*.test.ts` and are run with `npm run test` (Vitest). Hooks (e.g. `useTraceOverlay`, `useTracePlayback`) and API modules (e.g. `traces`) have tests; `TraceMinimapPreview` has a test for `buildTraceMinimapModel`.
 
 ## Project Structure
 
@@ -59,6 +68,7 @@ src/
 ├── context/              # React Contexts that hold global UI state.
 ├── components/           # Shared UI components used across pages.
 ├── features/             # Feature modules. Each subfolder is a self-contained section of the app.
+├── utils/                # Shared utilities (e.g. schema-validation for validating trace output against agent output schema).
 └── assets/               # SVG icons used in the UI.
 ```
 
@@ -91,10 +101,11 @@ TypeScript interfaces that describe the shape of data coming from the backend. W
 
 ### `src/hooks/` -- Data Fetching Hooks
 
-React hooks are functions that let components "hook into" React features like state and side effects. The two custom hooks here handle all data fetching for the graph viewer:
+React hooks are functions that let components "hook into" React features like state and side effects. The graph viewer uses these hooks:
 
-- **`useGraph(graphId?)`** -- Fetches the graph topology from the API, then fans out to fetch prompt components for every agent node. Returns fully hydrated ReactFlow nodes and edges, plus the workflow state schema.
-- **`useTraceOverlay(traceId, baseNodes)`** -- When a trace is selected, fetches its events and groups them by LangGraph node. Returns a new array of nodes where each agent node has an `execution` field containing status, latency, and LLM input/output.
+- **`useGraph(graphId?)`** -- Fetches the graph topology from the API, then fans out to fetch prompt components for every agent node. Returns fully hydrated ReactFlow nodes and edges, plus the workflow state schema, graph info (topology metadata), and related IDs.
+- **`useTraceOverlay`** -- Used internally. Exports `computeOverlay(events, nodeIds)`, which is consumed by `useTracePlayback`. When a trace is selected, it fetches events and groups them by LangGraph node; returns a map of node id → execution data (status, latency, LLM I/O).
+- **`useTracePlayback(traceId, baseNodes, activeFrameIndex)`** -- Main trace hook used by GraphViewer. Fetches trace events, uses `computeOverlay` from useTraceOverlay, and computes a list of **frames** (state snapshots over time). Returns: `displayNodes` (nodes with execution/overlay data), `frames`, `activeFrame`, and `playbackError`. Enables frame-by-frame scrubbing via FrameScrubber.
 
 ### `src/context/` -- Global State
 
@@ -125,7 +136,10 @@ Each folder is a self-contained part of the application:
 | `panels/SchemaTable.tsx` | Reusable table that renders a JSON Schema as rows. |
 | `controls/LayerToggle.tsx` | Toggle button to switch between Intent and Execution layers. |
 | `controls/GraphSelector.tsx` | Dropdown to pick which graph to view (shown when multiple graphs exist). |
-| `controls/TraceSelector.tsx` | Dropdown to pick which trace run to overlay. |
+| `controls/GraphInfoPanel.tsx` | Shows graph metadata (graph id, name, created at, etc.) from graph topology. |
+| `controls/TraceSelector.tsx` | Dropdown to pick which trace run to overlay. **TraceMinimapPreview** is used inside this dropdown to show a small graph preview per trace. |
+| `controls/FrameScrubber.tsx` | Timeline control to step through trace execution frames when a trace is selected; sets `activeFrameIndex`. |
+| `nodes/SchemaValidationIndicator.tsx` | Used in AgentNode execution variant; shows whether the node’s output conforms to its output schema (valid/invalid/missing), using `utils/schema-validation` (ajv). |
 
 **`features/playground/`** -- The prompt testing page.
 
@@ -137,7 +151,7 @@ Each folder is a self-contained part of the application:
 
 ### The Two-Layer Model
 
-The graph viewer has two modes of looking at the same graph, controlled by the toggle in the top-right corner:
+The graph viewer has two modes of looking at the same graph, controlled by the toggle in the top-left panel:
 
 **Intent Layer** (default) -- The "design-time" view. Shows every node and edge in the graph as the developer defined it. Agent nodes display their prompt components, model configuration, and a link to the prompt editor. Data comes from `GET /api/graphs/{id}` (for the topology) and `GET /api/prompts/{id}/latest` (for each agent's prompt components).
 
@@ -156,11 +170,16 @@ Backend API
 src/api/ functions (axios calls)
     |
     v
-src/hooks/useGraph        --> fetches topology + prompt components
-src/hooks/useTraceOverlay --> fetches trace events, computes per-node execution data
+useGraph(graphId)         --> baseNodes, baseEdges, stateSchema, graphInfo, etc.
     |
     v
-GraphViewer.tsx           --> passes hydrated nodes + edges to ReactFlow
+useTracePlayback(selectedTraceId, baseNodes, activeFrameIndex)
+    |                         --> fetchTraceEvents + computeOverlay (from useTraceOverlay)
+    |                         --> displayNodes, frames, activeFrame, playbackError
+    v
+GraphViewer.tsx           --> passes displayNodes (or flowNodes when scrubbing) to ReactFlow;
+                             when activeFrameIndex is set, node selection is cleared so only
+                             the active-frame highlight shows
     |
     v
 AgentNode / TerminalNode  --> reads LayerContext to decide which sub-component to render
@@ -169,9 +188,9 @@ AgentNode / TerminalNode  --> reads LayerContext to decide which sub-component t
 AgentDetailPanel          --> reads SidebarContext to know which node is selected
 ```
 
-1. `useGraph` calls `fetchGraphs()` to get the list of available graphs, then `fetchGraph(id)` for the topology, then `fetchLatestVersion(promptId)` for each agent node. It runs the dagre layout and returns positioned nodes and edges.
-2. `useTraceOverlay` receives the base nodes from `useGraph`. When a trace ID is selected, it calls `fetchTraceEvents(traceId)`, groups events by LangGraph node, and merges execution data onto each node.
-3. `GraphViewer` passes the final nodes to the `<ReactFlow>` component, which renders them on a pannable, zoomable canvas.
+1. `useGraph` fetches topology and prompt components, runs dagre layout, and returns `baseNodes`, `baseEdges`, `stateSchema`, `graphInfo`, and related IDs.
+2. `useTracePlayback` receives `baseNodes` and the selected trace ID. It fetches trace events, uses `computeOverlay` (from useTraceOverlay) to build per-node execution data, and computes **frames** (state snapshots over time). It returns `displayNodes`, `frames`, `activeFrame`, and `playbackError`.
+3. GraphViewer passes `displayNodes` (or `flowNodes` when scrubbing, with selection cleared) to `<ReactFlow>`.
 4. Each `AgentNode` reads `LayerContext` to decide whether to render the intent variant or the execution variant.
 
 ### React Flow Basics
@@ -297,3 +316,5 @@ If the backend runs on a different port, change the `target` value here.
 **Styles not updating** -- Vite hot-reloads CSS changes automatically. If styles seem stale, hard-refresh the browser (`Cmd+Shift+R` on macOS, `Ctrl+Shift+R` on Windows/Linux).
 
 **Graph layout looks wrong after adding nodes** -- Check that the new node type has dimensions defined in `constants.ts`. Dagre needs width and height to position nodes correctly.
+
+**Frame scrubber not showing** -- The scrubber is only visible when a trace is selected and the trace has frames. Ensure the backend trace has events; if the trace is empty, no frames are computed and the scrubber stays hidden.

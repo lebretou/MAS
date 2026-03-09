@@ -8,41 +8,22 @@ import type {
   GraphNodeData,
 } from "../types/node-data";
 import type { TraceEvent } from "../types/trace";
+import {
+  diffStateKeys,
+  eventExplicitlyBelongsToNode,
+  getParentRunIdFromEvent,
+  getRunIdFromEvent,
+  isRecord,
+  parseTimestampMs,
+  resolveAgentNodeId,
+} from "../utils/traceEventUtils";
 
 /**
  * groups trace events by their langgraph node and computes per-node execution data.
  * returns a map of node_id -> ExecutionData that can be merged onto graph nodes.
  */
-function getNodeIdFromEvent(event: TraceEvent): string | undefined {
-  return (event.refs?.langgraph as Record<string, unknown> | undefined)?.node as string | undefined;
-}
 
-function getHintAgentIdFromEvent(event: TraceEvent): string | undefined {
-  return (event.refs?.hint as Record<string, unknown> | undefined)?.agent_id as string | undefined;
-}
-
-function getRunIdFromEvent(event: TraceEvent): string | undefined {
-  return (event.refs?.langchain as Record<string, unknown> | undefined)?.run_id as string | undefined;
-}
-
-function getParentRunIdFromEvent(event: TraceEvent): string | undefined {
-  return (event.refs?.langchain as Record<string, unknown> | undefined)?.parent_run_id as string | undefined;
-}
-
-function parseTimestampMs(timestamp: string): number {
-  return new Date(timestamp).getTime();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function diffStateKeys(previousState: Record<string, unknown>, nextState: Record<string, unknown>): string[] {
-  return Array.from(new Set([...Object.keys(previousState), ...Object.keys(nextState)]))
-    .filter((key) => JSON.stringify(previousState[key]) !== JSON.stringify(nextState[key]))
-    .sort();
-}
-
+// maps tool name patterns to AgentOperationType for display
 function classifyToolOperation(toolName: string): AgentOperationType {
   const normalized = toolName.toLowerCase();
   if (/(retrieve|rag|search|vector|embed)/.test(normalized)) return "rag_retrieve"; // can this be improved?
@@ -121,56 +102,31 @@ function getRunMeta(event: TraceEvent): { runId?: string; parentRunId?: string }
   };
 }
 
-function eventExplicitlyBelongsToNode(event: TraceEvent, nodeId: string): boolean {
-  const hintAgentId = getHintAgentIdFromEvent(event);
-  if (hintAgentId === nodeId) return true;
-  if (event.agent_id === nodeId) return true;
-  return getNodeIdFromEvent(event) === nodeId;
-}
-
 export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<string, ExecutionData> {
   const nodeIdSet = new Set(nodeIds);
   const byNode = new Map<string, TraceEvent[]>();
   const runToNode = new Map<string, string>();
   const spanToNode = new Map<string, string>();
   const runParent = new Map<string, string>();
+  // build run -> parent run map for scoping events to a node's run tree
   for (const event of events) {
     const runId = getRunIdFromEvent(event);
     const parentRunId = getParentRunIdFromEvent(event);
     if (runId && parentRunId) runParent.set(runId, parentRunId);
   }
 
-  function resolveAgentNodeId(event: TraceEvent): string | undefined {
-    const hintAgentId = getHintAgentIdFromEvent(event);
-    if (hintAgentId && nodeIdSet.has(hintAgentId)) return hintAgentId;
-
-    if (event.agent_id && nodeIdSet.has(event.agent_id)) return event.agent_id;
-
-    const directNodeId = getNodeIdFromEvent(event);
-    if (directNodeId && nodeIdSet.has(directNodeId)) return directNodeId;
-
-    const runId = getRunIdFromEvent(event);
-    if (runId && runToNode.has(runId)) return runToNode.get(runId);
-
-    const parentRunId = getParentRunIdFromEvent(event);
-    if (parentRunId && runToNode.has(parentRunId)) return runToNode.get(parentRunId);
-
-    if (event.parent_span_id && spanToNode.has(event.parent_span_id)) return spanToNode.get(event.parent_span_id);
-    if (event.span_id && spanToNode.has(event.span_id)) return spanToNode.get(event.span_id);
-
-    return undefined;
-  }
-
+  // populate runToNode and spanToNode so later events can resolve via run/span
   for (const event of events) {
-    const nodeId = resolveAgentNodeId(event);
+    const nodeId = resolveAgentNodeId(event, nodeIdSet, runToNode, spanToNode);
     if (!nodeId) continue;
     const runId = getRunIdFromEvent(event);
     if (runId) runToNode.set(runId, nodeId);
     if (event.span_id) spanToNode.set(event.span_id, nodeId);
   }
 
+  // group events by resolved agent node
   for (const event of events) {
-    const node = resolveAgentNodeId(event);
+    const node = resolveAgentNodeId(event, nodeIdSet, runToNode, spanToNode);
     if (!node || !nodeIdSet.has(node)) continue;
     const existing = byNode.get(node) ?? [];
     existing.push(event);
@@ -192,6 +148,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       return parseTimestampMs(a.timestamp) - parseTimestampMs(b.timestamp);
     });
 
+    // top-level chain runs that explicitly started on this node (used to scope events)
     const rootRunIds = new Set(
       orderedEvents
         .filter((event) => event.event_type === "on_chain_start" && eventExplicitlyBelongsToNode(event, nodeId))
@@ -199,6 +156,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
         .filter((runId): runId is string => Boolean(runId)),
     );
 
+    // include event if it belongs to this node or is under one of its root runs
     function belongsToNodeRunTree(event: TraceEvent): boolean {
       if (eventExplicitlyBelongsToNode(event, nodeId)) return true;
       const runId = getRunIdFromEvent(event);
@@ -219,12 +177,13 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
 
     const hasError = scopedEvents.some((e) => e.event_type.endsWith("_error"));
 
-    // compute latency from first to last event
+    // latency from first to last scoped event
     const timestamps = scopedEvents.map((e) => parseTimestampMs(e.timestamp)).sort((a, b) => a - b);
     const latencyMs = timestamps.length >= 2
       ? timestamps[timestamps.length - 1] - timestamps[0]
       : undefined;
 
+    // match end events to their start for latency and payload
     const llmStartsBySpan = new Map<string, TraceEvent>();
     const toolStartsBySpan = new Map<string, TraceEvent>();
     const topLevelStartsByRunId = new Map<string, TraceEvent>();
@@ -357,6 +316,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       }
     }
 
+    // count top-level chain starts on this node (retries)
     const nodeAttemptCount = scopedEvents.filter((event) => {
       if (event.event_type !== "on_chain_start") return false;
       if (!eventExplicitlyBelongsToNode(event, nodeId)) return false;
@@ -401,6 +361,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
   return overlay;
 }
 
+/** fetches trace events and merges execution data onto agent nodes; clears when traceId is null */
 export function useTraceOverlay(
   traceId: string | null,
   baseNodes: Node<GraphNodeData>[],
@@ -409,7 +370,7 @@ export function useTraceOverlay(
 
   useEffect(() => {
     if (!traceId) {
-      // clear execution data when no trace selected
+      // clear execution when no trace selected
       setOverlaidNodes(
         baseNodes.map((n) => ({
           ...n,

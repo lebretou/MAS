@@ -3,65 +3,23 @@ import type { Node } from "@xyflow/react";
 import { fetchTraceEvents } from "../api/traces";
 import type { ExecutionFrame, GraphNodeData, NodeFrameState } from "../types/node-data";
 import type { TraceEvent } from "../types/trace";
+import {
+  diffStateKeys,
+  eventExplicitlyBelongsToNode,
+  getParentRunIdFromEvent,
+  getRunIdFromEvent,
+  isRecord,
+  parseTimestampMs,
+  resolveAgentNodeId,
+  sortTraceEvents,
+} from "../utils/traceEventUtils";
 import { computeOverlay } from "./useTraceOverlay";
-
-function getNodeIdFromEvent(event: TraceEvent): string | undefined {
-  return (event.refs?.langgraph as Record<string, unknown> | undefined)?.node as string | undefined;
-}
-
-function getHintAgentIdFromEvent(event: TraceEvent): string | undefined {
-  return (event.refs?.hint as Record<string, unknown> | undefined)?.agent_id as string | undefined;
-}
-
-function getRunIdFromEvent(event: TraceEvent): string | undefined {
-  return (event.refs?.langchain as Record<string, unknown> | undefined)?.run_id as string | undefined;
-}
-
-function getParentRunIdFromEvent(event: TraceEvent): string | undefined {
-  return (event.refs?.langchain as Record<string, unknown> | undefined)?.parent_run_id as string | undefined;
-}
-
-function parseTimestampMs(timestamp: string): number {
-  return new Date(timestamp).getTime();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
 
 function cloneStateSnapshot(snapshot: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(JSON.stringify(snapshot)) as Record<string, unknown>;
 }
 
-function valuesEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-export function diffStateKeys(
-  previousState: Record<string, unknown>,
-  nextState: Record<string, unknown>,
-): string[] {
-  return Array.from(new Set([...Object.keys(previousState), ...Object.keys(nextState)]))
-    .filter((key) => !valuesEqual(previousState[key], nextState[key]))
-    .sort();
-}
-
-export function sortTraceEvents(events: TraceEvent[]): TraceEvent[] {
-  return [...events].sort((left, right) => {
-    const leftSequence = left.sequence ?? Number.MAX_SAFE_INTEGER;
-    const rightSequence = right.sequence ?? Number.MAX_SAFE_INTEGER;
-    if (leftSequence !== rightSequence) return leftSequence - rightSequence;
-    return parseTimestampMs(left.timestamp) - parseTimestampMs(right.timestamp);
-  });
-}
-
-function eventExplicitlyBelongsToNode(event: TraceEvent, nodeId: string): boolean {
-  const hintAgentId = getHintAgentIdFromEvent(event);
-  if (hintAgentId === nodeId) return true;
-  if (event.agent_id === nodeId) return true;
-  return getNodeIdFromEvent(event) === nodeId;
-}
-
+/** builds ordered frames from chain_end events (one per node transition); includes initial state frame if present */
 export function computeExecutionFrames(
   events: TraceEvent[],
   nodeLabels: Record<string, string>,
@@ -71,39 +29,20 @@ export function computeExecutionFrames(
   const runToNode = new Map<string, string>();
   const spanToNode = new Map<string, string>();
 
-  function resolveAgentNodeId(event: TraceEvent): string | undefined {
-    const hintAgentId = getHintAgentIdFromEvent(event);
-    if (hintAgentId && nodeIdSet.has(hintAgentId)) return hintAgentId;
-
-    if (event.agent_id && nodeIdSet.has(event.agent_id)) return event.agent_id;
-
-    const directNodeId = getNodeIdFromEvent(event);
-    if (directNodeId && nodeIdSet.has(directNodeId)) return directNodeId;
-
-    const runId = getRunIdFromEvent(event);
-    if (runId && runToNode.has(runId)) return runToNode.get(runId);
-
-    const parentRunId = getParentRunIdFromEvent(event);
-    if (parentRunId && runToNode.has(parentRunId)) return runToNode.get(parentRunId);
-
-    if (event.parent_span_id && spanToNode.has(event.parent_span_id)) return spanToNode.get(event.parent_span_id);
-    if (event.span_id && spanToNode.has(event.span_id)) return spanToNode.get(event.span_id);
-
-    return undefined;
-  }
-
+  // resolve run/span -> node so we can attribute chain events to nodes
   for (const event of orderedEvents) {
-    const nodeId = resolveAgentNodeId(event);
+    const nodeId = resolveAgentNodeId(event, nodeIdSet, runToNode, spanToNode);
     if (!nodeId) continue;
     const runId = getRunIdFromEvent(event);
     if (runId) runToNode.set(runId, nodeId);
     if (event.span_id) spanToNode.set(event.span_id, nodeId);
   }
 
+  // root runs per node (top-level chain starts) for frame boundaries
   const rootRunIdsByNode = new Map<string, Set<string>>();
   for (const event of orderedEvents) {
     if (event.event_type !== "on_chain_start") continue;
-    const nodeId = resolveAgentNodeId(event);
+    const nodeId = resolveAgentNodeId(event, nodeIdSet, runToNode, spanToNode);
     const runId = getRunIdFromEvent(event);
     if (!nodeId || !runId || !eventExplicitlyBelongsToNode(event, nodeId)) continue;
     const parentRunId = getParentRunIdFromEvent(event);
@@ -119,9 +58,10 @@ export function computeExecutionFrames(
   const frames: ExecutionFrame[] = [];
   let previousState: Record<string, unknown> = {};
 
+  // optional frame 0 from first on_chain_start inputs
   const initialEventIndex = orderedEvents.findIndex((event) => {
     if (event.event_type !== "on_chain_start" || !isRecord(event.payload?.inputs)) return false;
-    const nodeId = resolveAgentNodeId(event);
+    const nodeId = resolveAgentNodeId(event, nodeIdSet, runToNode, spanToNode);
     const runId = getRunIdFromEvent(event);
     if (!nodeId || !runId) return false;
     return rootRunIdsByNode.get(nodeId)?.has(runId) ?? false;
@@ -147,7 +87,7 @@ export function computeExecutionFrames(
 
   orderedEvents.forEach((event, eventOrder) => {
     if (event.event_type !== "on_chain_end") return;
-    const nodeId = resolveAgentNodeId(event);
+    const nodeId = resolveAgentNodeId(event, nodeIdSet, runToNode, spanToNode);
     const runId = getRunIdFromEvent(event);
     if (!nodeId || !runId) return;
     if (!rootRunIdsByNode.get(nodeId)?.has(runId)) return;
@@ -175,6 +115,7 @@ export function computeExecutionFrames(
   return frames;
 }
 
+/** whether node is idle, active at current frame, completed, or upcoming */
 export function getNodeFrameState(
   nodeId: string,
   frames: ExecutionFrame[],
@@ -200,6 +141,7 @@ interface TracePlaybackResult {
   error: boolean;
 }
 
+/** fetches trace, builds frames from chain_end, and returns nodes with execution/playback state up to activeFrameIndex */
 export function useTracePlayback(
   traceId: string | null,
   baseNodes: Node<GraphNodeData>[],
@@ -256,12 +198,14 @@ export function useTracePlayback(
 
   const activeFrame = resolvedFrameIndex == null ? null : frames[resolvedFrameIndex] ?? null;
 
+  // events visible at current scrub position (all events if no frame selected)
   const scopedEvents = useMemo(() => {
     if (!traceId) return [];
     if (!activeFrame) return orderedEvents;
     return orderedEvents.slice(0, activeFrame.eventOrder + 1);
   }, [traceId, orderedEvents, activeFrame]);
 
+  // base nodes with execution overlay and playback frameState for current frame
   const displayNodes = useMemo(() => {
     if (!traceId) {
       return baseNodes.map((node) => ({
