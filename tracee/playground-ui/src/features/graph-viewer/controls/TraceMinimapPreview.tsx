@@ -5,11 +5,16 @@ import type { GraphEdgeData, GraphNodeData } from "../../../types/node-data";
 import type { TraceSummary } from "../../../types/trace";
 
 const MINIMAP_PADDING = 24;
-const NODE_SIZE = 84;
+const LAYOUT_SCALE = 0.65;
+const NODE_WIDTH = 100;
+const NODE_HEIGHT = 100;
+const NODE_RX = 30;
 const ACTIVE_EDGE_STROKE = "#219ebc";
 const INACTIVE_EDGE_STROKE = "#d4d4d8";
 const ACTIVE_NODE_FILL = "#219ebc";
 const INACTIVE_NODE_FILL = "#d4d4d8";
+const EDGE_STROKE_ACTIVE = 33;
+const EDGE_STROKE_INACTIVE = 30;
 
 interface TraceMinimapPreviewProps {
   nodes: Node<GraphNodeData>[];
@@ -59,13 +64,13 @@ export function buildTraceMinimapModel(
     const dims = NODE_DIMENSIONS[node.type ?? "agent"];
     const width = typeof node.measured?.width === "number" ? node.measured.width : dims.width;
     const height = typeof node.measured?.height === "number" ? node.measured.height : dims.height;
-    const centerX = node.position.x + width / 2;
-    const centerY = node.position.y + height / 2;
+    const centerX = (node.position.x + width / 2) * LAYOUT_SCALE;
+    const centerY = (node.position.y + height / 2) * LAYOUT_SCALE;
 
     return {
       id: node.id,
-      x: centerX - NODE_SIZE / 2,
-      y: centerY - NODE_SIZE / 2,
+      x: centerX - NODE_WIDTH / 2,
+      y: centerY - NODE_HEIGHT / 2,
       isActive: activeAgents.has(node.id),
     };
   });
@@ -80,18 +85,18 @@ export function buildTraceMinimapModel(
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      x1: source.x + NODE_SIZE / 2,
-      y1: source.y + NODE_SIZE / 2,
-      x2: target.x + NODE_SIZE / 2,
-      y2: target.y + NODE_SIZE / 2,
+      x1: source.x + NODE_WIDTH / 2,
+      y1: source.y + NODE_HEIGHT / 2,
+      x2: target.x + NODE_WIDTH / 2,
+      y2: target.y + NODE_HEIGHT / 2,
       isActive: activeEdges.has(getTraceEdgeKey(edge.source, edge.target)),
     }];
   });
 
   const minX = Math.min(...previewNodes.map((node) => node.x));
   const minY = Math.min(...previewNodes.map((node) => node.y));
-  const maxX = Math.max(...previewNodes.map((node) => node.x + NODE_SIZE));
-  const maxY = Math.max(...previewNodes.map((node) => node.y + NODE_SIZE));
+  const maxX = Math.max(...previewNodes.map((node) => node.x + NODE_WIDTH));
+  const maxY = Math.max(...previewNodes.map((node) => node.y + NODE_HEIGHT));
   const viewBox = [
     minX - MINIMAP_PADDING,
     minY - MINIMAP_PADDING,
@@ -123,7 +128,7 @@ export function TraceMinimapPreview({ nodes, edges, summary }: TraceMinimapPrevi
               x2={edge.x2}
               y2={edge.y2}
               stroke={edge.isActive ? ACTIVE_EDGE_STROKE : INACTIVE_EDGE_STROKE}
-              strokeWidth={edge.isActive ? 20 : 14}
+              strokeWidth={edge.isActive ? EDGE_STROKE_ACTIVE : EDGE_STROKE_INACTIVE}
               strokeLinecap="round"
               opacity={edge.isActive ? 1 : 0.95}
             />
@@ -135,9 +140,9 @@ export function TraceMinimapPreview({ nodes, edges, summary }: TraceMinimapPrevi
               key={node.id}
               x={node.x}
               y={node.y}
-              width={NODE_SIZE}
-              height={NODE_SIZE}
-              rx={20}
+              width={NODE_WIDTH}
+              height={NODE_HEIGHT}
+              rx={NODE_RX}
               fill={node.isActive ? ACTIVE_NODE_FILL : INACTIVE_NODE_FILL}
               opacity={node.isActive ? 1 : 0.9}
             />

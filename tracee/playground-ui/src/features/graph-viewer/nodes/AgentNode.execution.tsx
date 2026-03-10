@@ -35,6 +35,17 @@ const operationLabelMap: Record<AgentOperationType, string> = {
   error: "Error",
 };
 
+// same type → color class as ExecutionDetails progress bar for consistent styling
+const operationColorMap: Record<AgentOperationType, string> = {
+  llm_call: "llm",
+  tool_call: "tool",
+  rag_retrieve: "rag",
+  code_exec: "code",
+  subgraph_call: "chain",
+  state_update: "state",
+  error: "error",
+};
+
 export function ExecutionContent({ data }: Props) {
   const exec = data.execution;
   const hasOperations = Boolean(exec?.operations && exec.operations.length > 0);
@@ -109,7 +120,7 @@ export function ExecutionContent({ data }: Props) {
                 {visibleOperations.map((operation, index, arr) => (
                   <Fragment key={operation.id}>
                     <span
-                      className={`agent-node__timeline-node${operation.status === "error" ? " agent-node__timeline-node--error" : ""}`}
+                      className={`agent-node__timeline-node agent-node__timeline-node--${operationColorMap[operation.type]}${operation.status === "error" ? " agent-node__timeline-node--error" : ""}`}
                       title={operation.label}
                     >
                       <img src={operationIconMap[operation.type]} alt="" className="agent-node__timeline-icon" />

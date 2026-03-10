@@ -23,11 +23,25 @@ import {
  * returns a map of node_id -> ExecutionData that can be merged onto graph nodes.
  */
 
-// maps tool name patterns to AgentOperationType for display
-function classifyToolOperation(toolName: string): AgentOperationType {
+// tracee: prefixed tags map to operation types, checked before heuristic
+const TRACEE_TAG_PREFIX = "tracee:";
+const TAG_TO_OP_TYPE: Record<string, AgentOperationType> = {
+  "tracee:rag": "rag_retrieve",
+  "tracee:code_exec": "code_exec",
+  "tracee:tool": "tool_call",
+};
+
+// maps tool tags and name patterns to AgentOperationType for display
+function classifyToolOperation(toolName: string, tags: string[]): AgentOperationType {
+  for (const tag of tags) {
+    if (tag.startsWith(TRACEE_TAG_PREFIX) && TAG_TO_OP_TYPE[tag]) {
+      return TAG_TO_OP_TYPE[tag];
+    }
+  }
+  // fallback heuristic with tighter patterns to avoid false positives
   const normalized = toolName.toLowerCase();
-  if (/(retrieve|rag|search|vector|embed)/.test(normalized)) return "rag_retrieve"; // can this be improved?
-  if (/(execute|run_code|python|bash|shell)/.test(normalized)) return "code_exec";
+  if (/(retrieve|rag|vector_search|embed)/.test(normalized)) return "rag_retrieve";
+  if (/(execute|run_code|python_repl|bash|shell)/.test(normalized)) return "code_exec";
   return "tool_call";
 }
 
@@ -259,16 +273,17 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
         const endOutput = event.payload?.output;
         const startTags = start ? getEventTags(start) : [];
         const endTags = getEventTags(event);
+        const allToolTags = [...startTags, ...endTags];
         operations.push({
           id: event.event_id,
-          type: classifyToolOperation(toolName),
+          type: classifyToolOperation(toolName, allToolTags),
           label: toolName,
           status: "success",
           latencyMs: opLatency,
           input: normalizePayloadValue(startInput),
           output: normalizePayloadValue(endOutput),
           metadata: {
-            tags: [...startTags, ...endTags],
+            tags: allToolTags,
             ...getRunMeta(event),
           },
         });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import { fetchTraceSummary, fetchTraces } from "../../../api/traces";
 import { useLayer } from "../../../context/LayerContext";
@@ -38,6 +38,8 @@ export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
   const { layer, selectedTraceId, setSelectedTraceId } = useLayer();
   const [traces, setTraces] = useState<TraceMetadata[]>([]);
   const [summaries, setSummaries] = useState<Record<string, TraceSummary>>({});
+  const [maxHeight, setMaxHeight] = useState<number | null>(null);
+  const cardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (layer !== "execution") {
@@ -99,10 +101,43 @@ export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
     }
   }, [layer, traces, selectedTraceId, setSelectedTraceId]);
 
+  useEffect(() => {
+    if (layer !== "execution") {
+      setMaxHeight(null);
+      return;
+    }
+
+    const element = cardRef.current;
+    if (!element) return;
+
+    const updateMaxHeight = () => {
+      const { top } = element.getBoundingClientRect();
+      const nextMaxHeight = Math.max(240, Math.floor(window.innerHeight - top - 16));
+      setMaxHeight(nextMaxHeight);
+    };
+
+    updateMaxHeight();
+    window.addEventListener("resize", updateMaxHeight);
+
+    const observer = new ResizeObserver(() => {
+      updateMaxHeight();
+    });
+    observer.observe(document.body);
+
+    return () => {
+      window.removeEventListener("resize", updateMaxHeight);
+      observer.disconnect();
+    };
+  }, [layer, traces.length]);
+
   if (layer !== "execution") return null;
 
   return (
-    <section className="trace-selector-card">
+    <section
+      ref={cardRef}
+      className="trace-selector-card"
+      style={maxHeight ? { maxHeight: `${maxHeight}px` } : undefined}
+    >
       <header className="trace-selector-card__header">
         <h3 className="trace-selector-card__title">
           <img src={iconTraces} alt="" className="trace-selector-card__title-icon" aria-hidden />
@@ -126,19 +161,21 @@ export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
                   <span className="trace-selector-item__id" title={t.trace_id}>
                     {t.trace_id.slice(0, 8)}
                   </span>
+                  <div className="trace-selector-item__meta">
+                    <span className="trace-selector-item__time">
+                      {formatDateTime(t.created_at)}
+                    </span>
+                    <span className="trace-selector-item__latency">
+                      {calculateLatency(t.created_at, t.updated_at)}
+                    </span>
+                  </div>
+                </div>
+                <TraceMinimapPreview nodes={nodes} edges={edges} summary={summaries[t.trace_id]} />
+                <div className="trace-selector-item__footer">
                   <span className="trace-selector-item__events">
                     {t.event_count} events
                   </span>
                 </div>
-                <div className="trace-selector-item__details">
-                  <span className="trace-selector-item__time">
-                    {formatDateTime(t.created_at)}
-                  </span>
-                  <span className="trace-selector-item__latency">
-                    {calculateLatency(t.created_at, t.updated_at)}
-                  </span>
-                </div>
-                <TraceMinimapPreview nodes={nodes} edges={edges} summary={summaries[t.trace_id]} />
               </button>
             );
           })

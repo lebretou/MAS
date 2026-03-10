@@ -166,7 +166,7 @@ describe("computeOverlay", () => {
           hint: { agent_id: nodeId },
           langchain: { run_id: "run-tool-rag-1", parent_run_id: "run-agent-1" },
         },
-        payload: { tool_name: "search_docs", input: { query: "rag" } },
+        payload: { tool_name: "search_docs", input: { query: "rag" }, tags: ["tracee:rag"] },
       }),
       makeEvent({
         event_id: "t3",
@@ -189,6 +189,53 @@ describe("computeOverlay", () => {
         label: "search_docs",
         status: "success",
         latencyMs: 800,
+      }),
+    ]);
+  });
+
+  it("classifies untagged search tool as tool_call, not rag_retrieve", () => {
+    const nodeId = "planner";
+    const events: TraceEvent[] = [
+      makeEvent({
+        event_id: "s1",
+        event_type: "on_chain_start",
+        timestamp: "2026-03-01T00:00:00.000Z",
+        refs: {
+          langgraph: { node: nodeId },
+          langchain: { run_id: "run-planner-1" },
+        },
+      }),
+      makeEvent({
+        event_id: "s2",
+        event_type: "on_tool_start",
+        timestamp: "2026-03-01T00:00:01.000Z",
+        span_id: "span-search-tool",
+        refs: {
+          langgraph: { node: nodeId },
+          langchain: { run_id: "run-search-1", parent_run_id: "run-planner-1" },
+        },
+        payload: { tool_name: "search_products", input: { q: "shoes" } },
+      }),
+      makeEvent({
+        event_id: "s3",
+        event_type: "on_tool_end",
+        timestamp: "2026-03-01T00:00:01.500Z",
+        span_id: "span-search-tool",
+        refs: {
+          langchain: { run_id: "run-search-1", parent_run_id: "run-planner-1" },
+        },
+        payload: { output: "[product1, product2]" },
+      }),
+    ];
+
+    const overlay = computeOverlay(events, [nodeId]);
+    const exec = overlay.get(nodeId);
+
+    expect(exec?.operations).toEqual([
+      expect.objectContaining({
+        type: "tool_call",
+        label: "search_products",
+        status: "success",
       }),
     ]);
   });

@@ -60,11 +60,11 @@ describe("buildTraceMinimapModel", () => {
 
     const model = buildTraceMinimapModel(nodes, edges, summary);
 
-    expect(model?.viewBox).toBe("44 19 682 172");
+    expect(model?.viewBox).toBe("30 33 710 144");
     expect(model?.nodes).toEqual([
-      expect.objectContaining({ id: "planner", x: 68, y: 43, isActive: true }),
-      expect.objectContaining({ id: "coder", x: 368, y: 83, isActive: true }),
-      expect.objectContaining({ id: "finish", x: 618, y: 83, isActive: false }),
+      expect.objectContaining({ id: "planner", x: 54, y: 57, isActive: true }),
+      expect.objectContaining({ id: "coder", x: 354, y: 97, isActive: true }),
+      expect.objectContaining({ id: "finish", x: 604, y: 97, isActive: false }),
     ]);
     expect(model?.edges).toEqual([
       expect.objectContaining({

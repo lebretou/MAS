@@ -7,6 +7,7 @@ import listIcon from "../../../assets/list.svg";
 import numberIcon from "../../../assets/number.svg";
 import stringIcon from "../../../assets/string.svg";
 import iconStateVariable from "../../../assets/icon-statevariable.svg";
+import iconSort from "../../../assets/icon-sort.svg";
 
 interface Props {
   schema: JsonSchema;
@@ -48,16 +49,52 @@ function inferTypeFromValue(value: unknown): string {
   return typeof value;
 }
 
+const STATUS_ORDER = { changed: 0, filled: 1, empty: 2 } as const;
+
+function getStatusRank(
+  key: string,
+  stateSnapshot: Record<string, unknown>,
+  changedKeys: Set<string>,
+  canShowChanges: boolean,
+): number {
+  const hasSnapshotValue = key in stateSnapshot;
+  const currentValue = stateSnapshot[key];
+  const isChanged = canShowChanges && changedKeys.has(key);
+  const isEmpty =
+    !hasSnapshotValue ||
+    currentValue === "" ||
+    currentValue == null ||
+    (Array.isArray(currentValue) && currentValue.length === 0) ||
+    (typeof currentValue === "object" &&
+      currentValue !== null &&
+      !Array.isArray(currentValue) &&
+      Object.keys(currentValue).length === 0);
+  const status = isChanged ? "changed" : isEmpty ? "empty" : "filled";
+  return STATUS_ORDER[status];
+}
+
 export function StateSchemaPanel({ schema, activeFrame }: Props) {
   const properties = schema.properties || {};
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
+  const [sortByStatus, setSortByStatus] = useState(false);
   const stateSnapshot = activeFrame?.stateSnapshot ?? {};
   const changedKeys = useMemo(() => new Set(activeFrame?.changedKeys ?? []), [activeFrame]);
   const canShowChanges = Boolean(activeFrame && activeFrame.index > 0);
-  const rowKeys = useMemo(
-    () => Array.from(new Set([...Object.keys(properties), ...Object.keys(stateSnapshot)])).sort(),
+  const baseKeys = useMemo(
+    () =>
+      Array.from(
+        new Set([...Object.keys(properties), ...Object.keys(stateSnapshot)]),
+      ).sort(),
     [properties, stateSnapshot],
   );
+  const rowKeys = useMemo(() => {
+    if (!sortByStatus) return baseKeys;
+    return [...baseKeys].sort((a, b) => {
+      const rankA = getStatusRank(a, stateSnapshot, changedKeys, canShowChanges);
+      const rankB = getStatusRank(b, stateSnapshot, changedKeys, canShowChanges);
+      return rankA !== rankB ? rankA - rankB : a.localeCompare(b);
+    });
+  }, [baseKeys, sortByStatus, stateSnapshot, changedKeys, canShowChanges]);
 
   return (
     <Panel position="top-right" className="state-schema-panel">
@@ -73,7 +110,18 @@ export function StateSchemaPanel({ schema, activeFrame }: Props) {
       <div className="state-schema-panel__table-header">
         <div className="state-schema-panel__col-name">Name</div>
         <div className="state-schema-panel__col-type">Type</div>
-        <div className="state-schema-panel__col-status">Status</div>
+        <div className="state-schema-panel__col-status">
+          Status
+          <button
+            type="button"
+            className={`state-schema-panel__sort-btn${sortByStatus ? " is-active" : ""}`}
+            onClick={() => setSortByStatus((prev) => !prev)}
+            title={sortByStatus ? "Sort by name" : "Sort by status (changed → filled → empty)"}
+            aria-pressed={sortByStatus}
+          >
+            <img src={iconSort} alt="" aria-hidden />
+          </button>
+        </div>
       </div>
       <div className="state-schema-panel__content">
         {rowKeys.map((key) => {

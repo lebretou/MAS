@@ -163,16 +163,16 @@ export function ExecutionDetails({ node }: Props) {
   const exec = node.execution;
   const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
-  const barRef = useRef<HTMLDivElement>(null);
+  const timelineViewportRef = useRef<HTMLDivElement>(null);
   const [barWidth, setBarWidth] = useState(0);
   const operations = exec?.operations ?? [];
 
   useEffect(() => {
-    if (!barRef.current) return;
+    if (!timelineViewportRef.current) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) setBarWidth(entry.contentRect.width);
     });
-    ro.observe(barRef.current);
+    ro.observe(timelineViewportRef.current);
     return () => ro.disconnect();
   }, []);
 
@@ -202,6 +202,9 @@ export function ExecutionDetails({ node }: Props) {
   const activeSegmentId = selectedSegment || (operations.length > 0 ? operations[0].id : null);
   const activeItem = operations.find((item) => item.id === activeSegmentId);
   const widths = computeSegmentWidths(operations, barWidth);
+  const timelineWidth = widths.length > 0
+    ? widths.reduce((sum, width) => sum + width, 0)
+    : Math.max(barWidth, operations.length * MIN_SEGMENT_PX);
   const resolvedOutputCandidate = resolveDisplayedOutputCandidate(node, exec);
   const shouldShowResolvedOutput = Boolean(
     activeItem
@@ -279,67 +282,71 @@ export function ExecutionDetails({ node }: Props) {
         <section className="side-panel__section">
           <h3 className="side-panel__section-title">operations</h3>
           <div className="side-panel__timeline-container">
-            {/* segmented timeline bar */}
-            <div className="side-panel__progbar" ref={barRef} role="list" aria-label="operations progress">
-              {operations.map((item, index) => {
-                const w = widths[index] ?? MIN_SEGMENT_PX;
-                const isActive = item.id === activeSegmentId;
-                const isErr = item.status === "error";
-                const colorClass = operationColorMap[item.type];
-                const labelFits = w >= LABEL_FIT_THRESHOLD;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="listitem"
-                    className={`side-panel__progbar-seg seg--${colorClass}${isActive ? " is-active" : ""}${isErr ? " is-error" : ""}`}
-                    style={{ width: `${w}px` }}
-                    onClick={() => setSelectedSegment(item.id)}
-                    onMouseEnter={() => setHoveredSegment(item.id)}
-                    onMouseLeave={() => setHoveredSegment(null)}
-                    title={`${item.label}${item.latencyMs != null ? ` · ${Math.round(item.latencyMs)}ms` : ""}`}
-                    aria-label={item.label}
-                  >
-                    <span className="side-panel__progbar-step">{index + 1}</span>
-                    <div className="side-panel__progbar-content">
-                      <img src={operationIconMap[item.type]} alt="" className="side-panel__progbar-icon" />
-                      {labelFits && <span className="side-panel__progbar-label">{item.label}</span>}
-                    </div>
-                  </button>
-                );
-              })}
+            <div className="side-panel__timeline-scroll" ref={timelineViewportRef}>
+              <div className="side-panel__timeline-track" style={{ width: `${timelineWidth}px` }}>
+                {/* segmented timeline bar */}
+                <div className="side-panel__progbar" role="list" aria-label="operations progress">
+                  {operations.map((item, index) => {
+                    const w = widths[index] ?? MIN_SEGMENT_PX;
+                    const isActive = item.id === activeSegmentId;
+                    const isErr = item.status === "error";
+                    const colorClass = operationColorMap[item.type];
+                    const labelFits = w >= LABEL_FIT_THRESHOLD;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="listitem"
+                        className={`side-panel__progbar-seg seg--${colorClass}${isActive ? " is-active" : ""}${isErr ? " is-error" : ""}`}
+                        style={{ width: `${w}px` }}
+                        onClick={() => setSelectedSegment(item.id)}
+                        onMouseEnter={() => setHoveredSegment(item.id)}
+                        onMouseLeave={() => setHoveredSegment(null)}
+                        title={`${item.label}${item.latencyMs != null ? ` · ${Math.round(item.latencyMs)}ms` : ""}`}
+                        aria-label={item.label}
+                      >
+                        <span className="side-panel__progbar-step">{index + 1}</span>
+                        <div className="side-panel__progbar-content">
+                          <img src={operationIconMap[item.type]} alt="" className="side-panel__progbar-icon" />
+                          {labelFits && <span className="side-panel__progbar-label">{item.label}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
 
-              {/* floating label tooltip for thin segments */}
-              {tooltipItem && tooltipWidth < LABEL_FIT_THRESHOLD && (
-                <div
-                  className="side-panel__progbar-tip"
-                  style={{
-                    left: `${widths.slice(0, tooltipIndex).reduce((s, w) => s + w, 0) + tooltipWidth / 2}px`,
-                  }}
-                >
-                  <span className="side-panel__progbar-tip-label">{tooltipItem.label}</span>
-                </div>
-              )}
-            </div>
-
-            {/* cumulative time ruler */}
-            {cumulativeMs.length > 0 && barWidth > 0 && (
-              <div className="side-panel__time-ruler" aria-hidden="true">
-                <span className="side-panel__time-ruler-label" style={{ left: 0 }}>0ms</span>
-                {cumulativeMs.map((ms, i) => {
-                  const left = widths.slice(0, i + 1).reduce((s, w) => s + w, 0);
-                  return (
-                    <span
-                      key={operations[i].id}
-                      className="side-panel__time-ruler-label"
-                      style={{ left: `${left}px` }}
+                  {/* floating label tooltip for thin segments */}
+                  {tooltipItem && tooltipWidth < LABEL_FIT_THRESHOLD && (
+                    <div
+                      className="side-panel__progbar-tip"
+                      style={{
+                        left: `${widths.slice(0, tooltipIndex).reduce((s, w) => s + w, 0) + tooltipWidth / 2}px`,
+                      }}
                     >
-                      {formatMs(ms)}
-                    </span>
-                  );
-                })}
+                      <span className="side-panel__progbar-tip-label">{tooltipItem.label}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* cumulative time ruler */}
+                {cumulativeMs.length > 0 && barWidth > 0 && (
+                  <div className="side-panel__time-ruler" aria-hidden="true">
+                    <span className="side-panel__time-ruler-label" style={{ left: 0 }}>0ms</span>
+                    {cumulativeMs.map((ms, i) => {
+                      const left = widths.slice(0, i + 1).reduce((s, w) => s + w, 0);
+                      return (
+                        <span
+                          key={operations[i].id}
+                          className="side-panel__time-ruler-label"
+                          style={{ left: `${left}px` }}
+                        >
+                          {formatMs(ms)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
             {/* operation meta pills — below the bar */}
             {activeItem && (
