@@ -37,7 +37,9 @@ export const playgroundAPI = {
     },
 
     getRunsByPrompt: async (promptId: string): Promise<PlaygroundRun[]> => {
-        const response: AxiosResponse<PlaygroundRun[]> = await api.get(`/api/playground/runs?prompt_id=${promptId}`);
+        const response: AxiosResponse<PlaygroundRun[]> = await api.get('/api/playground/runs', {
+            params: { prompt_id: promptId },
+        });
         return response.data;
     }
 };

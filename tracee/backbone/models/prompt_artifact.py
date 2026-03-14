@@ -6,11 +6,19 @@ from enum import Enum
 from pydantic import BaseModel, model_validator
 
 
+class SchemaMode(str, Enum):
+    """Controls how output_schema is included in the resolved prompt text."""
+
+    full = "full"    # embed full JSON Schema block in prompt (default)
+    hint = "hint"    # append a short generic hint only
+    none = "none"    # no schema mention at all
+
+
 class PromptComponentType(str, Enum):
     """
-    Currently the exact components here are tentative, but we aer likely going 
+    Currently the exact components here are tentative, but we aer likely going
     to support multi-block editing so that users don't have to deal with a monotonic long text string
-    Zhongzheng will confirm on the exact components soon 
+    Zhongzheng will confirm on the exact components soon
     """
 
     # tentative
@@ -75,11 +83,14 @@ class PromptVersion(BaseModel):
                 )
         return self
 
-    def resolve(self) -> str:
+    def resolve(self, *, schema_mode: SchemaMode = SchemaMode.full) -> str:
         """Resolve the prompt to a single text string.
 
-        If output_schema is set, appends a JSON Schema block instructing the LLM
-        to return a conforming JSON object.
+        Args:
+            schema_mode: Controls how output_schema appears in the prompt.
+                - full: embeds the full JSON Schema block (default, backward compatible)
+                - hint: appends a short generic hint
+                - none: no schema mention at all
         """
         text = "\n\n".join(
             component.content
@@ -87,11 +98,14 @@ class PromptVersion(BaseModel):
             if component.enabled
         )
         if self.output_schema is not None:
-            schema_block = (
-                "Respond with a JSON object that conforms to the following JSON Schema:\n"
-                "```json\n"
-                + json.dumps(self.output_schema, indent=2)
-                + "\n```"
-            )
-            text = text + "\n\n" + schema_block
+            if schema_mode == SchemaMode.full:
+                schema_block = (
+                    "Respond with a JSON object that conforms to the following JSON Schema:\n"
+                    "```json\n"
+                    + json.dumps(self.output_schema, indent=2)
+                    + "\n```"
+                )
+                text = text + "\n\n" + schema_block
+            elif schema_mode == SchemaMode.hint:
+                text = text + "\n\nYour response should be structured JSON matching the requested schema."
         return text

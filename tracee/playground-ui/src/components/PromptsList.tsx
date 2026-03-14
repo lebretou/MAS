@@ -40,66 +40,117 @@ const PromptsList: React.FC = () => {
     }
   };
 
-  if (loading) return <p>Loading…</p>;
-  if (error) return <p style={{ color: 'red' }}>{error}</p>;
-  if (prompts.length === 0) return <p>No prompts found. Create a run to generate one.</p>;
+  if (loading) {
+    return (
+      <div className="empty-state">
+        <div className="spinner spinner--lg" />
+        <div className="empty-state__title">Loading prompts...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="alert alert--danger">
+        <span className="alert__icon">!</span>
+        {error}
+      </div>
+    );
+  }
+
+  if (prompts.length === 0) {
+    return (
+      <div className="card">
+        <div className="empty-state">
+          <div className="empty-state__icon">&#9744;</div>
+          <div className="empty-state__title">No prompts yet</div>
+          <div className="empty-state__desc">Create a run to generate your first prompt.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: '16px' }}>
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Versions</th>
-            <th>Latest</th>
-            <th>Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {prompts.map(prompt => {
-            const isExpanded = expanded[prompt.prompt_id] !== undefined;
-            const expandedData = expanded[prompt.prompt_id];
+    <div className="flex-col prompts__container">
+      <h2 className="prompts__heading">Prompts</h2>
+      <div className="card">
+        <div className="card__body prompts__card-body">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Versions</th>
+                <th>Latest</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prompts.map(prompt => {
+                const isExpanded = expanded[prompt.prompt_id] !== undefined;
+                const expandedData = expanded[prompt.prompt_id];
 
-            return (
-              <React.Fragment key={prompt.prompt_id}>
-                <tr onClick={() => toggleRow(prompt.prompt_id)} style={{ cursor: 'pointer' }}>
-                  <td>{isExpanded ? '▼' : '▶'} {prompt.name}</td>
-                  <td>{prompt.version_count}</td>
-                  <td>{prompt.latest_version_id}</td>
-                  <td>{fmtDate(prompt.created_at)}</td>
-                </tr>
+                return (
+                  <React.Fragment key={prompt.prompt_id}>
+                    <tr
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleRow(prompt.prompt_id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleRow(prompt.prompt_id); }}
+                      className="prompts__row"
+                    >
+                      <td>
+                        <span className="prompts__expand-icon">
+                          {isExpanded ? '▼' : '▶'}
+                        </span>
+                        {prompt.name}
+                      </td>
+                      <td>
+                        <span className="badge badge--primary">{prompt.version_count}</span>
+                      </td>
+                      <td>
+                        <span className="table__mono">{prompt.latest_version_id}</span>
+                      </td>
+                      <td>{fmtDate(prompt.created_at)}</td>
+                    </tr>
 
-                {isExpanded && (
-                  <tr>
-                    <td colSpan={4} style={{ paddingLeft: '24px' }}>
-                      {expandedData === 'loading' && <span>Loading versions…</span>}
-                      {expandedData === 'error' && (
-                        <span style={{ color: 'red' }}>Failed to load versions.</span>
-                      )}
-                      {expandedData !== 'loading' && expandedData !== 'error' && expandedData && (
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Version ID</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {expandedData.versions.map(version => (
-                              <tr key={version.version_id}>
-                                <td>{version.version_id}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={4} className="prompts__expanded-cell">
+                          {expandedData === 'loading' && (
+                            <div className="flex-row prompts__loading-row">
+                              <span className="spinner" />
+                              <span className="prompts__loading-text">Loading versions...</span>
+                            </div>
+                          )}
+                          {expandedData === 'error' && (
+                            <span className="prompts__error-text">Failed to load versions.</span>
+                          )}
+                          {expandedData !== 'loading' && expandedData !== 'error' && expandedData && (
+                            <table className="table prompts__nested-table">
+                              <thead>
+                                <tr>
+                                  <th>Version ID</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {expandedData.versions.map(version => (
+                                  <tr key={version.version_id}>
+                                    <td className="table__mono">{version.version_id}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };

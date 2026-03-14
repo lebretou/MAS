@@ -60,11 +60,15 @@ export interface CreateVersionRequest {
   output_schema?: Record<string, unknown> | null;
 }
 
-export type SchemaPropertyType = 'string' | 'number' | 'integer' | 'boolean' | 'null';
+export type SchemaPropertyType = 'string' | 'number' | 'integer' | 'boolean' | 'null' | 'array';
+
+export type SchemaArrayItemType = 'string' | 'number' | 'integer' | 'boolean';
 
 export interface SchemaProperty {
+  id: string;
   name: string;
   type: SchemaPropertyType;
   description: string;
   required: boolean;
+  items?: SchemaArrayItemType;
 }

@@ -2,43 +2,35 @@ import React, { useState } from 'react';
 import CreateRun from './components/CreateRun';
 import PromptsList from './components/PromptsList';
 
-type View = 'list' | 'create' | 'prompts';
+type View = 'prompts' | 'create';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<View>('list');
+  const [view, setView] = useState<View>('create');
 
   return (
     <div>
-      <nav style={{ backgroundColor: '#333', padding: '10px' }}>
-        <button
-          onClick={() => setView('prompts')}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: view === 'prompts' ? '#555' : '#222',
-            color: 'white',
-            border: 'none',
-            cursor: 'pointer',
-            marginRight: '8px',
-          }}
-        >
-          Prompts
-        </button>
-        <button
-          onClick={() => setView('create')}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: view === 'create' ? '#555' : '#222',
-            color: 'white',
-            border: 'none',
-            cursor: 'pointer'
-          }}
-        >
-          Create Run
-        </button>
+      <nav className="app-shell__nav">
+        <span className="app-shell__brand">tracee</span>
+        <div className="app-shell__links">
+          <button
+            className={`app-shell__link ${view === 'prompts' ? 'is-active' : ''}`}
+            onClick={() => setView('prompts')}
+          >
+            Prompts
+          </button>
+          <button
+            className={`app-shell__link ${view === 'create' ? 'is-active' : ''}`}
+            onClick={() => setView('create')}
+          >
+            Playground
+          </button>
+        </div>
       </nav>
 
-      {view === 'prompts' && <PromptsList />}
-      {view === 'create' && <CreateRun />}
+      <div className="page-container">
+        {view === 'prompts' && <PromptsList />}
+        {view === 'create' && <CreateRun />}
+      </div>
     </div>
   );
 };
