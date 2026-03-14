@@ -19,7 +19,6 @@ from backbone.models.saved_model_config import (
     SavedModelConfigCreate,
     SavedModelConfigUpdate,
 )
-from backbone.tracer import Tracer
 from backbone.sdk.prompt_loader import PromptLoader
 
 __all__ = [
@@ -39,6 +38,5 @@ __all__ = [
     "SavedModelConfigCreate",
     "SavedModelConfigUpdate",
     # High-level APIs
-    "Tracer",
     "PromptLoader",
 ]
