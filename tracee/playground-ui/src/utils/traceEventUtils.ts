@@ -53,6 +53,29 @@ export function eventExplicitlyBelongsToNode(event: TraceEvent, nodeId: string):
   return getNodeIdFromEvent(event) === nodeId;
 }
 
+export function getEventTags(event: TraceEvent): string[] {
+  const rawTags = event.payload?.tags;
+  if (!Array.isArray(rawTags)) return [];
+  return rawTags.filter((tag): tag is string => typeof tag === "string");
+}
+
+/** returns true when event is a chain start that belongs to nodeId and is not nested under that same node */
+export function isTopLevelNodeChainStart(
+  event: TraceEvent,
+  nodeId: string,
+  runToNode: Map<string, string>,
+  spanToNode: Map<string, string>,
+): boolean {
+  if (event.event_type !== "on_chain_start") return false;
+  if (!eventExplicitlyBelongsToNode(event, nodeId)) return false;
+  const parentRunId = getParentRunIdFromEvent(event);
+  const parentRunNodeId = parentRunId ? runToNode.get(parentRunId) : undefined;
+  if (parentRunNodeId === nodeId) return false;
+  const parentSpanNodeId = event.parent_span_id ? spanToNode.get(event.parent_span_id) : undefined;
+  if (parentSpanNodeId === nodeId) return false;
+  return true;
+}
+
 export function resolveAgentNodeId(
   event: TraceEvent,
   nodeIdSet: Set<string>,

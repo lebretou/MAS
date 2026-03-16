@@ -11,9 +11,11 @@ import type { TraceEvent } from "../types/trace";
 import {
   diffStateKeys,
   eventExplicitlyBelongsToNode,
+  getEventTags,
   getParentRunIdFromEvent,
   getRunIdFromEvent,
   isRecord,
+  isTopLevelNodeChainStart,
   parseTimestampMs,
   resolveAgentNodeId,
 } from "../utils/traceEventUtils";
@@ -43,6 +45,10 @@ function classifyToolOperation(toolName: string, tags: string[]): AgentOperation
   if (/(retrieve|rag|vector_search|embed)/.test(normalized)) return "rag_retrieve";
   if (/(execute|run_code|python_repl|bash|shell)/.test(normalized)) return "code_exec";
   return "tool_call";
+}
+
+function isGraphStepTagged(event: TraceEvent): boolean {
+  return getEventTags(event).some((tag) => tag.startsWith("graph:step:"));
 }
 
 function buildOperationLabel(value: unknown, fallback: string): string {
@@ -103,12 +109,6 @@ function normalizePayloadValue(value: unknown): unknown {
   return parseMaybeJsonString(value);
 }
 
-function getEventTags(event: TraceEvent): string[] {
-  const rawTags = event.payload?.tags;
-  if (!Array.isArray(rawTags)) return [];
-  return rawTags.filter((tag): tag is string => typeof tag === "string");
-}
-
 function getRunMeta(event: TraceEvent): { runId?: string; parentRunId?: string } {
   return {
     runId: getRunIdFromEvent(event),
@@ -161,6 +161,16 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       if (sequenceA !== sequenceB) return sequenceA - sequenceB;
       return parseTimestampMs(a.timestamp) - parseTimestampMs(b.timestamp);
     });
+
+    const hasGraphTaggedAttempts = orderedEvents.some((event) =>
+      isTopLevelNodeChainStart(event, nodeId, runToNode, spanToNode) && isGraphStepTagged(event)
+    );
+
+    const isNodeAttemptStart = (event: TraceEvent): boolean => {
+      if (!isTopLevelNodeChainStart(event, nodeId, runToNode, spanToNode)) return false;
+      if (!hasGraphTaggedAttempts) return true;
+      return isGraphStepTagged(event);
+    };
 
     // top-level chain runs that explicitly started on this node (used to scope events)
     const rootRunIds = new Set(
@@ -216,12 +226,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
       }
       if (event.event_type === "on_chain_start") {
         const runId = getRunIdFromEvent(event);
-        if (!runId || !eventExplicitlyBelongsToNode(event, nodeId)) continue;
-        const parentRunId = getParentRunIdFromEvent(event);
-        const parentRunNodeId = parentRunId ? runToNode.get(parentRunId) : undefined;
-        if (parentRunNodeId === nodeId) continue;
-        const parentSpanNodeId = event.parent_span_id ? spanToNode.get(event.parent_span_id) : undefined;
-        if (parentSpanNodeId === nodeId) continue;
+        if (!runId || !isNodeAttemptStart(event)) continue;
         topLevelStartsByRunId.set(runId, event);
       }
       if (event.event_type === "on_llm_end") {
@@ -332,16 +337,7 @@ export function computeOverlay(events: TraceEvent[], nodeIds: string[]): Map<str
     }
 
     // count top-level chain starts on this node (retries)
-    const nodeAttemptCount = scopedEvents.filter((event) => {
-      if (event.event_type !== "on_chain_start") return false;
-      if (!eventExplicitlyBelongsToNode(event, nodeId)) return false;
-      const parentRunId = getParentRunIdFromEvent(event);
-      const parentRunNodeId = parentRunId ? runToNode.get(parentRunId) : undefined;
-      if (parentRunNodeId === nodeId) return false;
-      const parentSpanNodeId = event.parent_span_id ? spanToNode.get(event.parent_span_id) : undefined;
-      if (parentSpanNodeId === nodeId) return false;
-      return true;
-    }).length;
+    const nodeAttemptCount = scopedEvents.filter(isNodeAttemptStart).length;
     const llmStart = scopedEvents.find((event) => event.event_type === "on_llm_start");
     const llmEnd = [...scopedEvents].reverse().find((event) => event.event_type === "on_llm_end");
     const llmInput = llmStart?.payload?.input

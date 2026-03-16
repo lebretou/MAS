@@ -52,7 +52,7 @@ def create_interaction_agent(state: AnalysisState) -> AnalysisState:
     system_prompt, output_schema = loader.get_with_schema("interaction-prompt", agent_id="interaction")
     interaction_agent = create_agent(
         model=ChatOpenAI(
-            model="gpt-4.1-2025-04-14",
+            model="gpt-5-mini-2025-08-07",
             temperature=0,
             callbacks=callbacks,
             metadata={"agent": "interaction", "has_tools": True},

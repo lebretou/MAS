@@ -5,10 +5,10 @@ import type { ExecutionFrame, GraphNodeData, NodeFrameState } from "../types/nod
 import type { TraceEvent } from "../types/trace";
 import {
   diffStateKeys,
-  eventExplicitlyBelongsToNode,
-  getParentRunIdFromEvent,
+  getEventTags,
   getRunIdFromEvent,
   isRecord,
+  isTopLevelNodeChainStart,
   parseTimestampMs,
   resolveAgentNodeId,
   sortTraceEvents,
@@ -38,21 +38,24 @@ export function computeExecutionFrames(
     if (event.span_id) spanToNode.set(event.span_id, nodeId);
   }
 
-  // root runs per node (top-level chain starts) for frame boundaries
-  const rootRunIdsByNode = new Map<string, Set<string>>();
+  // collect top-level chain start candidates per node, noting which carry graph:step:* tags
+  const rootCandidatesByNode = new Map<string, Array<{ runId: string; isGraphTagged: boolean }>>();
   for (const event of orderedEvents) {
-    if (event.event_type !== "on_chain_start") continue;
     const nodeId = resolveAgentNodeId(event, nodeIdSet, runToNode, spanToNode);
     const runId = getRunIdFromEvent(event);
-    if (!nodeId || !runId || !eventExplicitlyBelongsToNode(event, nodeId)) continue;
-    const parentRunId = getParentRunIdFromEvent(event);
-    const parentRunNodeId = parentRunId ? runToNode.get(parentRunId) : undefined;
-    if (parentRunNodeId === nodeId) continue;
-    const parentSpanNodeId = event.parent_span_id ? spanToNode.get(event.parent_span_id) : undefined;
-    if (parentSpanNodeId === nodeId) continue;
-    const existing = rootRunIdsByNode.get(nodeId) ?? new Set<string>();
-    existing.add(runId);
-    rootRunIdsByNode.set(nodeId, existing);
+    if (!nodeId || !runId) continue;
+    if (!isTopLevelNodeChainStart(event, nodeId, runToNode, spanToNode)) continue;
+    const candidates = rootCandidatesByNode.get(nodeId) ?? [];
+    candidates.push({ runId, isGraphTagged: getEventTags(event).some((t) => t.startsWith("graph:step:")) });
+    rootCandidatesByNode.set(nodeId, candidates);
+  }
+
+  // prefer graph:step:-tagged starts when present; fall back to all top-level starts
+  const rootRunIdsByNode = new Map<string, Set<string>>();
+  for (const [nodeId, candidates] of rootCandidatesByNode) {
+    const hasTagged = candidates.some((c) => c.isGraphTagged);
+    const filtered = hasTagged ? candidates.filter((c) => c.isGraphTagged) : candidates;
+    rootRunIdsByNode.set(nodeId, new Set(filtered.map((c) => c.runId)));
   }
 
   const frames: ExecutionFrame[] = [];

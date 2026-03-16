@@ -59,7 +59,9 @@ def seed_interaction_prompt(client: httpx.Client) -> None:
             "content": (
                 "Use dataset tools to understand the dataset and draft an answer. "
                 "If the user asks for analysis, modeling, plotting, or calculations, "
-                "prepare to route to downstream analysis agents."
+                "prepare to route to downstream analysis agents. The other agents are: planner, coding, and summary."
+                "If you can answer the user's query directly, you should do so using your tools and return chat_only."
+                "If you think that the answer requires computational analysis, you should route to the planner agent."
             ),
             "enabled": True,
         },
@@ -74,7 +76,7 @@ def seed_interaction_prompt(client: httpx.Client) -> None:
         {
             "type": "outputs",
             "content": (
-                "Final output schema fields: decision, response, reasoning, dataset_observations. "
+                "Final output schema fields: decision, response, reasoning, dataset_observations. You must use your internal knowledge to determine whether other agents are needed to answer the user's query. "
                 "decision must be relevant or chat_only."
             ),
             "enabled": True,

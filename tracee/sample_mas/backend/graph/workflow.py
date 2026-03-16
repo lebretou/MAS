@@ -53,7 +53,7 @@ def create_workflow() -> StateGraph:
     
     workflow.add_node("interaction", create_interaction_agent, metadata={
         "prompt_id": "interaction-prompt",
-        "model": "gpt-4.1-2025-04-14",
+        "model": "gpt-5-mini-2025-08-07",
         "temperature": 0,
         "has_tools": True,
     })

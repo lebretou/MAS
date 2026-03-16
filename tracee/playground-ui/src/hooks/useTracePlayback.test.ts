@@ -154,6 +154,73 @@ describe("computeExecutionFrames", () => {
     });
   });
 
+  it("does not create extra frames for internal chain calls inside a node", () => {
+    // interaction has one graph-level invocation plus one internal helper chain —
+    // the helper must not produce a second frame
+    const events: TraceEvent[] = [
+      makeEvent({
+        event_id: "ic1",
+        event_type: "on_chain_start",
+        sequence: 1,
+        timestamp: "2026-03-01T00:00:00.000Z",
+        refs: {
+          langgraph: { node: "interaction" },
+          langchain: { run_id: "run-interaction-1", parent_run_id: "run-graph" },
+        },
+        payload: {
+          tags: ["graph:step:1"],
+          inputs: { messages: [], next_agent: null },
+        },
+      }),
+      // internal helper chain (no graph:step tag)
+      makeEvent({
+        event_id: "ic2",
+        event_type: "on_chain_start",
+        sequence: 2,
+        timestamp: "2026-03-01T00:00:01.000Z",
+        refs: {
+          langgraph: { node: "interaction" },
+          langchain: { run_id: "run-decision-llm", parent_run_id: "run-graph" },
+        },
+        payload: {
+          inputs: { messages: [{ role: "user", content: "hi" }] },
+        },
+      }),
+      makeEvent({
+        event_id: "ic3",
+        event_type: "on_chain_end",
+        sequence: 3,
+        timestamp: "2026-03-01T00:00:02.000Z",
+        refs: {
+          langgraph: { node: "interaction" },
+          langchain: { run_id: "run-decision-llm" },
+        },
+        payload: {
+          outputs: { messages: [{ role: "user", content: "hi" }, { role: "assistant", content: "hello" }] },
+        },
+      }),
+      makeEvent({
+        event_id: "ic4",
+        event_type: "on_chain_end",
+        sequence: 4,
+        timestamp: "2026-03-01T00:00:03.000Z",
+        refs: {
+          langgraph: { node: "interaction" },
+          langchain: { run_id: "run-interaction-1" },
+        },
+        payload: {
+          outputs: { messages: ["done"], next_agent: "end" },
+        },
+      }),
+    ];
+
+    const frames = computeExecutionFrames(events, { interaction: "Interaction" });
+
+    // should be: frame 0 (initial state) + frame 1 (interaction) = 2 frames, not 3
+    expect(frames).toHaveLength(2);
+    expect(frames[1]).toMatchObject({ nodeId: "interaction" });
+  });
+
   it("uses the earliest top-level agent start as the initial frame", () => {
     const events: TraceEvent[] = [
       makeEvent({

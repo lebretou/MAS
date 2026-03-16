@@ -31,6 +31,7 @@ describe("computeOverlay", () => {
           langchain: { run_id: "run-attempt-1" },
         },
         payload: {
+          tags: ["graph:step:1"],
           inputs: {
             messages: ["hello"],
             next_agent: null,
@@ -103,6 +104,7 @@ describe("computeOverlay", () => {
           langchain: { run_id: "run-attempt-2" },
         },
         payload: {
+          tags: ["graph:step:2"],
           inputs: {
             messages: ["hello", "world"],
             next_agent: "planning",
@@ -142,6 +144,87 @@ describe("computeOverlay", () => {
         }),
       }),
     ]);
+  });
+
+  it("does not count internal chain calls as retries", () => {
+    const nodeId = "interaction";
+    const events: TraceEvent[] = [
+      makeEvent({
+        event_id: "r1",
+        event_type: "on_chain_start",
+        timestamp: "2026-03-01T00:00:00.000Z",
+        refs: {
+          langgraph: { node: nodeId },
+          langchain: { run_id: "run-node-1", parent_run_id: "run-graph-1" },
+        },
+        payload: {
+          tags: ["graph:step:1"],
+          inputs: {
+            messages: ["hello"],
+            next_agent: null,
+          },
+        },
+      }),
+      makeEvent({
+        event_id: "r2",
+        event_type: "on_chain_start",
+        timestamp: "2026-03-01T00:00:01.000Z",
+        refs: {
+          langgraph: { node: nodeId },
+          langchain: { run_id: "run-internal-1", parent_run_id: "run-graph-1" },
+        },
+        payload: {
+          tags: ["seq:step:2"],
+          inputs: {
+            messages: [{ role: "user", content: "hello" }],
+          },
+        },
+      }),
+      makeEvent({
+        event_id: "r3",
+        event_type: "on_chain_end",
+        timestamp: "2026-03-01T00:00:02.000Z",
+        refs: {
+          langchain: { run_id: "run-node-1", parent_run_id: "run-graph-1" },
+        },
+        payload: {
+          outputs: {
+            messages: ["hello", "done"],
+            next_agent: "end",
+          },
+        },
+      }),
+    ];
+
+    const overlay = computeOverlay(events, [nodeId]);
+    const exec = overlay.get(nodeId);
+
+    expect(exec?.retryCount).toBe(1);
+  });
+
+  it("falls back to top-level chain starts when graph tags are absent", () => {
+    const nodeId = "planner";
+    const events: TraceEvent[] = [
+      makeEvent({
+        event_id: "f1",
+        event_type: "on_chain_start",
+        timestamp: "2026-03-01T00:00:00.000Z",
+        refs: {
+          langgraph: { node: nodeId },
+          langchain: { run_id: "run-planner-1", parent_run_id: "run-graph-1" },
+        },
+        payload: {
+          inputs: {
+            anything: "ok",
+          },
+        },
+      }),
+    ];
+
+    const overlay = computeOverlay(events, [nodeId]);
+    const exec = overlay.get(nodeId);
+
+    expect(exec?.retryCount).toBe(1);
   });
 
   it("attributes tool events from tools node to hint agent", () => {
