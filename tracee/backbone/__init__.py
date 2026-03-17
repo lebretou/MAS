@@ -6,10 +6,7 @@ from backbone.models.prompt_artifact import (
     PromptComponentType,
     PromptVersion,
 )
-from backbone.models.trace_event import (
-    PROMPT_RESOLVED,
-    TraceEvent,
-)
+from backbone.models.trace_event import TraceEvent
 from backbone.models.playground_run import (
     PlaygroundRun,
     PlaygroundRunCreate,
@@ -20,6 +17,7 @@ from backbone.models.saved_model_config import (
     SavedModelConfigUpdate,
 )
 from backbone.sdk.prompt_loader import PromptLoader
+from backbone.sdk.instrument import init, trace
 
 __all__ = [
     # Prompt artifacts
@@ -28,7 +26,6 @@ __all__ = [
     "PromptComponentType",
     "PromptVersion",
     # Trace events
-    "PROMPT_RESOLVED",
     "TraceEvent",
     # Playground
     "PlaygroundRun",
@@ -39,4 +36,6 @@ __all__ = [
     "SavedModelConfigUpdate",
     # High-level APIs
     "PromptLoader",
+    "init",
+    "trace",
 ]

@@ -22,7 +22,7 @@ class UpsertAgentRequest(BaseModel):
     prompt_version_id: str | None = None
     model: str | None = None
     temperature: float | None = None
-    has_tools: bool = False
+    has_tools: bool | None = None
     metadata: dict | None = None
 
 
@@ -59,7 +59,7 @@ def upsert_agent(agent_id: str, request: UpsertAgentRequest) -> AgentRegistryEnt
             prompt_version_id=request.prompt_version_id if request.prompt_version_id is not None else existing.prompt_version_id,
             model=request.model if request.model is not None else existing.model,
             temperature=request.temperature if request.temperature is not None else existing.temperature,
-            has_tools=request.has_tools,
+            has_tools=request.has_tools if request.has_tools is not None else existing.has_tools,
             metadata=request.metadata if request.metadata is not None else existing.metadata,
             updated_at=now,
         )
@@ -70,7 +70,7 @@ def upsert_agent(agent_id: str, request: UpsertAgentRequest) -> AgentRegistryEnt
             prompt_version_id=request.prompt_version_id,
             model=request.model,
             temperature=request.temperature,
-            has_tools=request.has_tools,
+            has_tools=request.has_tools or False,
             metadata=request.metadata,
             updated_at=now,
         )

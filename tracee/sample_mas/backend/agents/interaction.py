@@ -4,10 +4,11 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, Base
 from langchain.agents import create_agent
 from langchain.agents.middleware import PIIMiddleware
 from backend.state.schema import AnalysisState
+from backend.telemetry.config import TRACEE_SERVER_URL
 from backend.tools.dataset_tools import create_dataset_tools_for_agent
 from backbone.sdk.prompt_loader import PromptLoader
 
-loader = PromptLoader(base_url="http://localhost:8000")
+loader = PromptLoader(base_url=TRACEE_SERVER_URL)
 
 
 class InteractionDecision(BaseModel):
@@ -48,14 +49,11 @@ def create_interaction_agent(state: AnalysisState) -> AnalysisState:
     # get dataset and create tools
     dataset = state["dataset"]
     tools = create_dataset_tools_for_agent(dataset)
-    callbacks = state.get("callbacks", [])
     system_prompt, output_schema = loader.get_with_schema("interaction-prompt", agent_id="interaction")
     interaction_agent = create_agent(
         model=ChatOpenAI(
             model="gpt-5-mini-2025-08-07",
             temperature=0,
-            callbacks=callbacks,
-            metadata={"agent": "interaction", "has_tools": True},
         ),
         tools=tools,
         system_prompt=system_prompt,
@@ -76,18 +74,13 @@ def create_interaction_agent(state: AnalysisState) -> AnalysisState:
             f"Dataset path: {state.get('dataset_path', 'uploaded_dataset')}\n\n"
             f"User query: {state['user_query']}"
         )
-        agent_result = interaction_agent.invoke(
-            {"messages": [{"role": "user", "content": user_message}]},
-            config={"callbacks": callbacks},
-        )
+        agent_result = interaction_agent.invoke({"messages": [{"role": "user", "content": user_message}]})
         agent_messages = agent_result.get("messages", [])
         interaction_output = _extract_last_assistant_text(agent_messages)
 
         decision_llm = ChatOpenAI(
             model="gpt-4.1-2025-04-14",
             temperature=0,
-            callbacks=callbacks,
-            metadata={"agent": "interaction_decision", "has_tools": False},
         )
         schema = output_schema if isinstance(output_schema, dict) and output_schema.get("title") else None
         structured_llm = decision_llm.with_structured_output(schema or InteractionDecision)
@@ -109,7 +102,6 @@ def create_interaction_agent(state: AnalysisState) -> AnalysisState:
                     )
                 ),
             ],
-            config={"callbacks": callbacks},
         )
 
         if isinstance(decision, dict):

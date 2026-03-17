@@ -6,6 +6,8 @@ system_prompt = loader.get("planner-prompt", "v2")
 
 from __future__ import annotations
 
+import warnings
+
 import httpx
 
 from backbone.models.prompt_artifact import PromptVersion
@@ -34,7 +36,9 @@ class PromptLoader:
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.registry_timeout = min(timeout, 2.0)
         self._cache: dict[tuple[str, str], PromptVersion] = {}
+        self._agent_prompt_cache: dict[str, tuple[str, str]] = {}
 
     def _fetch_version(self, prompt_id: str, version_id: str) -> PromptVersion:
         """Fetch a prompt version from the server."""
@@ -123,42 +127,18 @@ class PromptLoader:
         agent_id: str | None = None,
     ) -> str:
         """Get resolved prompt text by ID and version.
-        Most importantly this works with our TraceEvents 
-        so that when a trace is ongoing this will emit an event to the sink so that we know which agent used which prompt version.
         
         Args:
             prompt_id: The prompt identifier
             version_id: The version to load ("latest" for most recent)
-            agent_id: Optional agent ID to associate with the trace event
+            agent_id: Optional agent identifier reserved for compatibility
             
         Returns:
             The resolved prompt text (all enabled components concatenated)
         """
         version = self.get_version(prompt_id, version_id)
-        resolved_text = version.resolve()
-        
-        # check the context and emit if tracing is active
-        from backbone.sdk.tracing import get_active_context
-        ctx = get_active_context()
-        if ctx:
-            ctx.emit_prompt_resolved(
-                prompt_id=prompt_id,
-                version_id=version.version_id,
-                resolved_text=resolved_text,
-                agent_id=agent_id,
-                components=[
-                    {
-                        "type": c.type.value,
-                        "content": c.content,
-                        "enabled": c.enabled,
-                    }
-                    for c in version.components
-                ],
-                variables_used=version.variables,
-                output_schema=version.output_schema,
-            )
-        
-        return resolved_text
+        self._maybe_upsert_agent_registry(agent_id, version)
+        return version.resolve()
 
     def get_with_schema(
         self,
@@ -177,41 +157,68 @@ class PromptLoader:
         Args:
             prompt_id: The prompt identifier
             version_id: The version to load ("latest" for most recent)
-            agent_id: Optional agent ID for trace event association
+            agent_id: Optional agent identifier reserved for compatibility
 
         Returns:
             Tuple of (resolved_text, output_schema) where output_schema is
             None if not defined on the version.
         """
         version = self.get_version(prompt_id, version_id)
+        self._maybe_upsert_agent_registry(agent_id, version)
         resolved_text = version.resolve()
-
-        from backbone.sdk.tracing import get_active_context
-        ctx = get_active_context()
-        if ctx:
-            ctx.emit_prompt_resolved(
-                prompt_id=prompt_id,
-                version_id=version.version_id,
-                resolved_text=resolved_text,
-                agent_id=agent_id,
-                components=[
-                    {
-                        "type": c.type.value,
-                        "content": c.content,
-                        "enabled": c.enabled,
-                    }
-                    for c in version.components
-                ],
-                variables_used=version.variables,
-                output_schema=version.output_schema,
-            )
-
         return resolved_text, version.output_schema
+
+    def _maybe_upsert_agent_registry(
+        self,
+        agent_id: str | None,
+        version: PromptVersion,
+    ) -> None:
+        if not agent_id:
+            return
+        cache_key = (version.prompt_id, version.version_id)
+        if self._agent_prompt_cache.get(agent_id) == cache_key:
+            return
+        synced = self._upsert_agent_registry(
+            agent_id=agent_id,
+            prompt_id=version.prompt_id,
+            prompt_version_id=version.version_id,
+        )
+        if synced:
+            self._agent_prompt_cache[agent_id] = cache_key
+
+    def _upsert_agent_registry(
+        self,
+        agent_id: str,
+        prompt_id: str,
+        prompt_version_id: str,
+    ) -> bool:
+        url = f"{self.base_url}/api/agents/{agent_id}"
+        payload = {
+            "prompt_id": prompt_id,
+            "prompt_version_id": prompt_version_id,
+        }
+        try:
+            with httpx.Client(timeout=self.registry_timeout) as client:
+                response = client.put(url, json=payload)
+                response.raise_for_status()
+            return True
+        except httpx.RequestError as e:
+            warnings.warn(
+                f"failed to sync agent registry at {self.base_url}: {e}",
+                stacklevel=2,
+            )
+        except httpx.HTTPStatusError as e:
+            warnings.warn(
+                f"failed to sync agent registry at {self.base_url}: {e}",
+                stacklevel=2,
+            )
+        return False
 
     def clear_cache(self) -> None:
         """Clear the prompt cache.
         """
         self._cache.clear()
+        self._agent_prompt_cache.clear()
 
     def preload(self, prompts: list[tuple[str, str]]) -> None:
         """Preload multiple prompts into the cache.

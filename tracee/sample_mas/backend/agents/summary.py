@@ -2,9 +2,10 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from pydantic import BaseModel, Field
 from backend.state.schema import AnalysisState
+from backend.telemetry.config import TRACEE_SERVER_URL
 from backbone.sdk.prompt_loader import PromptLoader
 
-loader = PromptLoader(base_url="http://localhost:8000")
+loader = PromptLoader(base_url=TRACEE_SERVER_URL)
 
 
 class SummaryResult(BaseModel):
@@ -27,13 +28,10 @@ def create_summary_agent(state: AnalysisState) -> AnalysisState:
     execution_result = state.get("execution_result", {})
     user_query = state["user_query"]
     generated_code = state.get("generated_code", "")
-    
-    callbacks = state.get("callbacks", [])
+
     llm = ChatOpenAI(
         model="gpt-4o-mini",
         temperature=0.5,
-        callbacks=callbacks,
-        metadata={"agent": "summary", "has_tools": False},
     )
     
     # prepare context for summary
@@ -74,7 +72,6 @@ Standard Error:
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"{context}\n\nPlease provide a clear summary in JSON format."),
             ],
-            config={"callbacks": callbacks},
         )
 
         if isinstance(response, dict):

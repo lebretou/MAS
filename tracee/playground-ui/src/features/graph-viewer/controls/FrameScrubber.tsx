@@ -85,7 +85,7 @@ export function FrameScrubber({ frames, activeFrameIndex, onChange }: Props) {
             <span className="frame-scrubber__title">Time frame</span>
           </div>
           <span className="frame-scrubber__subtitle">
-            {activeFrame ? `${activeFrameIndex + 1} / ${frames.length} · ${activeFrame.label}` : "Showing all"}
+            {activeFrame && activeFrameIndex != null ? `${activeFrameIndex + 1} / ${frames.length} · ${activeFrame.label}` : "Showing all"}
           </span>
         </div>
         <div className="frame-scrubber__controls">

@@ -31,6 +31,3 @@ class AnalysisState(TypedDict):
     
     # session management
     session_id: str
-    
-    # telemetry - shared callbacks for unified tracing
-    callbacks: list  # callback handlers (LangSmith, MAS backbone)

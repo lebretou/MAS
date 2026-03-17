@@ -1995,48 +1995,62 @@ name = "tracee"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "anthropic" },
-    { name = "faiss-cpu" },
-    { name = "fastapi" },
-    { name = "langchain" },
-    { name = "langchain-community" },
+    { name = "httpx" },
     { name = "langchain-core" },
-    { name = "langchain-openai" },
-    { name = "langgraph" },
-    { name = "numpy" },
-    { name = "openai" },
     { name = "pydantic" },
-    { name = "python-dotenv" },
-    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
 dev = [
+    { name = "anthropic" },
+    { name = "faiss-cpu" },
+    { name = "fastapi" },
     { name = "httpx" },
+    { name = "langchain" },
+    { name = "langchain-community" },
+    { name = "langchain-openai" },
+    { name = "langgraph" },
+    { name = "numpy" },
+    { name = "openai" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "python-dotenv" },
+    { name = "uvicorn" },
+]
+server = [
+    { name = "anthropic" },
+    { name = "fastapi" },
+    { name = "openai" },
+    { name = "python-dotenv" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.18" },
-    { name = "faiss-cpu", specifier = ">=1.9.0" },
-    { name = "fastapi", specifier = ">=0.115" },
+    { name = "anthropic", marker = "extra == 'dev'", specifier = ">=0.18" },
+    { name = "anthropic", marker = "extra == 'server'", specifier = ">=0.18" },
+    { name = "faiss-cpu", marker = "extra == 'dev'", specifier = ">=1.9.0" },
+    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.115" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28" },
-    { name = "langchain", specifier = ">=1.2.0" },
-    { name = "langchain-community", specifier = ">=0.3.0" },
+    { name = "langchain", marker = "extra == 'dev'", specifier = ">=1.2.0" },
+    { name = "langchain-community", marker = "extra == 'dev'", specifier = ">=0.3.0" },
     { name = "langchain-core", specifier = ">=0.3" },
-    { name = "langchain-openai", specifier = ">=1.1.0" },
-    { name = "langgraph", specifier = ">=1.0.0" },
-    { name = "numpy", specifier = ">=2.4.1" },
-    { name = "openai", specifier = ">=1.0" },
+    { name = "langchain-openai", marker = "extra == 'dev'", specifier = ">=1.1.0" },
+    { name = "langgraph", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "numpy", marker = "extra == 'dev'", specifier = ">=2.4.1" },
+    { name = "openai", marker = "extra == 'dev'", specifier = ">=1.0" },
+    { name = "openai", marker = "extra == 'server'", specifier = ">=1.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "uvicorn", specifier = ">=0.34" },
+    { name = "python-dotenv", marker = "extra == 'dev'", specifier = ">=1.0" },
+    { name = "python-dotenv", marker = "extra == 'server'", specifier = ">=1.0" },
+    { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.34" },
+    { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.34" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["server", "dev"]
 
 [[package]]
 name = "typing-extensions"

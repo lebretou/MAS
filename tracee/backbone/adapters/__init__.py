@@ -1,6 +1,5 @@
 """Adapters for integrating with LangChain/LangGraph and event capture."""
 
-from backbone.adapters.event_api import EventEmitter
 from backbone.adapters.langchain_callback import (
     RawCallbackHandler,
     MASCallbackHandler,  # alias for backwards compatibility
@@ -14,5 +13,4 @@ __all__ = [
     "HttpSink",
     "RawCallbackHandler",
     "MASCallbackHandler",
-    "EventEmitter",
 ]

@@ -4,8 +4,10 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from server.agent_routes import router as agent_router
 from server.graph_routes import router as graph_router
@@ -56,8 +58,8 @@ app.include_router(agent_router, prefix="/api")
 app.include_router(graph_router, prefix="/api")
 
 
-@app.get("/")
-def root():
+@app.get("/api/health")
+def health():
     """Health check endpoint."""
     return {
         "status": "ok",
@@ -72,6 +74,38 @@ def root():
             "graphs": "/api/graphs",
         },
     }
+
+
+ui_build = Path(__file__).parent.parent / "playground-ui" / "dist"
+ui_root = ui_build.resolve()
+if ui_build.exists():
+    assets_dir = ui_build / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="ui-assets")
+
+
+@app.get("/")
+def root():
+    """Serve the UI root when built, otherwise return health."""
+    if ui_build.exists():
+        return FileResponse(ui_build / "index.html")
+    return health()
+
+
+@app.get("/{path:path}")
+def spa(path: str):
+    """Serve built UI assets and SPA routes."""
+    if not ui_build.exists():
+        return health()
+    if path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    requested = (ui_build / path).resolve()
+    if path and not requested.is_relative_to(ui_root):
+        raise HTTPException(status_code=404, detail="Not Found")
+    if path and requested.is_file():
+        return FileResponse(requested)
+    return FileResponse(ui_build / "index.html")
 
 
 if __name__ == "__main__":

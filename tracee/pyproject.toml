@@ -5,26 +5,37 @@ description = "MAS tracing and visualization toolkit"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "langchain>=1.2.0",
-    "numpy>=2.4.1",
-    "pydantic>=2.0",
+    "httpx>=0.28",
     "langchain-core>=0.3",
-    "langchain-openai>=1.1.0",
-    "langchain-community>=0.3.0",
-    "langgraph>=1.0.0",
-    "faiss-cpu>=1.9.0",
-    "fastapi>=0.115",
-    "uvicorn>=0.34",
-    "openai>=1.0",
-    "anthropic>=0.18",
-    "python-dotenv>=1.0"
+    "pydantic>=2.0",
 ]
 
+[project.scripts]
+tracee = "tracee.cli:main"
+
 [project.optional-dependencies]
+server = [
+    "anthropic>=0.18",
+    "fastapi>=0.115",
+    "openai>=1.0",
+    "python-dotenv>=1.0",
+    "uvicorn>=0.34",
+]
 dev = [
+    "anthropic>=0.18",
+    "faiss-cpu>=1.9.0",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "langchain>=1.2.0",
+    "langchain-community>=0.3.0",
+    "langchain-openai>=1.1.0",
+    "langgraph>=1.0.0",
+    "numpy>=2.4.1",
+    "openai>=1.0",
     "pytest>=8.0",
     "pytest-cov>=4.0",
-    "httpx>=0.28",  # for testing FastAPI
+    "python-dotenv>=1.0",
+    "uvicorn>=0.34",
 ]
 
 [build-system]
@@ -37,7 +48,10 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 
 [tool.hatch.build]
-packages = ["backbone", "server"]
+packages = ["backbone", "server", "tracee"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"playground-ui/dist" = "playground-ui/dist"
 
 [tool.hatch.metadata]
 allow-direct-references = true

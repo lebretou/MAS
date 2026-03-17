@@ -8,6 +8,7 @@ and playground structured output plumbing.
 import json
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from backbone.models.prompt_artifact import (
@@ -233,8 +234,8 @@ class TestPromptLoaderGetWithSchema:
         assert "You are a planner." in text
         assert schema is None
 
-    def test_get_with_schema_emits_trace_event(self):
-        """get_with_schema should emit prompt_resolved with output_schema when tracing."""
+    def test_get_with_schema_stays_pure_during_tracing(self):
+        """get_with_schema should not emit trace events when tracing is active."""
         from backbone.sdk.prompt_loader import PromptLoader
         from backbone.sdk.tracing import enable_tracing
 
@@ -242,29 +243,135 @@ class TestPromptLoaderGetWithSchema:
 
         loader = PromptLoader(base_url="http://localhost:8000")
         loader._fetch_latest = MagicMock(return_value=version)
+        loader._upsert_agent_registry = MagicMock()
 
         with enable_tracing() as ctx:
             text, schema = loader.get_with_schema("test-prompt", agent_id="planner")
 
-        assert len(ctx.event_sink.events) == 1
-        event = ctx.event_sink.events[0]
-        assert event.payload["output_schema"] == SAMPLE_SCHEMA
+        assert "You are a planner." in text
+        assert schema == SAMPLE_SCHEMA
+        assert ctx.event_sink.events == []
 
-    def test_get_also_includes_schema_in_trace_event(self):
-        """The existing get() method should also include output_schema in trace events."""
+    def test_get_registers_prompt_with_agent_registry(self):
+        """get should sync prompt ownership when agent_id is provided."""
         from backbone.sdk.prompt_loader import PromptLoader
-        from backbone.sdk.tracing import enable_tracing
 
         version = _make_version(output_schema=SAMPLE_SCHEMA)
-
         loader = PromptLoader(base_url="http://localhost:8000")
         loader._fetch_latest = MagicMock(return_value=version)
+        loader._upsert_agent_registry = MagicMock()
 
-        with enable_tracing() as ctx:
-            loader.get("test-prompt", agent_id="planner")
+        text = loader.get("test-prompt", agent_id="planner")
 
-        event = ctx.event_sink.events[0]
-        assert event.payload["output_schema"] == SAMPLE_SCHEMA
+        assert "You are a planner." in text
+        loader._upsert_agent_registry.assert_called_once_with(
+            agent_id="planner",
+            prompt_id="test-prompt",
+            prompt_version_id="v1",
+        )
+
+    def test_get_with_schema_registers_prompt_with_agent_registry(self):
+        """get_with_schema should sync prompt ownership when agent_id is provided."""
+        from backbone.sdk.prompt_loader import PromptLoader
+
+        version = _make_version(output_schema=SAMPLE_SCHEMA)
+        loader = PromptLoader(base_url="http://localhost:8000")
+        loader._fetch_latest = MagicMock(return_value=version)
+        loader._upsert_agent_registry = MagicMock()
+
+        text, schema = loader.get_with_schema("test-prompt", agent_id="planner")
+
+        assert "You are a planner." in text
+        assert schema == SAMPLE_SCHEMA
+        loader._upsert_agent_registry.assert_called_once_with(
+            agent_id="planner",
+            prompt_id="test-prompt",
+            prompt_version_id="v1",
+        )
+
+    def test_get_without_agent_id_does_not_register_prompt(self):
+        """get should not sync registry when no agent_id is provided."""
+        from backbone.sdk.prompt_loader import PromptLoader
+
+        version = _make_version(output_schema=SAMPLE_SCHEMA)
+        loader = PromptLoader(base_url="http://localhost:8000")
+        loader._fetch_latest = MagicMock(return_value=version)
+        loader._upsert_agent_registry = MagicMock()
+
+        loader.get("test-prompt")
+
+        loader._upsert_agent_registry.assert_not_called()
+
+    def test_get_skips_registry_sync_when_agent_prompt_is_unchanged(self):
+        """get should avoid repeated registry writes for the same resolved version."""
+        from backbone.sdk.prompt_loader import PromptLoader
+
+        version = _make_version(output_schema=SAMPLE_SCHEMA)
+        loader = PromptLoader(base_url="http://localhost:8000")
+        loader._fetch_latest = MagicMock(return_value=version)
+        loader._upsert_agent_registry = MagicMock()
+
+        loader.get("test-prompt", agent_id="planner")
+        loader.get("test-prompt", agent_id="planner")
+
+        loader._upsert_agent_registry.assert_called_once_with(
+            agent_id="planner",
+            prompt_id="test-prompt",
+            prompt_version_id="v1",
+        )
+
+    def test_get_retries_registry_sync_after_failed_upsert(self):
+        """failed registry sync should not mark the agent prompt as synced."""
+        from backbone.sdk.prompt_loader import PromptLoader
+
+        version = _make_version(output_schema=SAMPLE_SCHEMA)
+        loader = PromptLoader(base_url="http://localhost:8000")
+        loader._fetch_latest = MagicMock(return_value=version)
+        loader._upsert_agent_registry = MagicMock(side_effect=[False, True])
+
+        loader.get("test-prompt", agent_id="planner")
+        loader.get("test-prompt", agent_id="planner")
+
+        assert loader._upsert_agent_registry.call_count == 2
+
+    def test_clear_cache_resets_agent_prompt_sync_cache(self):
+        """clear_cache should allow registry sync to run again."""
+        from backbone.sdk.prompt_loader import PromptLoader
+
+        version = _make_version(output_schema=SAMPLE_SCHEMA)
+        loader = PromptLoader(base_url="http://localhost:8000")
+        loader._fetch_latest = MagicMock(return_value=version)
+        loader._upsert_agent_registry = MagicMock(return_value=True)
+
+        loader.get("test-prompt", agent_id="planner")
+        loader.clear_cache()
+        loader.get("test-prompt", agent_id="planner")
+
+        assert loader._upsert_agent_registry.call_count == 2
+
+    def test_upsert_agent_registry_returns_false_on_request_error(self, monkeypatch):
+        """registry sync should report failure on transport errors."""
+        from backbone.sdk.prompt_loader import PromptLoader
+
+        loader = PromptLoader(base_url="http://localhost:8000")
+
+        class FailingClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def put(self, *args, **kwargs):
+                raise httpx.RequestError("boom")
+
+        monkeypatch.setattr("backbone.sdk.prompt_loader.httpx.Client", FailingClient)
+
+        with pytest.warns(UserWarning, match="failed to sync agent registry"):
+            assert loader._upsert_agent_registry("planner", "test-prompt", "v1") is False
 
 
 class TestOpenAIStructuredOutput:

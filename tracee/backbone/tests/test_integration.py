@@ -3,14 +3,17 @@
 import json
 from pathlib import Path
 
-import pytest
-
-from backbone.adapters.event_api import EventEmitter
 from backbone.adapters.sinks import FileSink, ListSink
 from backbone.analysis.trace_summary import trace_summary
-from backbone.models.trace_event import PROMPT_RESOLVED, TraceEvent
+from backbone.models.trace_event import TraceEvent
 from backbone.sdk.tracing import enable_tracing, get_active_context
-from backbone.utils.identifiers import generate_execution_id, generate_trace_id, utc_timestamp
+from backbone.utils.identifiers import (
+    generate_event_id,
+    generate_execution_id,
+    generate_span_id,
+    generate_trace_id,
+    utc_timestamp,
+)
 
 
 class TestEnableTracing:
@@ -44,22 +47,17 @@ class TestEnableTracing:
         
         assert get_active_context() is None
 
-    def test_emit_prompt_resolved(self):
-        """Context should allow emitting prompt_resolved events."""
-        with enable_tracing() as ctx:
-            ctx.emit_prompt_resolved(
-                prompt_id="test-prompt",
-                version_id="v1",
-                resolved_text="You are a test agent.",
-                agent_id="test",
-            )
-        
-        # check event was emitted
-        assert len(ctx.event_sink.events) == 1
-        event = ctx.event_sink.events[0]
-        assert event.event_type == PROMPT_RESOLVED
-        assert event.payload["prompt_id"] == "test-prompt"
+    def test_nested_context_restores_outer_context(self):
+        """Nested tracing should restore the outer context on exit."""
+        with enable_tracing() as outer:
+            assert get_active_context() is outer
 
+            with enable_tracing() as inner:
+                assert get_active_context() is inner
+
+            assert get_active_context() is outer
+
+        assert get_active_context() is None
 
 class TestTraceSummaryWithRawEvents:
     """Test trace summary with raw LangChain events."""
@@ -239,30 +237,6 @@ class TestTraceSummaryWithRawEvents:
         assert summary.edges[0].to_agent == "executor"
 
 
-class TestEventEmitterSequence:
-    """Test EventEmitter sequence generation."""
-
-    def test_sequence_starts_at_zero(self):
-        """EventEmitter sequence should start at 0."""
-        sink = ListSink()
-        emitter = EventEmitter(generate_execution_id(), generate_trace_id(), sink)
-
-        emitter.emit("test_event", {"data": "test"})
-
-        assert sink.events[0].sequence == 0
-
-    def test_sequence_increments(self):
-        """EventEmitter sequence should increment with each emit."""
-        sink = ListSink()
-        emitter = EventEmitter(generate_execution_id(), generate_trace_id(), sink)
-
-        for i in range(5):
-            emitter.emit("test_event", {"iteration": i})
-
-        for i, event in enumerate(sink.events):
-            assert event.sequence == i
-
-
 class TestFileSink:
     """Test FileSink writes events correctly."""
 
@@ -283,10 +257,33 @@ class TestFileSink:
         output_path = self.output_dir / trace_id / "trace_events.jsonl"
         
         sink = FileSink(output_path)
-        emitter = EventEmitter(generate_execution_id(), trace_id, sink)
-        
-        emitter.emit("on_chain_start", {"chain_name": "test"})
-        emitter.emit("on_chain_end", {"outputs": {}})
+
+        sink.append(TraceEvent(
+            event_id=generate_event_id(),
+            trace_id=trace_id,
+            execution_id=generate_execution_id(),
+            timestamp=utc_timestamp(),
+            sequence=0,
+            event_type="on_chain_start",
+            agent_id=None,
+            span_id=generate_span_id(),
+            parent_span_id=None,
+            refs={},
+            payload={"chain_name": "test"},
+        ))
+        sink.append(TraceEvent(
+            event_id=generate_event_id(),
+            trace_id=trace_id,
+            execution_id=generate_execution_id(),
+            timestamp=utc_timestamp(),
+            sequence=1,
+            event_type="on_chain_end",
+            agent_id=None,
+            span_id=generate_span_id(),
+            parent_span_id=None,
+            refs={},
+            payload={"outputs": {}},
+        ))
         
         # read the file
         with open(output_path) as f:

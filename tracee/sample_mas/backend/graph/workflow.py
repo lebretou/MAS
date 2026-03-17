@@ -1,12 +1,23 @@
+import os
+import sys
+from pathlib import Path
+
 from langgraph.graph import StateGraph, END
 from backend.state.schema import AnalysisState
 from backend.agents.interaction import create_interaction_agent
 from backend.agents.planner import create_planner_agent
 from backend.agents.coding import create_coding_agent
 from backend.agents.summary import create_summary_agent
-from backbone.sdk.graph_extractor import extract_and_register
+from backend.telemetry.config import TRACEE_SERVER_URL
 from langchain_core.messages import HumanMessage
 import pandas as pd
+
+project_root = Path(__file__).resolve().parents[3]
+workspace_root = project_root.parent
+if str(workspace_root) not in sys.path:
+    sys.path.insert(0, str(workspace_root))
+
+import tracee
 
 
 def should_continue_to_next_node(state: AnalysisState) -> str:
@@ -110,15 +121,13 @@ def create_workflow() -> StateGraph:
     workflow.add_edge("summary", END)
     
     app = workflow.compile()
-
-    extract_and_register(
-        compiled_graph=app,
+    tracee.init(
+        app,
         graph_id="data-analysis-mas",
         name="Data Analysis MAS",
         description="Multi-agent system for interactive data analysis",
-        base_url="http://localhost:8000",
+        server_url=TRACEE_SERVER_URL,
     )
-
     return app
 
 
@@ -134,8 +143,6 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
     Returns:
         Dictionary with workflow results
     """
-    from backend.telemetry.config import tracing_session
-    
     # get dataset info upfront and store it in the state
     dataset_info = {
         "columns": list(dataset.columns),
@@ -144,10 +151,10 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
         "numeric_columns": list(dataset.select_dtypes(include=['number']).columns),
         "categorical_columns": list(dataset.select_dtypes(include=['object', 'category']).columns),
     }
-    
-    with tracing_session(session_id=session_id) as ctx:
-        callbacks = ctx.callbacks
-        
+
+    app = create_workflow()
+
+    with tracee.trace():
         # initialize state
         initial_state = {
             "dataset": dataset,
@@ -165,15 +172,11 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
             "retry_count": 0,
             "next_agent": "interaction",
             "session_id": session_id,
-            "callbacks": callbacks,
         }
-        
-        # create and run workflow
-        app = create_workflow()
-        
+
         try:
-            final_state = app.invoke(initial_state, config={"callbacks": callbacks})
-            
+            final_state = app.invoke(initial_state)
+
             return {
                 "success": True,
                 "final_summary": final_state.get("final_summary", ""),
@@ -185,7 +188,7 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
                 "retry_count": final_state.get("retry_count", 0),
                 "messages": _serialize_messages(final_state.get("messages", [])),
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
@@ -203,9 +206,6 @@ def run_analysis_workflow(dataset: pd.DataFrame, query: str, dataset_path: str =
 
 async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset_path: str = "uploaded", session_id: str = "default") -> dict:
     """Run the complete analysis workflow asynchronously."""
-
-    from backend.telemetry.config import tracing_session
-    
     # get dataset info upfront
     dataset_info = {
         "columns": list(dataset.columns),
@@ -214,10 +214,10 @@ async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset
         "numeric_columns": list(dataset.select_dtypes(include=['number']).columns),
         "categorical_columns": list(dataset.select_dtypes(include=['object', 'category']).columns),
     }
-    
-    with tracing_session(session_id=session_id) as ctx:
-        callbacks = ctx.callbacks
-        
+
+    app = create_workflow()
+
+    with tracee.trace():
         # initialize state
         initial_state = {
             "dataset": dataset,
@@ -235,15 +235,11 @@ async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset
             "retry_count": 0,
             "next_agent": "interaction",
             "session_id": session_id,
-            "callbacks": callbacks,
         }
-        
-        # create and run workflow
-        app = create_workflow()
-        
+
         try:
-            final_state = await app.ainvoke(initial_state, config={"callbacks": callbacks})
-            
+            final_state = await app.ainvoke(initial_state)
+
             return {
                 "success": True,
                 "final_summary": final_state.get("final_summary", ""),
@@ -255,7 +251,7 @@ async def run_analysis_workflow_async(dataset: pd.DataFrame, query: str, dataset
                 "retry_count": final_state.get("retry_count", 0),
                 "messages": _serialize_messages(final_state.get("messages", [])),
             }
-            
+
         except Exception as e:
             return {
                 "success": False,

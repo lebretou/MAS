@@ -11,7 +11,7 @@ type AgentNodeType = Node<GraphNodeData, "agent">;
 export function AgentNode({ id, data, sourcePosition, targetPosition }: NodeProps<AgentNodeType>) {
   const { openSidebar } = useSidebar();
   const { getNode, setCenter, getZoom } = useReactFlow();
-  const { layer, selectedTraceId } = useLayer();
+  const { layer } = useLayer();
   const { label, metadata, execution, playback } = data;
 
   const dimmed = layer === "execution" && (playback ? (playback.frameState === "upcoming" || playback.frameState === "idle") : (!execution || !execution.invoked));

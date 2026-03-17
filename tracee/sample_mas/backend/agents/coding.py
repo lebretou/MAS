@@ -2,11 +2,12 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from pydantic import BaseModel, Field
 from backend.state.schema import AnalysisState
+from backend.telemetry.config import TRACEE_SERVER_URL
 from backend.tools.execution_tools import execute_code_safely
 import os
 from backbone.sdk.prompt_loader import PromptLoader
 
-loader = PromptLoader(base_url="http://localhost:8000")
+loader = PromptLoader(base_url=TRACEE_SERVER_URL)
 
 
 class CodingResult(BaseModel):
@@ -26,12 +27,9 @@ def create_coding_agent(state: AnalysisState) -> AnalysisState:
     """
     # get dataset
     dataset = state["dataset"]
-    callbacks = state.get("callbacks", [])
     llm = ChatOpenAI(
         model="gpt-4o-mini",
         temperature=0,
-        callbacks=callbacks,
-        metadata={"agent": "coding", "has_tools": False}
     )
     
     # execute agent to generate code
@@ -52,7 +50,7 @@ Previous execution error: {previous_error}
 Please generate the Python code to accomplish this analysis.
 Return JSON with the code field.""")
         
-        response = structured_llm.invoke([system_message, user_message], config={"callbacks": callbacks})
+        response = structured_llm.invoke([system_message, user_message])
         code = response["code"] if isinstance(response, dict) else response.code
         
         # clean up code if it has markdown formatting

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getMock: vi.fn(),
@@ -10,109 +10,42 @@ vi.mock("./client", () => ({
   },
 }));
 
-import { fetchCognitionCached } from "./traces";
+import { fetchTraceEvents, fetchTraces, fetchTraceSummary } from "./traces";
 
-describe("fetchCognitionCached", () => {
-  it("deduplicates in-flight requests", async () => {
-    mocks.getMock.mockResolvedValue({
-      data: {
-        agent_id: "interaction",
-        summary: "[llm] done",
-        hint: "[llm] done",
-        cached: false,
-      },
-    
-
-  it("fetches fresh cognition when forceRefresh is true", async () => {
-    mocks.getMock.mockResolvedValueOnce({
-      data: {
-        agent_id: "interaction",
-        summary: "[llm] stale",
-        hint: "[llm] stale",
-        cached: true,
-      },
-    });
-
-    mocks.getMock.mockResolvedValueOnce({
-      data: {
-        agent_id: "interaction",
-        summary: "[llm] fresh",
-        hint: "[llm] fresh",
-        cached: false,
-      },
-    });
-
-    const first = await fetchCognitionCached("trace-refresh", "interaction");
-    const second = await fetchCognitionCached("trace-refresh", "interaction", { forceRefresh: true });
-
-    expect(first.summary).toBe("[llm] stale");
-    expect(second.summary).toBe("[llm] fresh");
-    expect(mocks.getMock).toHaveBeenCalledTimes(2);
+describe("traces api", () => {
+  beforeEach(() => {
+    mocks.getMock.mockReset();
   });
-});
 
-    const p1 = fetchCognitionCached("trace-1", "interaction");
-    const p2 = fetchCognitionCached("trace-1", "interaction");
-    const [r1, r2] = await Promise.all([p1, p2]);
+  it("fetches traces with pagination params", async () => {
+    const traces = [{ trace_id: "trace-1" }];
+    mocks.getMock.mockResolvedValue({ data: traces });
 
-    expect(mocks.getMock).toHaveBeenCalledTimes(1);
-    expect(r1.hint).toBe("[llm] done");
-    expect(r2.hint).toBe("[llm] done");
-  
+    const result = await fetchTraces(50, 10);
 
-  it("fetches fresh cognition when forceRefresh is true", async () => {
-    mocks.getMock.mockResolvedValueOnce({
-      data: {
-        agent_id: "interaction",
-        summary: "[llm] stale",
-        hint: "[llm] stale",
-        cached: true,
-      },
+    expect(mocks.getMock).toHaveBeenCalledWith("/traces", {
+      params: { limit: 50, offset: 10 },
     });
-
-    mocks.getMock.mockResolvedValueOnce({
-      data: {
-        agent_id: "interaction",
-        summary: "[llm] fresh",
-        hint: "[llm] fresh",
-        cached: false,
-      },
-    });
-
-    const first = await fetchCognitionCached("trace-refresh", "interaction");
-    const second = await fetchCognitionCached("trace-refresh", "interaction", { forceRefresh: true });
-
-    expect(first.summary).toBe("[llm] stale");
-    expect(second.summary).toBe("[llm] fresh");
-    expect(mocks.getMock).toHaveBeenCalledTimes(2);
+    expect(result).toEqual(traces);
   });
-});
 
+  it("fetches trace events by trace id", async () => {
+    const events = [{ event_id: "event-1", event_type: "on_chain_start" }];
+    mocks.getMock.mockResolvedValue({ data: events });
 
-  it("fetches fresh cognition when forceRefresh is true", async () => {
-    mocks.getMock.mockResolvedValueOnce({
-      data: {
-        agent_id: "interaction",
-        summary: "[llm] stale",
-        hint: "[llm] stale",
-        cached: true,
-      },
-    });
+    const result = await fetchTraceEvents("trace-1");
 
-    mocks.getMock.mockResolvedValueOnce({
-      data: {
-        agent_id: "interaction",
-        summary: "[llm] fresh",
-        hint: "[llm] fresh",
-        cached: false,
-      },
-    });
+    expect(mocks.getMock).toHaveBeenCalledWith("/traces/trace-1");
+    expect(result).toEqual(events);
+  });
 
-    const first = await fetchCognitionCached("trace-refresh", "interaction");
-    const second = await fetchCognitionCached("trace-refresh", "interaction", { forceRefresh: true });
+  it("fetches a trace summary by trace id", async () => {
+    const summary = { trace_id: "trace-1", agents: ["planner"] };
+    mocks.getMock.mockResolvedValue({ data: summary });
 
-    expect(first.summary).toBe("[llm] stale");
-    expect(second.summary).toBe("[llm] fresh");
-    expect(mocks.getMock).toHaveBeenCalledTimes(2);
+    const result = await fetchTraceSummary("trace-1");
+
+    expect(mocks.getMock).toHaveBeenCalledWith("/traces/trace-1/summary");
+    expect(result).toEqual(summary);
   });
 });

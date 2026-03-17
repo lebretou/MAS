@@ -48,6 +48,7 @@ def upsert_graph(graph_id: str, request: UpsertGraphRequest) -> GraphTopology:
     Uses PUT for idempotent upsert — safe to call on every compile.
     Also registers all agents that have prompt_id in their metadata.
     """
+    from server.agent_db import get_agent as db_get_agent
     from server.agent_db import upsert_agent as db_upsert_agent
     from backbone.models.agent_registry import AgentRegistryEntry
 
@@ -72,13 +73,19 @@ def upsert_graph(graph_id: str, request: UpsertGraphRequest) -> GraphTopology:
         if node.node_type != "agent":
             continue
         meta = node.metadata or {}
+        existing_agent = db_get_agent(node.node_id)
+        prompt_id = node.prompt_id if node.prompt_id is not None else existing_agent.prompt_id if existing_agent else None
+        prompt_version_id = existing_agent.prompt_version_id if existing_agent else None
+        if existing_agent and node.prompt_id is not None and node.prompt_id != existing_agent.prompt_id:
+            prompt_version_id = None
         entry = AgentRegistryEntry(
             agent_id=node.node_id,
-            prompt_id=node.prompt_id,
-            model=meta.get("model"),
-            temperature=meta.get("temperature"),
-            has_tools=meta.get("has_tools", False),
-            metadata=meta,
+            prompt_id=prompt_id,
+            prompt_version_id=prompt_version_id,
+            model=meta.get("model") if meta.get("model") is not None else existing_agent.model if existing_agent else None,
+            temperature=meta.get("temperature") if meta.get("temperature") is not None else existing_agent.temperature if existing_agent else None,
+            has_tools=meta.get("has_tools", existing_agent.has_tools if existing_agent else False),
+            metadata=meta if meta else existing_agent.metadata if existing_agent else None,
             updated_at=now,
         )
         db_upsert_agent(entry)

@@ -1,26 +1,19 @@
-"""Telemetry helpers for LangSmith and MAS backbone."""
+"""Telemetry helpers for LangSmith and tracee."""
 
 import os
 import sys
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
 
 from dotenv import load_dotenv
 
-# add backbone to path (sibling directory inside tracee/)
-backbone_path = Path(__file__).parent.parent.parent.parent / "backbone"
-if str(backbone_path.parent) not in sys.path:
-    sys.path.insert(0, str(backbone_path.parent))
+project_root = Path(__file__).resolve().parents[3]
+workspace_root = project_root.parent
+if str(workspace_root) not in sys.path:
+    sys.path.insert(0, str(workspace_root))
 
-from backbone.sdk.tracing import enable_tracing, TracingContext
-
-# load environment variables
 load_dotenv()
 
-# default output directory for traces
-TRACES_OUTPUT_DIR = Path(__file__).parent.parent.parent.parent / "server" / "data" / "traces"
-TRACE_API_URL = os.getenv("TRACE_API_URL")
+TRACEE_SERVER_URL = os.getenv("TRACE_API_URL", "http://localhost:8000")
 
 
 def get_langsmith_config():
@@ -43,28 +36,6 @@ def setup_langsmith():
         print(f"✓ LangSmith tracing enabled for project: {config['project_name']}")
     else:
         print("⚠ LangSmith tracing disabled - API key not found")
-
-
-@contextmanager
-def tracing_session(session_id: str = "default") -> Generator[TracingContext, None, None]:
-    """context manager for a tracing session using the new enable_tracing API.
-    
-    Usage:
-        with tracing_session("my-session") as ctx:
-            result = app.invoke(state, config={"callbacks": ctx.callbacks})
-    """
-    if TRACE_API_URL:
-        with enable_tracing(base_url=TRACE_API_URL) as ctx:
-            print("✓ MAS Backbone tracing enabled (remote)")
-            print(f"  trace id: {ctx.trace_id}")
-            print(f"  session: {session_id}")
-            yield ctx
-        return
-    with enable_tracing(output_dir=TRACES_OUTPUT_DIR) as ctx:
-        print(f"✓ MAS Backbone tracing enabled")
-        print(f"  trace id: {ctx.trace_id}")
-        print(f"  session: {session_id}")
-        yield ctx
 
 
 def setup_telemetry():

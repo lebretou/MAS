@@ -3,10 +3,11 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, Base
 from langchain.agents import create_agent
 from pydantic import BaseModel, Field
 from backend.state.schema import AnalysisState
+from backend.telemetry.config import TRACEE_SERVER_URL
 from backend.tools.rag_tools import retrieve_analysis_context_tool
 from backbone.sdk.prompt_loader import PromptLoader
 
-loader = PromptLoader(base_url="http://localhost:8000")
+loader = PromptLoader(base_url=TRACEE_SERVER_URL)
 
 
 class PlannerResult(BaseModel):
@@ -47,12 +48,9 @@ def create_planner_agent(state: AnalysisState) -> AnalysisState:
     # get dataset info
     dataset = state["dataset"]
     dataset_info = state.get("dataset_info", {})
-    callbacks = state.get("callbacks", [])
     llm = ChatOpenAI(
         model="o3-mini",
         reasoning_effort="medium",
-        callbacks=callbacks,
-        metadata={"agent": "planner", "has_tools": False},
     )
     
     # prepare dataset info
@@ -81,7 +79,6 @@ Use the retrieve_analysis_context_tool when useful for selecting robust analysis
 Draft a complete plan and coding instructions."""
         planner_response = planning_agent.invoke(
             {"messages": [{"role": "user", "content": planner_input}]},
-            config={"callbacks": callbacks},
         )
         planner_messages = planner_response.get("messages", [])
         planner_draft = _extract_last_assistant_text(planner_messages)
@@ -98,7 +95,6 @@ Draft a complete plan and coding instructions."""
                 ),
                 HumanMessage(content=f"Planner draft:\n{planner_draft}"),
             ],
-            config={"callbacks": callbacks},
         )
 
         if isinstance(result, dict):

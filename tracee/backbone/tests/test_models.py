@@ -1,15 +1,11 @@
 """Tests for model serialization and round-trip."""
 
-import json
-
-import pytest
-
 from backbone.models.prompt_artifact import (
     PromptComponent,
     PromptComponentType,
     PromptVersion,
 )
-from backbone.models.trace_event import PROMPT_RESOLVED, TraceEvent
+from backbone.models.trace_event import TraceEvent
 from backbone.utils.identifiers import (
     generate_event_id,
     generate_execution_id,
@@ -43,7 +39,7 @@ class TestPromptArtifactRoundTrip:
             name="Test Prompt",
             components=[
                 PromptComponent(type=PromptComponentType.role, content="Role content"),
-                PromptComponent(type=PromptComponentType.goal, content="Goal content"),
+                PromptComponent(type=PromptComponentType.task, content="Task content"),
             ],
             variables={"var1": "value1"},
             created_at=utc_timestamp(),
@@ -81,30 +77,6 @@ class TestTraceEventRoundTrip:
         assert restored.event_type == "on_chain_start"
         assert restored.sequence == 0
         assert restored.refs["langchain"]["run_id"] == "abc123"
-
-    def test_prompt_resolved_event_round_trip(self):
-        """prompt_resolved event should serialize and deserialize cleanly."""
-        event = TraceEvent(
-            event_id=generate_event_id(),
-            trace_id=generate_trace_id(),
-            execution_id=generate_execution_id(),
-            timestamp=utc_timestamp(),
-            sequence=1,
-            event_type=PROMPT_RESOLVED,
-            agent_id="planner",
-            refs={},
-            payload={
-                "prompt_id": "planner-system",
-                "version_id": "v1",
-                "resolved_text": "You are a planning agent.",
-            },
-        )
-        json_str = event.model_dump_json()
-        restored = TraceEvent.model_validate_json(json_str)
-
-        assert restored.event_type == PROMPT_RESOLVED
-        assert restored.payload["prompt_id"] == "planner-system"
-        assert restored.payload["version_id"] == "v1"
 
     def test_namespaced_refs_survive_serialization(self):
         """Namespaced refs should survive JSON round-trip."""

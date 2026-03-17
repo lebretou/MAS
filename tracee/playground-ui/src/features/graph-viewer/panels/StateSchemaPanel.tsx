@@ -142,7 +142,6 @@ export function StateSchemaPanel({ schema, activeFrame }: Props) {
             || (Array.isArray(currentValue) && currentValue.length === 0)
             || (typeof currentValue === "object" && currentValue !== null && !Array.isArray(currentValue) && Object.keys(currentValue).length === 0);
           const isExpanded = Boolean(expandedKeys[key]);
-          const canExpand = hasSnapshotValue;
 
           return (
             <div key={key} className="state-schema-panel__row-container">
