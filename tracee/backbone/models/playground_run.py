@@ -33,6 +33,7 @@ class PlaygroundRun(BaseModel):
     # IO
     input_variables: dict[str, str]  # Template variable substitutions
     resolved_prompt: str  # The final prompt text sent to LLM
+    output_schema: dict | None = None  # JSON Schema used for this run, if any
     output: str  # LLM response
 
     # metadata
@@ -63,6 +64,7 @@ class PlaygroundRunCreate(BaseModel):
     prompt_id: str
     version_id: str = "latest"
     input_variables: dict[str, str] = {}
+    output_schema: dict | None = None
 
     # either reference a saved config or provide inline
     model_config_id: str | None = None  # Use saved config

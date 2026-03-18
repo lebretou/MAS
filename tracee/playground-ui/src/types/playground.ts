@@ -9,7 +9,9 @@ export interface PlaygroundRun {
   max_tokens: number | null;
   input_variables: Record<string, string>;
   resolved_prompt: string;
+  output_schema?: Record<string, unknown> | null;
   output: string;
+  output_schema_used?: boolean;
   latency_ms: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
@@ -25,6 +27,7 @@ export interface PlaygroundRunCreate {
   prompt_id: string;
   version_id?: string;
   input_variables?: Record<string, string>;
+  output_schema?: Record<string, unknown> | null;
   model?: string;
   provider?: string;
   temperature?: number;

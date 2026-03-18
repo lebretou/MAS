@@ -1,3 +1,6 @@
+@import "./design-system.css";
+@import "./components/components.css";
+
 *,
 *::before,
 *::after {

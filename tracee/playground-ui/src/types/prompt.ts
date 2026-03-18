@@ -1,7 +1,9 @@
 export type PromptComponentType =
   | "role"
+  | "goal"
   | "constraints"
   | "task"
+  | "io_rules"
   | "inputs"
   | "outputs"
   | "examples"
@@ -34,6 +36,21 @@ export interface PromptVersion {
   created_at: string;
 }
 
+export interface PromptListItem {
+  prompt_id: string;
+  name: string;
+  description: string | null;
+  latest_version_id: string | null;
+  version_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromptWithVersions {
+  prompt: Prompt;
+  versions: PromptVersion[];
+}
+
 export interface CreatePromptRequest {
   prompt_id: string;
   name: string;
@@ -45,4 +62,17 @@ export interface CreateVersionRequest {
   components: PromptComponent[];
   variables?: Record<string, string> | null;
   output_schema?: Record<string, unknown> | null;
+}
+
+export type SchemaPropertyType = "string" | "number" | "integer" | "boolean" | "null" | "array";
+
+export type SchemaArrayItemType = "string" | "number" | "integer" | "boolean";
+
+export interface SchemaProperty {
+  id: string;
+  name: string;
+  type: SchemaPropertyType;
+  description: string;
+  required: boolean;
+  items?: SchemaArrayItemType;
 }

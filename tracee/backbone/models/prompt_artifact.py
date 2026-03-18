@@ -1,20 +1,31 @@
 """Data model for prompts created in the playground"""
 
+import json
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+
+class SchemaMode(str, Enum):
+    """Controls how output_schema is included in the resolved prompt text."""
+
+    full = "full"    # embed full JSON Schema block in prompt (default)
+    hint = "hint"    # append a short generic hint only
+    none = "none"    # no schema mention at all
 
 
 class PromptComponentType(str, Enum):
     """
-    Currently the exact components here are tentative, but we aer likely going 
+    Currently the exact components here are tentative, but we aer likely going
     to support multi-block editing so that users don't have to deal with a monotonic long text string
-    Zhongzheng will confirm on the exact components soon 
+    Zhongzheng will confirm on the exact components soon
     """
 
     role = "role"
+    goal = "goal"
     constraints = "constraints"
     task = "task"
+    io_rules = "io_rules"
     inputs = "inputs"
     outputs = "outputs"
     examples = "examples"
@@ -66,11 +77,38 @@ class PromptVersion(BaseModel):
     output_schema: dict | None = None  # JSON Schema for structured LLM output
     created_at: str
 
-    def resolve(self) -> str:
+    @model_validator(mode="after")
+    def validate_output_schema(self) -> "PromptVersion":
+        if self.output_schema is not None:
+            if "type" not in self.output_schema or "properties" not in self.output_schema:
+                raise ValueError(
+                    "output_schema must have top-level 'type' and 'properties' keys"
+                )
+        return self
+
+    def resolve(self, *, schema_mode: SchemaMode = SchemaMode.full) -> str:
         """Resolve the prompt to a single text string.
+
+        Args:
+            schema_mode: Controls how output_schema appears in the prompt.
+                - full: embeds the full JSON Schema block (default, backward compatible)
+                - hint: appends a short generic hint
+                - none: no schema mention at all
         """
-        return "\n\n".join(
+        text = "\n\n".join(
             component.content
             for component in self.components
             if component.enabled
         )
+        if self.output_schema is not None:
+            if schema_mode == SchemaMode.full:
+                schema_block = (
+                    "Respond with a JSON object that conforms to the following JSON Schema:\n"
+                    "```json\n"
+                    + json.dumps(self.output_schema, indent=2)
+                    + "\n```"
+                )
+                text = text + "\n\n" + schema_block
+            elif schema_mode == SchemaMode.hint:
+                text = text + "\n\nYour response should be structured JSON matching the requested schema."
+        return text
