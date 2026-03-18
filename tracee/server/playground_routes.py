@@ -8,14 +8,15 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
-from backbone.models.playground_run import PlaygroundRun, PlaygroundRunCreate
-from backbone.models.prompt_artifact import PromptVersion, SchemaMode
+from backbone.models.playground_run import PlaygroundRun, PlaygroundRunCreate, PlaygroundToolCall
+from backbone.models.prompt_artifact import PromptTool, PromptVersion, SchemaMode
 from backbone.utils.identifiers import generate_run_id, utc_timestamp
 from server.playground_db import get_run, insert_run, list_runs
 from server.prompt_db import get_latest_version as db_get_latest_version
@@ -103,6 +104,8 @@ def _load_prompt_version(prompt_id: str, version_id: str) -> PromptVersion:
 
 def _load_model_config(config_id: str) -> dict:
     """Load a saved model configuration."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", config_id):
+        raise HTTPException(status_code=400, detail=f"Invalid model config id: {config_id}")
     config_file = MODEL_CONFIGS_DIR / f"{config_id}.json"
     if not config_file.exists():
         raise HTTPException(status_code=404, detail=f"Model config not found: {config_id}")
@@ -132,6 +135,27 @@ def _build_anthropic_schema_tool(schema: dict) -> dict:
         "name": "structured_output",
         "description": "Return the response in the required structured format.",
         "input_schema": schema,
+    }
+
+
+def _build_openai_tool(tool: PromptTool) -> dict:
+    """Build an OpenAI tool definition from a prompt-authored tool."""
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": tool.input_schema(),
+        },
+    }
+
+
+def _build_anthropic_tool(tool: PromptTool) -> dict:
+    """Build an Anthropic tool definition from a prompt-authored tool."""
+    return {
+        "name": tool.name,
+        "description": tool.description,
+        "input_schema": tool.input_schema(),
     }
 
 
@@ -189,6 +213,7 @@ async def _call_openai(
     temperature: float,
     max_tokens: int | None,
     output_schema: dict | None = None,
+    prompt_tools: list[PromptTool] | None = None,
 ) -> dict:
     """Call OpenAI API and return standardized response."""
     client = _get_openai_client()
@@ -201,6 +226,8 @@ async def _call_openai(
         }
         if max_tokens:
             params["max_tokens"] = max_tokens
+        if prompt_tools:
+            params["tools"] = [_build_openai_tool(tool) for tool in prompt_tools]
         if output_schema:
             if not _supports_openai_json_schema(model):
                 raise HTTPException(
@@ -215,16 +242,34 @@ async def _call_openai(
 
         message = response.choices[0].message
         content = message.content or ""
+        tool_calls: list[PlaygroundToolCall] = []
+        if message.tool_calls:
+            for tool_call in message.tool_calls:
+                arguments = tool_call.function.arguments
+                try:
+                    parsed_arguments = json.loads(arguments) if arguments else {}
+                except json.JSONDecodeError:
+                    parsed_arguments = arguments
+                tool_calls.append(
+                    PlaygroundToolCall(
+                        call_id=tool_call.id,
+                        name=tool_call.function.name,
+                        arguments=parsed_arguments,
+                    )
+                )
+        if not content and tool_calls:
+            content = json.dumps([call.model_dump() for call in tool_calls], indent=2)
         usage = response.usage
 
         return {
             "content": content,
+            "tool_calls": tool_calls or None,
             "usage": {
                 "prompt_tokens": usage.prompt_tokens if usage else 0,
                 "completion_tokens": usage.completion_tokens if usage else 0,
                 "total_tokens": usage.total_tokens if usage else 0,
             },
-            "schema_enforced": bool(output_schema),
+            "schema_enforced": bool(output_schema) and not tool_calls,
         }
     except HTTPException:
         raise
@@ -242,6 +287,7 @@ async def _call_anthropic(
     temperature: float,
     max_tokens: int | None,
     output_schema: dict | None = None,
+    prompt_tools: list[PromptTool] | None = None,
 ) -> dict:
     """Call Anthropic API and return standardized response."""
     client = _get_anthropic_client()
@@ -254,15 +300,23 @@ async def _call_anthropic(
             "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
         }
+        tools: list[dict] = []
+        if prompt_tools:
+            tools.extend(_build_anthropic_tool(tool) for tool in prompt_tools)
         if output_schema:
-            api_params["tools"] = [_build_anthropic_schema_tool(output_schema)]
+            tools.append(_build_anthropic_schema_tool(output_schema))
+        if tools:
+            api_params["tools"] = tools
+        if output_schema and not prompt_tools:
             api_params["tool_choice"] = {"type": "tool", "name": "structured_output"}
 
         response = await client.messages.create(**api_params)
 
         content = ""
         schema_enforced = False
-        if output_schema and response.content:
+        tool_calls: list[PlaygroundToolCall] = []
+        text_parts: list[str] = []
+        if response.content:
             for block in response.content:
                 if block.type == "tool_use" and getattr(block, "name", None) == "structured_output":
                     try:
@@ -275,27 +329,27 @@ async def _call_anthropic(
                             model,
                         )
                     schema_enforced = True
-                    break
-            if not schema_enforced:
-                # Schema was requested but LLM did not return tool_use
-                logger.warning(
-                    "Anthropic did not return tool_use block despite schema enforcement "
-                    "(model=%s). Falling back to text content.",
-                    model,
-                )
-                content = "".join(
-                    block.text for block in response.content
-                    if hasattr(block, "text")
-                )
-        elif response.content:
-            content = "".join(
-                block.text for block in response.content
-                if hasattr(block, "text")
-            )
+                    continue
+                if block.type == "tool_use":
+                    tool_calls.append(
+                        PlaygroundToolCall(
+                            call_id=getattr(block, "id", None),
+                            name=getattr(block, "name", "tool"),
+                            arguments=getattr(block, "input", None),
+                        )
+                    )
+                    continue
+                if hasattr(block, "text"):
+                    text_parts.append(block.text)
+        if not schema_enforced:
+            content = "".join(text_parts).strip()
+        if not content and tool_calls:
+            content = json.dumps([call.model_dump() for call in tool_calls], indent=2)
         usage = response.usage
 
         return {
             "content": content,
+            "tool_calls": tool_calls or None,
             "usage": {
                 "prompt_tokens": usage.input_tokens if usage else 0,
                 "completion_tokens": usage.output_tokens if usage else 0,
@@ -320,6 +374,7 @@ async def _call_llm(
     temperature: float,
     max_tokens: int | None,
     output_schema: dict | None = None,
+    prompt_tools: list[PromptTool] | None = None,
 ) -> dict:
     """Call the appropriate LLM based on provider.
 
@@ -334,9 +389,23 @@ async def _call_llm(
     provider_lower = provider.lower()
 
     if provider_lower == "openai":
-        return await _call_openai(prompt, model, temperature, max_tokens, output_schema)
+        return await _call_openai(
+            prompt,
+            model,
+            temperature,
+            max_tokens,
+            output_schema,
+            prompt_tools,
+        )
     elif provider_lower == "anthropic":
-        return await _call_anthropic(prompt, model, temperature, max_tokens, output_schema)
+        return await _call_anthropic(
+            prompt,
+            model,
+            temperature,
+            max_tokens,
+            output_schema,
+            prompt_tools,
+        )
     else:
         raise HTTPException(
             status_code=400,
@@ -366,7 +435,9 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         version = _validate_output_schema(request.output_schema, version)
 
     if version.output_schema is not None:
-        resolved_prompt = version.resolve(schema_mode=SchemaMode.hint)
+        resolved_prompt = version.resolve(
+            schema_mode=SchemaMode.full if version.tools else SchemaMode.hint
+        )
     else:
         resolved_prompt = version.resolve()
     if request.input_variables:
@@ -391,7 +462,8 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         provider=provider,
         temperature=temperature,
         max_tokens=max_tokens,
-        output_schema=version.output_schema,
+        output_schema=version.output_schema if not version.tools else None,
+        prompt_tools=version.tools or None,
     )
     latency_ms = (time.time() - start_time) * 1000
 
@@ -407,6 +479,8 @@ async def execute_playground_run(request: PlaygroundRunCreate) -> PlaygroundRunR
         input_variables=request.input_variables,
         resolved_prompt=resolved_prompt,
         output_schema=version.output_schema,
+        tools=version.tools or None,
+        tool_calls=response["tool_calls"],
         output=response["content"],
         output_schema_used=response["schema_enforced"],
         latency_ms=latency_ms,

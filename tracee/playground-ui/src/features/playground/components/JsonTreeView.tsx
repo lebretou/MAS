@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { FieldDeviation } from '../utils/schemaAggregation';
+import type { FieldDeviation } from '../../../utils/schemaAggregation';
 
 interface Props {
   data: unknown;

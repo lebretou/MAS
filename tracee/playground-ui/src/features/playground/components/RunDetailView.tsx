@@ -1,49 +1,52 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { AnalyzedRun } from '../hooks/useRunAnalysis';
+import type { AnalyzedRun, ComparisonReference } from '../../../hooks/useRunAnalysis';
 import {
   getClassificationBg,
   getClassificationColor,
-} from '../utils/schemaAggregation';
-import { computeDiff } from '../utils/jsonDiff';
+} from '../../../utils/schemaAggregation';
+import { computeDiff } from '../../../utils/jsonDiff';
 import OutputDiffView from './OutputDiffView';
 import JsonTreeView from './JsonTreeView';
 
 interface Props {
   analyzed: AnalyzedRun[];
   selectedRun: number | null;
-  consensusOutputIndex: number;
+  reference: ComparisonReference | null;
   onBack: () => void;
+  onPromoteRun: (index: number) => void;
 }
 
 const RunDetailView: React.FC<Props> = ({
   analyzed,
   selectedRun,
-  consensusOutputIndex,
+  reference,
   onBack,
+  onPromoteRun,
 }) => {
   const [detailMode, setDetailMode] = useState<'tree' | 'raw'>('tree');
   const [diffDismissed, setDiffDismissed] = useState(false);
 
   useEffect(() => {
     setDiffDismissed(false);
-  }, [selectedRun]);
+  }, [selectedRun, reference?.kind, reference?.output, reference?.runIndex]);
 
   const selected = selectedRun !== null ? analyzed[selectedRun] : null;
 
   const selectedDiff = useMemo(() => {
-    if (selectedRun === null || consensusOutputIndex < 0) return null;
-    if (selectedRun === consensusOutputIndex) return null;
+    if (selectedRun === null || !reference) return null;
+    if (reference.runIndex === selectedRun) return null;
 
     const selectedOutput = analyzed[selectedRun]?.run?.output;
-    const consensusOutput = analyzed[consensusOutputIndex]?.run?.output;
-    if (!selectedOutput || !consensusOutput) return null;
+    if (!selectedOutput || !reference.output) return null;
 
     const format = (s: string): string => {
-      try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
+      const normalized = s.replace(/^```\w*\n?/, '').replace(/\n?```$/, '').trim();
+
+      try { return JSON.stringify(JSON.parse(normalized), null, 2); } catch { return normalized; }
     };
 
-    return computeDiff(format(consensusOutput), format(selectedOutput));
-  }, [selectedRun, consensusOutputIndex, analyzed]);
+    return computeDiff(format(reference.output), format(selectedOutput));
+  }, [selectedRun, reference, analyzed]);
 
   if (!selected) {
     return (
@@ -61,12 +64,10 @@ const RunDetailView: React.FC<Props> = ({
   return (
     <div className="detail-view__content">
       <div className="flex-col results__container">
-        {/* Back button */}
         <button className="btn btn--ghost btn--sm" onClick={onBack}>
-          &#8592; Back to prompt
+          Close detail
         </button>
 
-        {/* Header */}
         <div className="detail-view__header">
           <span className="detail-view__title">
             Run {selected.index + 1}
@@ -82,10 +83,21 @@ const RunDetailView: React.FC<Props> = ({
             {selected.parseFailed && (
               <span className="badge badge--warning results__badge-ml-sm">non-JSON</span>
             )}
+            {reference?.kind === 'anchor' && reference.runIndex === selected.index && (
+              <span className="badge badge--primary results__badge-ml-sm">anchor</span>
+            )}
           </span>
+          {selected.run && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => onPromoteRun(selected.index)}
+            >
+              promote as anchor
+            </button>
+          )}
         </div>
 
-        {/* Metadata */}
         {selected.run && (
           <div className="results__meta-grid">
             <div className="meta-card">
@@ -103,7 +115,6 @@ const RunDetailView: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Validation errors */}
         {selected.validationErrors.length > 0 && (
           <div className="alert alert--warning results__alert-spaced">
             <span className="alert__icon">!</span>
@@ -121,7 +132,6 @@ const RunDetailView: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Deviation summary */}
         {selected.deviations.length > 0 && (
           <div className="alert alert--info results__alert-spaced">
             <span className="alert__icon">i</span>
@@ -130,7 +140,7 @@ const RunDetailView: React.FC<Props> = ({
                 <div>Missing: {selected.deviations.filter(d => d.type === 'missing').map(d => d.path).join(', ')}</div>
               )}
               {selected.deviations.filter(d => d.type === 'type_mismatch').length > 0 && (
-                <div>Type mismatch: {selected.deviations.filter(d => d.type === 'type_mismatch').map(d => `${d.path} (${d.expected} → ${d.actual})`).join(', ')}</div>
+                <div>Type mismatch: {selected.deviations.filter(d => d.type === 'type_mismatch').map(d => `${d.path} (${d.expected} -> ${d.actual})`).join(', ')}</div>
               )}
               {selected.deviations.filter(d => d.type === 'extra').length > 0 && (
                 <div>Extra: {selected.deviations.filter(d => d.type === 'extra').map(d => d.path).join(', ')}</div>
@@ -139,17 +149,37 @@ const RunDetailView: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Diff view */}
+        {selected.run?.tool_calls?.length ? (
+          <div className="card">
+            <div className="card__header">
+              <span className="section-label">Tool Calls</span>
+            </div>
+            <div className="card__body results__tool-calls">
+              {selected.run.tool_calls.map((toolCall, index) => (
+                <div key={toolCall.call_id ?? `${toolCall.name}-${index}`} className="results__tool-call-card">
+                  <div className="results__tool-call-head">
+                    <span className="results__tool-call-name">{toolCall.name}</span>
+                    <span className="badge">call {index + 1}</span>
+                  </div>
+                  <pre className="results__tool-call-args">
+                    {JSON.stringify(toolCall.arguments ?? {}, null, 2)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {selectedDiff && selectedRun !== null && !diffDismissed && (
           <OutputDiffView
             diff={selectedDiff}
-            consensusRunLabel={`Run ${consensusOutputIndex + 1}`}
+            referenceLabel={reference?.label ?? 'reference'}
             selectedRunLabel={`Run ${selectedRun + 1}`}
+            referenceKind={reference?.kind ?? 'consensus'}
             onClose={() => setDiffDismissed(true)}
           />
         )}
 
-        {/* View toggle */}
         <div className="seg-control results__seg-control">
           <button
             className={`seg-control__btn ${detailMode === 'tree' ? 'is-active' : ''}`}
@@ -165,7 +195,6 @@ const RunDetailView: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Output content */}
         {selected.error ? (
           <div className="alert alert--danger">
             <span className="alert__icon">!</span>

@@ -9,15 +9,21 @@ export function AppShell() {
           <NavLink
             className={({ isActive }) => `app-shell__link${isActive ? " is-active" : ""}`}
             end
-            to="/"
+            to="."
           >
             Graph
           </NavLink>
           <NavLink
             className={({ isActive }) => `app-shell__link${isActive ? " is-active" : ""}`}
-            to="/playground"
+            to="playground"
           >
             Playground
+          </NavLink>
+          <NavLink
+            className={({ isActive }) => `app-shell__link${isActive ? " is-active" : ""}`}
+            to="prompts"
+          >
+            Prompts
           </NavLink>
         </div>
       </nav>

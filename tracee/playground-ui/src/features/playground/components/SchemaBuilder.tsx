@@ -1,5 +1,5 @@
 import React from 'react';
-import type { SchemaArrayItemType, SchemaProperty, SchemaPropertyType } from '../types/prompt';
+import type { SchemaArrayItemType, SchemaProperty, SchemaPropertyType } from '../../../types/prompt';
 
 interface Props {
   properties: SchemaProperty[];
@@ -9,17 +9,53 @@ interface Props {
 const TYPE_OPTIONS: SchemaPropertyType[] = ['string', 'number', 'integer', 'boolean', 'null', 'array'];
 const ARRAY_ITEM_OPTIONS: SchemaArrayItemType[] = ['string', 'number', 'integer', 'boolean'];
 
-export function toJsonSchema(props: SchemaProperty[]): Record<string, unknown> {
+export function createSchemaProperty(): SchemaProperty {
+  const randomId =
+    globalThis.crypto?.randomUUID?.() ??
+    `schema-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  return {
+    id: randomId,
+    name: '',
+    type: 'string',
+    description: '',
+    required: false,
+  };
+}
+
+export function getSchemaValidationError(props: SchemaProperty[]): string | null {
+  if (props.length === 0) {
+    return 'Add at least one output field.';
+  }
+
   const seen = new Set<string>();
-  const validProps = props.filter(p => {
-    const name = p.name.trim();
-    if (!name || seen.has(name)) return false;
+
+  for (const prop of props) {
+    const name = prop.name.trim();
+
+    if (!name) {
+      return 'Each output field needs a name.';
+    }
+
+    if (seen.has(name)) {
+      return 'Output field names must be unique.';
+    }
+
     seen.add(name);
-    return true;
-  });
+  }
+
+  return null;
+}
+
+export function toJsonSchema(props: SchemaProperty[]): Record<string, unknown> {
+  const validProps = props.map(prop => ({
+    ...prop,
+    name: prop.name.trim(),
+  }));
 
   return {
     type: 'object',
+    additionalProperties: false,
     properties: Object.fromEntries(
       validProps.map(p => [
         p.name.trim(),
@@ -38,7 +74,7 @@ const SchemaBuilder: React.FC<Props> = ({ properties, onChange }) => {
   const addProperty = () => {
     onChange([
       ...properties,
-      { id: crypto.randomUUID(), name: '', type: 'string', description: '', required: false },
+      createSchemaProperty(),
     ]);
   };
 

@@ -59,14 +59,13 @@ Unit tests live in `src/**/*.test.ts` and are run with `npm run test` (Vitest). 
 src/
 ├── main.tsx              # Entry point. Mounts the React app into the HTML page.
 ├── App.tsx               # Root component. Sets up providers (global state) and routes.
-├── index.css             # All styles for the application (single CSS file).
+├── index.css             # Global stylesheet entry point. Imports shared and feature styles.
 ├── vite-env.d.ts         # TypeScript declarations so you can import .svg and .css files.
 │
 ├── api/                  # Functions that call the backend. One file per domain.
 ├── types/                # TypeScript interfaces that mirror the backend data models.
 ├── hooks/                # Custom React hooks that fetch and transform data.
 ├── context/              # React Contexts that hold global UI state.
-├── components/           # Shared UI components used across pages.
 ├── features/             # Feature modules. Each subfolder is a self-contained section of the app.
 ├── utils/                # Shared utilities (e.g. schema-validation for validating trace output against agent output schema).
 └── assets/               # SVG icons used in the UI.
@@ -141,11 +140,19 @@ Each folder is a self-contained part of the application:
 | `controls/FrameScrubber.tsx` | Timeline control to step through trace execution frames when a trace is selected; sets `activeFrameIndex`. |
 | `nodes/SchemaValidationIndicator.tsx` | Used in AgentNode execution variant; shows whether the node’s output conforms to its output schema (valid/invalid/missing), using `utils/schema-validation` (ajv). |
 
+**`features/app-shell/`** -- Route shell and top-level navigation.
+
+| File | Purpose |
+|------|---------|
+| `AppShell.tsx` | Shared route shell with the top navigation and outlet. |
+
 **`features/playground/`** -- The prompt testing page.
 
 | File | Purpose |
 |------|---------|
 | `PlaygroundPage.tsx` | Form to type a prompt, pick a model, execute a run, and see the output. |
+| `components/` | Playground-specific form, result, diff, and prompt-library components. |
+| `playground.css` | Styles scoped to the playground feature. |
 
 ## Key Concepts
 
@@ -210,7 +217,7 @@ const nodeTypes: NodeTypes = {
 
 ### CSS Approach
 
-All styles live in a single file: `src/index.css`. The project uses **BEM-like** class naming, which stands for Block-Element-Modifier. The convention looks like this:
+Global styles are loaded from `src/index.css`, which imports shared and feature-level stylesheets. The project uses **BEM-like** class naming, which stands for Block-Element-Modifier. The convention looks like this:
 
 ```css
 /* Block: the top-level component */
@@ -227,7 +234,7 @@ All styles live in a single file: `src/index.css`. The project uses **BEM-like**
 
 The benefit of BEM is that class names are descriptive and unlikely to collide. You can look at a class name like `.side-panel__meta-card` and immediately know it belongs to the side panel component.
 
-There are no CSS modules, no Tailwind, and no CSS-in-JS. If you need to add styles, add them to `index.css` following the same naming pattern.
+There are no CSS modules, no Tailwind, and no CSS-in-JS. If you need to add styles, place shared styles in `index.css` and feature-specific styles alongside the feature.
 
 ## How to Add a New Feature
 
@@ -268,7 +275,7 @@ export interface MyType {
 <Route path="your-page" element={<YourPage />} />
 ```
 
-3. Optionally add a navigation link in `src/components/AppShell.tsx`.
+3. Optionally add a navigation link in `src/features/app-shell/AppShell.tsx`.
 
 ### Adding a new panel or control to the graph viewer
 

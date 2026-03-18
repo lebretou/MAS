@@ -1,15 +1,23 @@
 import React from 'react';
-import type { ConsensusSchema, FieldDeviation } from '../utils/schemaAggregation';
+import type { ConsensusSchema, FieldDeviation } from '../../../utils/schemaAggregation';
 
 interface Props {
   consensus: ConsensusSchema;
-  runDeviations: FieldDeviation[][]; // deviations per run
+  runDeviations: FieldDeviation[][];
   onCellClick?: (runIndex: number, path: string) => void;
+  title?: string;
+  hint?: string;
 }
 
 type CellStatus = 'ok' | 'miss' | 'type' | 'extra' | 'na';
 
-const DeviationHeatmap: React.FC<Props> = ({ consensus, runDeviations, onCellClick }) => {
+const DeviationHeatmap: React.FC<Props> = ({
+  consensus,
+  runDeviations,
+  onCellClick,
+  title = 'Deviation Heatmap',
+  hint = 'Fields vs. Runs',
+}) => {
   const majorityThreshold = consensus.totalRuns / 2;
   const significantFields = consensus.fields
     .filter(f => f.count >= majorityThreshold)
@@ -19,10 +27,7 @@ const DeviationHeatmap: React.FC<Props> = ({ consensus, runDeviations, onCellCli
         .flatMap(devs => devs.filter(d => d.type === 'extra').map(d => d.path))
     );
 
-  // Deduplicate
   const allFields = Array.from(new Set(significantFields));
-
-  // Skip array index fields for cleaner display
   const displayFields = allFields.filter(f => !f.includes('['));
 
   if (displayFields.length === 0) return null;
@@ -63,8 +68,8 @@ const DeviationHeatmap: React.FC<Props> = ({ consensus, runDeviations, onCellCli
   return (
     <div className="card">
       <div className="card__header">
-        <h3 className="card__title">Deviation Heatmap</h3>
-        <span className="field__hint heatmap__hint">Fields vs. Runs</span>
+        <h3 className="card__title">{title}</h3>
+        <span className="field__hint heatmap__hint">{hint}</span>
       </div>
       <div className="card__body heatmap__body">
         <table className="heatmap">

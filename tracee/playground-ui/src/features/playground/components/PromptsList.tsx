@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { promptAPI } from '../services/api';
-import type { PromptListItem, PromptWithVersions } from '../types/prompt';
+import { promptAPI } from '../../../services/api';
+import type { PromptListItem, PromptWithVersions } from '../../../types/prompt';
 
 type ExpandedState = PromptWithVersions | 'loading' | 'error';
 
@@ -21,7 +21,6 @@ const PromptsList: React.FC = () => {
 
   const toggleRow = async (promptId: string) => {
     if (expanded[promptId] !== undefined) {
-      // Collapse
       setExpanded(prev => {
         const next = { ...prev };
         delete next[promptId];
@@ -30,7 +29,6 @@ const PromptsList: React.FC = () => {
       return;
     }
 
-    // Expand — fetch if not cached
     setExpanded(prev => ({ ...prev, [promptId]: 'loading' }));
     try {
       const data = await promptAPI.getPrompt(promptId);
@@ -72,7 +70,6 @@ const PromptsList: React.FC = () => {
 
   return (
     <div className="flex-col prompts__container">
-      <h2 className="prompts__heading">Prompts</h2>
       <div className="card">
         <div className="card__body prompts__card-body">
           <table className="table">

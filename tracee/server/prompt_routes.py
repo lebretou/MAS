@@ -1,12 +1,12 @@
 """API routes for prompt management."""
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backbone.models.prompt_artifact import (
     Prompt,
     PromptComponent,
-    PromptComponentType,
+    PromptTool,
     PromptVersion,
 )
 from backbone.utils.identifiers import utc_timestamp
@@ -43,6 +43,7 @@ class CreateVersionRequest(BaseModel):
     components: list[PromptComponent]
     variables: dict[str, str] | None = None
     output_schema: dict | None = None
+    tools: list[PromptTool] = Field(default_factory=list)
 
 
 class PromptWithVersions(BaseModel):
@@ -167,6 +168,7 @@ def create_version(prompt_id: str, request: CreateVersionRequest) -> PromptVersi
         components=request.components,
         variables=request.variables,
         output_schema=request.output_schema,
+        tools=request.tools,
         created_at=now,
     )
     
@@ -219,6 +221,7 @@ def resolve_version(prompt_id: str, version_id: str) -> dict:
         "resolved_text": resolved_text,
         "component_count": len(version.components),
         "enabled_count": sum(1 for c in version.components if c.enabled),
+        "tool_count": len(version.tools),
     }
 
 

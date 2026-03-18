@@ -1,3 +1,11 @@
+import type { PromptTool } from "./prompt";
+
+export interface PlaygroundToolCall {
+  call_id?: string | null;
+  name: string;
+  arguments?: unknown;
+}
+
 export interface PlaygroundRun {
   run_id: string;
   created_at: string;
@@ -10,6 +18,8 @@ export interface PlaygroundRun {
   input_variables: Record<string, string>;
   resolved_prompt: string;
   output_schema?: Record<string, unknown> | null;
+  tools?: PromptTool[] | null;
+  tool_calls?: PlaygroundToolCall[] | null;
   output: string;
   output_schema_used?: boolean;
   latency_ms: number | null;

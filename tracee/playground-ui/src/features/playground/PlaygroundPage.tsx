@@ -1,39 +1,19 @@
-import { useState } from "react";
-import CreateRun from "../../components/CreateRun";
-import PromptsList from "../../components/PromptsList";
-
-type PlaygroundTab = "create" | "prompts";
+import CreateRun from "./components/CreateRun";
+import iconPlayground from "../../assets/icon-playground.svg";
 
 export function PlaygroundPage() {
-  const [tab, setTab] = useState<PlaygroundTab>("create");
-
   return (
-    <div className="page-container flex-col">
+    <div className="page-container flex-col playground-page">
       <div className="flex-col">
-        <h2>Playground</h2>
+        <div className="playground-page__title-row">
+          <img src={iconPlayground} alt="" className="playground-page__title-icon" aria-hidden />
+          <h2>Playground</h2>
+        </div>
         <p className="field__hint">
-          Run prompt experiments and inspect saved prompt versions.
+          Run prompt experiments and inspect the output side by side.
         </p>
       </div>
-
-      <div className="tab-bar">
-        <button
-          className={`tab-bar__item ${tab === "create" ? "is-active" : ""}`}
-          onClick={() => setTab("create")}
-          type="button"
-        >
-          Run Playground
-        </button>
-        <button
-          className={`tab-bar__item ${tab === "prompts" ? "is-active" : ""}`}
-          onClick={() => setTab("prompts")}
-          type="button"
-        >
-          Prompt Library
-        </button>
-      </div>
-
-      {tab === "create" ? <CreateRun /> : <PromptsList />}
+      <CreateRun />
     </div>
   );
 }

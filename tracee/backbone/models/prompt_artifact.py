@@ -1,9 +1,10 @@
 """Data model for prompts created in the playground"""
 
 import json
+import re
 from enum import Enum
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class SchemaMode(str, Enum):
@@ -42,6 +43,85 @@ class PromptComponent(BaseModel):
     enabled: bool = True
 
 
+class ToolArgumentType(str, Enum):
+    """Supported primitive argument types for prompt-authored tools."""
+
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    array = "array"
+    object = "object"
+
+
+class PromptToolArgument(BaseModel):
+    """A single tool argument exposed to the model."""
+
+    name: str
+    description: str | None = None
+    type: ToolArgumentType = ToolArgumentType.string
+    required: bool = False
+    allowed_values: list[str] | None = None
+
+    @model_validator(mode="after")
+    def validate_argument(self) -> "PromptToolArgument":
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.name):
+            raise ValueError(
+                "tool argument name must start with a letter or underscore and contain only letters, numbers, and underscores"
+            )
+        if self.allowed_values and self.type != ToolArgumentType.string:
+            raise ValueError("allowed_values are only supported for string tool arguments")
+        return self
+
+
+class PromptTool(BaseModel):
+    """A custom tool definition authored alongside a prompt version."""
+
+    name: str
+    description: str
+    arguments: list[PromptToolArgument] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_tool(self) -> "PromptTool":
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", self.name):
+            raise ValueError(
+                "tool name must be 1-64 chars and contain only letters, numbers, underscores, or hyphens"
+            )
+        if self.name == "structured_output":
+            raise ValueError("tool name 'structured_output' is reserved")
+
+        argument_names = [argument.name for argument in self.arguments]
+        if len(argument_names) != len(set(argument_names)):
+            raise ValueError("tool argument names must be unique within a tool")
+        return self
+
+    def input_schema(self) -> dict:
+        """Convert the tool definition to a JSON Schema object."""
+        properties: dict[str, dict] = {}
+        required: list[str] = []
+
+        for argument in self.arguments:
+            schema: dict = {"type": argument.type.value}
+            if argument.description:
+                schema["description"] = argument.description
+            if argument.type == ToolArgumentType.array:
+                schema["items"] = {"type": "string"}
+            if argument.type == ToolArgumentType.object:
+                schema["additionalProperties"] = True
+            if argument.allowed_values:
+                schema["enum"] = argument.allowed_values
+            properties[argument.name] = schema
+            if argument.required:
+                required.append(argument.name)
+
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": False,
+        }
+
+
 class Prompt(BaseModel):
     """A prompt artifact that can have multiple versions.
     
@@ -75,6 +155,7 @@ class PromptVersion(BaseModel):
     components: list[PromptComponent]
     variables: dict[str, str] | None = None # we will support placeholders/variables
     output_schema: dict | None = None  # JSON Schema for structured LLM output
+    tools: list[PromptTool] = Field(default_factory=list)
     created_at: str
 
     @model_validator(mode="after")
@@ -84,6 +165,9 @@ class PromptVersion(BaseModel):
                 raise ValueError(
                     "output_schema must have top-level 'type' and 'properties' keys"
                 )
+        tool_names = [tool.name for tool in self.tools]
+        if len(tool_names) != len(set(tool_names)):
+            raise ValueError("tool names must be unique within a prompt version")
         return self
 
     def resolve(self, *, schema_mode: SchemaMode = SchemaMode.full) -> str:

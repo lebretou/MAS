@@ -8,6 +8,8 @@ from backbone.models.playground_run import PlaygroundRun, PlaygroundRunCreate
 from backbone.models.prompt_artifact import (
     PromptComponent,
     PromptComponentType,
+    PromptTool,
+    PromptToolArgument,
     PromptVersion,
 )
 from backbone.models.trace_event import TraceEvent
@@ -143,6 +145,59 @@ class TestOutputSchema:
         restored = PromptVersion.model_validate_json(version.model_dump_json())
         assert restored.output_schema == schema
 
+    def test_round_trip_with_tools(self):
+        """PromptVersion with custom tools serializes and deserializes cleanly."""
+        version = self._make_version()
+        version.tools = [
+            PromptTool(
+                name="explore_dataset",
+                description="return basic information about a dataset",
+                arguments=[
+                    PromptToolArgument(
+                        name="dataset_name",
+                        description="name of the dataset to inspect",
+                        required=True,
+                    )
+                ],
+            )
+        ]
+        restored = PromptVersion.model_validate_json(version.model_dump_json())
+        assert restored.tools[0].name == "explore_dataset"
+        assert restored.tools[0].arguments[0].name == "dataset_name"
+
+    def test_duplicate_tool_names_raise(self):
+        """PromptVersion rejects duplicate tool names."""
+        with pytest.raises(ValueError, match="tool names must be unique"):
+            PromptVersion(
+                prompt_id="test-prompt",
+                version_id="v1",
+                name="Test",
+                components=[
+                    PromptComponent(type=PromptComponentType.role, content="You are a helpful assistant."),
+                ],
+                tools=[
+                    PromptTool(name="lookup", description="first tool"),
+                    PromptTool(name="lookup", description="second tool"),
+                ],
+                created_at=utc_timestamp(),
+            )
+
+    def test_reserved_tool_name_raises(self):
+        """PromptVersion rejects reserved internal tool names."""
+        with pytest.raises(ValueError, match="reserved"):
+            PromptVersion(
+                prompt_id="test-prompt",
+                version_id="v1",
+                name="Test",
+                components=[
+                    PromptComponent(type=PromptComponentType.role, content="You are a helpful assistant."),
+                ],
+                tools=[
+                    PromptTool(name="structured_output", description="conflicts with internal tool"),
+                ],
+                created_at=utc_timestamp(),
+            )
+
     def test_playground_run_accepts_output_schema(self):
         """PlaygroundRun accepts output_schema field without extra-field rejection."""
         schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
@@ -180,6 +235,35 @@ class TestOutputSchema:
         schema = {"type": "object", "properties": {"score": {"type": "number"}}}
         req = PlaygroundRunCreate(prompt_id="p1", output_schema=schema)
         assert req.output_schema == schema
+
+    def test_playground_run_accepts_tool_calls(self):
+        """PlaygroundRun accepts persisted tool call metadata."""
+        run = PlaygroundRun(
+            run_id="run-3",
+            created_at=utc_timestamp(),
+            prompt_id="p1",
+            version_id="v1",
+            model="gpt-4o",
+            provider="openai",
+            input_variables={},
+            resolved_prompt="Hello",
+            tools=[
+                PromptTool(
+                    name="explore_dataset",
+                    description="return basic information about a dataset",
+                )
+            ],
+            tool_calls=[
+                {
+                    "call_id": "call-1",
+                    "name": "explore_dataset",
+                    "arguments": {"dataset_name": "sales"},
+                }
+            ],
+            output='[{"name": "explore_dataset"}]',
+        )
+        assert run.tools[0].name == "explore_dataset"
+        assert run.tool_calls[0].name == "explore_dataset"
 
 
 class TestTraceEventRoundTrip:

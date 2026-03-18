@@ -1,12 +1,13 @@
 import React from 'react';
-import type { PromptComponent, PromptComponentType } from '../types/prompt';
+import type { PromptComponent, PromptComponentType } from '../../../types/prompt';
 
 interface Props {
   components: PromptComponent[];
   onChange: (components: PromptComponent[]) => void;
+  showAddControl?: boolean;
 }
 
-const COMPONENT_TYPES: PromptComponentType[] = [
+export const COMPONENT_TYPES: PromptComponentType[] = [
   'role',
   'goal',
   'task',
@@ -20,7 +21,7 @@ const COMPONENT_TYPES: PromptComponentType[] = [
   'external_information',
 ];
 
-const COMPONENT_LABELS: Record<PromptComponentType, string> = {
+export const COMPONENT_LABELS: Record<PromptComponentType, string> = {
   role: 'Role',
   goal: 'Goal',
   task: 'Task',
@@ -48,9 +49,22 @@ const COMPONENT_PLACEHOLDERS: Record<PromptComponentType, string> = {
   external_information: 'Relevant external facts or background context...',
 };
 
-const PromptComponentEditor: React.FC<Props> = ({ components, onChange }) => {
+const PromptComponentEditor: React.FC<Props> = ({
+  components,
+  onChange,
+  showAddControl = true,
+}) => {
+  const textareaRefs = React.useRef<Array<HTMLTextAreaElement | null>>([]);
   const usedTypes = new Set(components.map(c => c.type));
   const availableTypes = COMPONENT_TYPES.filter(t => !usedTypes.has(t));
+
+  React.useEffect(() => {
+    textareaRefs.current.forEach((textarea) => {
+      if (!textarea) return;
+      textarea.style.height = '0px';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    });
+  }, [components]);
 
   const addComponent = (type: PromptComponentType) => {
     onChange([...components, { type, content: '', enabled: true }]);
@@ -87,27 +101,33 @@ const PromptComponentEditor: React.FC<Props> = ({ components, onChange }) => {
               className="icon-btn icon-btn--close"
               onClick={() => removeComponent(i)}
               title="Remove component"
+              aria-label={`remove ${COMPONENT_LABELS[comp.type]} component`}
             >
               &times;
             </button>
           </div>
           <div className="card__body prompt-components__body">
             <textarea
+              ref={(element) => {
+                textareaRefs.current[i] = element;
+              }}
               className="textarea"
               value={comp.content}
-              onChange={e => updateComponent(i, { content: e.target.value })}
-              rows={4}
+              onChange={e => {
+                e.target.style.height = '0px';
+                e.target.style.height = `${e.target.scrollHeight}px`;
+                updateComponent(i, { content: e.target.value });
+              }}
+              rows={2}
               placeholder={COMPONENT_PLACEHOLDERS[comp.type]}
               disabled={!comp.enabled}
+              aria-label={`${COMPONENT_LABELS[comp.type]} component content`}
             />
-            <span className="field__hint">
-              Use {'{{variable_name}}'} for input variables
-            </span>
           </div>
         </div>
       ))}
 
-      {availableTypes.length > 0 && (
+      {showAddControl && availableTypes.length > 0 && (
         <div className="prompt-components__add">
           <select
             className="select prompt-components__type-select"

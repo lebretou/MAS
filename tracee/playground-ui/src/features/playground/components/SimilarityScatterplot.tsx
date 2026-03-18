@@ -3,14 +3,16 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   LabelList,
 } from 'recharts';
-import type { RunClassification } from '../utils/schemaAggregation';
+import type { RunClassification } from '../../../utils/schemaAggregation';
 
 interface RunPoint {
   x: number;
   y: number;
-  index: number;
+  index: number | null;
   classification: RunClassification;
   similarity: number;
+  isAnchor: boolean;
+  label: string;
 }
 
 interface Props {
@@ -19,13 +21,6 @@ interface Props {
   onSelectRun: (index: number) => void;
 }
 
-/**
- * Compute dynamic color thresholds from the data distribution.
- * Blue = cluster core (>= median), Cyan = moderate, Red = outlier (< median - 1.5*stddev).
- *
- * When the spread is small (stddev < 0.05), the group is uniformly clustered
- * and no runs should be flagged as outliers regardless of absolute scores.
- */
 function computeSimilarityTiers(points: RunPoint[]): { blueThreshold: number; cyanThreshold: number } {
   const sims = points
     .filter(p => p.classification !== 'failure')
@@ -40,8 +35,6 @@ function computeSimilarityTiers(points: RunPoint[]): { blueThreshold: number; cy
   const variance = sims.reduce((sum, s) => sum + (s - mean) ** 2, 0) / sims.length;
   const stddev = Math.sqrt(variance);
 
-  // If the spread is tiny, all runs are effectively the same cluster.
-  // Set thresholds below the minimum so nothing gets flagged.
   if (stddev < 0.05) {
     return {
       blueThreshold: minSim,
@@ -58,13 +51,15 @@ function computeSimilarityTiers(points: RunPoint[]): { blueThreshold: number; cy
 function getSimilarityColor(
   similarity: number,
   classification: RunClassification,
+  isAnchor: boolean,
   blueThreshold: number,
   cyanThreshold: number,
 ): string {
+  if (isAnchor) return '#7c3aed';
   if (classification === 'failure') return '#dc2626';
   if (similarity >= blueThreshold) return '#1d4ed8';
-  if (similarity >= cyanThreshold) return '#06b6d4'; 
-  return '#dc2626';                                    
+  if (similarity >= cyanThreshold) return '#06b6d4';
+  return '#dc2626';
 }
 
 const SimilarityScatterplot: React.FC<Props> = ({ points, selectedIndex, onSelectRun }) => {
@@ -74,8 +69,13 @@ const SimilarityScatterplot: React.FC<Props> = ({ points, selectedIndex, onSelec
 
   const data = points.map(p => ({
     ...p,
-    label: String(p.index + 1),
-    fill: getSimilarityColor(p.similarity, p.classification, blueThreshold, cyanThreshold),
+    fill: getSimilarityColor(
+      p.similarity,
+      p.classification,
+      p.isAnchor,
+      blueThreshold,
+      cyanThreshold,
+    ),
   }));
 
   return (
@@ -110,7 +110,9 @@ const SimilarityScatterplot: React.FC<Props> = ({ points, selectedIndex, onSelec
                 const point = payload[0].payload as RunPoint & { label: string };
                 return (
                   <div className="scatter__tooltip">
-                    <div className="scatter__tooltip-title">Run {point.label}</div>
+                    <div className="scatter__tooltip-title">
+                      {point.isAnchor ? 'Anchor' : `Run ${point.label}`}
+                    </div>
                     <div className="scatter__tooltip-detail">
                       Avg similarity: {(point.similarity * 100).toFixed(0)}%
                     </div>
@@ -134,12 +136,12 @@ const SimilarityScatterplot: React.FC<Props> = ({ points, selectedIndex, onSelec
                 const isSelected = point.index === selectedIndex;
                 return (
                   <Cell
-                    key={point.index}
+                    key={point.isAnchor ? 'anchor' : point.index}
                     fill={point.fill}
-                    stroke={isSelected ? '#1a1a2e' : '#fff'}
-                    strokeWidth={isSelected ? 2.5 : 1}
-                    r={isSelected ? 8 : 6}
-                    style={{ cursor: 'pointer' }}
+                    stroke={point.isAnchor ? '#4c1d95' : isSelected ? '#1a1a2e' : '#fff'}
+                    strokeWidth={point.isAnchor ? 3 : isSelected ? 2.5 : 1}
+                    r={point.isAnchor ? 10 : isSelected ? 8 : 6}
+                    style={{ cursor: point.isAnchor ? 'default' : 'pointer' }}
                   />
                 );
               })}
@@ -158,6 +160,7 @@ const SimilarityScatterplot: React.FC<Props> = ({ points, selectedIndex, onSelec
           </ScatterChart>
         </ResponsiveContainer>
         <div className="scatter__legend">
+          <span><span className="scatter__legend-dot--anchor">●</span> Anchor</span>
           <span><span className="scatter__legend-dot--blue">●</span> Similar (cluster)</span>
           <span><span className="scatter__legend-dot--cyan">●</span> Moderate</span>
           <span><span className="scatter__legend-dot--red">●</span> Outlier</span>

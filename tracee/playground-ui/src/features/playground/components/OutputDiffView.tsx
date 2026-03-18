@@ -1,10 +1,11 @@
 import React from 'react';
-import type { DiffLine } from '../utils/jsonDiff';
+import type { DiffLine } from '../../../utils/jsonDiff';
 
 interface Props {
   diff: DiffLine[];
-  consensusRunLabel: string;
+  referenceLabel: string;
   selectedRunLabel: string;
+  referenceKind: 'anchor' | 'consensus';
   onClose: () => void;
 }
 
@@ -14,8 +15,15 @@ const PREFIX: Record<DiffLine['type'], string> = {
   removed: '- ',
 };
 
-const OutputDiffView: React.FC<Props> = ({ diff, consensusRunLabel, selectedRunLabel, onClose }) => {
+const OutputDiffView: React.FC<Props> = ({
+  diff,
+  referenceLabel,
+  selectedRunLabel,
+  referenceKind,
+  onClose,
+}) => {
   const hasChanges = diff.some(l => l.type !== 'same');
+  const referenceName = referenceKind === 'anchor' ? 'anchor' : 'consensus';
 
   return (
     <div className="card diff__card">
@@ -25,7 +33,7 @@ const OutputDiffView: React.FC<Props> = ({ diff, consensusRunLabel, selectedRunL
             Output Diff
           </h3>
           <span className="field__hint">
-            {selectedRunLabel} vs {consensusRunLabel} (consensus)
+            {selectedRunLabel} vs {referenceLabel} ({referenceName})
           </span>
         </div>
         <button
@@ -38,11 +46,11 @@ const OutputDiffView: React.FC<Props> = ({ diff, consensusRunLabel, selectedRunL
       <div className="card__body diff__body">
         {!hasChanges ? (
           <div className="diff__identical">
-            Output is identical to consensus.
+            Output is identical to the {referenceName}.
           </div>
         ) : (
           <div className="diff__legend">
-            <span><span className="diff__legend-removed">-</span> consensus</span>
+            <span><span className="diff__legend-removed">-</span> {referenceLabel}</span>
             <span><span className="diff__legend-added">+</span> this run</span>
           </div>
         )}

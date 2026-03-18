@@ -6,6 +6,16 @@ For MAS traces, see the trace events stored in JSONL files.
 
 from pydantic import BaseModel
 
+from backbone.models.prompt_artifact import PromptTool
+
+
+class PlaygroundToolCall(BaseModel):
+    """A tool call requested by the model during a playground run."""
+
+    call_id: str | None = None
+    name: str
+    arguments: dict | list | str | int | float | bool | None = None
+
 
 class PlaygroundRun(BaseModel):
     """Record of a single LLM invocation in the playground.
@@ -34,6 +44,8 @@ class PlaygroundRun(BaseModel):
     input_variables: dict[str, str]  # Template variable substitutions
     resolved_prompt: str  # The final prompt text sent to LLM
     output_schema: dict | None = None  # JSON Schema used for this run, if any
+    tools: list[PromptTool] | None = None
+    tool_calls: list[PlaygroundToolCall] | None = None
     output: str  # LLM response
 
     # metadata
