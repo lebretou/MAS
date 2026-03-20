@@ -1,5 +1,13 @@
 import React from 'react';
-import type { PromptComponent, PromptTool, SchemaProperty } from '../../../types/prompt';
+import type {
+  Prompt,
+  PromptComponent,
+  PromptListItem,
+  PromptTool,
+  PromptVersion,
+  PromptWithVersions,
+  SchemaProperty,
+} from '../../../types/prompt';
 import SchemaBuilder, {
   createSchemaProperty,
   getSchemaValidationError,
@@ -7,12 +15,15 @@ import SchemaBuilder, {
 } from './SchemaBuilder';
 import PromptComponentEditor from './PromptComponentEditor';
 import PromptToolsEditor from './PromptToolsEditor';
+import PromptVersionTree from './PromptVersionTree';
+import GuidedPromptStart from './GuidedPromptStart';
 import { useRunExecution } from '../../../hooks/useRunExecution';
 import type { PlaygroundRun } from '../../../types/playground';
 import iconModelConfig from '../../../assets/icon-modelconfig.svg';
 import iconTool from '../../../assets/icon-tool.svg';
 import iconOutputSchema from '../../../assets/icon-outputschema.svg';
 import iconVariable from '../../../assets/icon-variable.svg';
+import { promptAPI } from '../../../services/api';
 
 interface Props {
   onRunComplete: (results: Array<PlaygroundRun | null>, errors: Array<string | null>) => void;
@@ -69,7 +80,29 @@ const DEFAULT_INPUT_VARS: Record<string, string> = {
 const TOOL_NAME_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 const TOOL_ARGUMENT_NAME_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-type WorkspacePanel = 'model' | 'variables' | 'tools' | 'schema' | 'anchor';
+type WorkspacePanel = 'guided' | 'model' | 'variables' | 'tools' | 'schema' | 'anchor';
+
+interface LoadedPromptContext {
+  prompt: Prompt;
+  version: PromptVersion;
+  executeSignature: string;
+  saveSignature: string;
+}
+
+interface CompareTarget {
+  promptId: string;
+  promptName: string;
+  version: PromptVersion;
+}
+
+const PANEL_TITLES: Record<WorkspacePanel, string> = {
+  guided: 'Guided prompt start',
+  model: 'Model configuration',
+  variables: 'Input variables',
+  tools: 'Tools',
+  schema: 'Output schema',
+  anchor: 'Anchor output',
+};
 
 function createDefaultSchemaProperties(): SchemaProperty[] {
   return [
@@ -125,6 +158,48 @@ function createDefaultSchemaProperties(): SchemaProperty[] {
   ];
 }
 
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(',')}]`;
+  }
+
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, nestedValue]) => `${JSON.stringify(key)}:${stableSerialize(nestedValue)}`);
+
+    return `{${entries.join(',')}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function getExecutionPromptSignature(
+  components: PromptComponent[],
+  tools: PromptTool[],
+  outputSchema: Record<string, unknown> | null,
+): string {
+  return stableSerialize({
+    components,
+    tools,
+    outputSchema,
+  });
+}
+
+function getSavedPromptSignature(
+  components: PromptComponent[],
+  variables: Record<string, string>,
+  tools: PromptTool[],
+  outputSchema: Record<string, unknown> | null,
+): string {
+  return stableSerialize({
+    components,
+    variables,
+    tools,
+    outputSchema,
+  });
+}
+
 function collectPromptVariables(components: PromptComponent[]): string[] {
   const variableNames = new Set<string>();
 
@@ -149,6 +224,7 @@ const PromptForm: React.FC<Props> = ({
   onClearAnchor,
 }) => {
   const triggerRefs = React.useRef<Record<WorkspacePanel, HTMLButtonElement | null>>({
+    guided: null,
     model: null,
     variables: null,
     tools: null,
@@ -165,16 +241,37 @@ const PromptForm: React.FC<Props> = ({
   const [temperature, setTemperature] = React.useState(0);
   const [numRuns, setNumRuns] = React.useState(1);
   const [activePanel, setActivePanel] = React.useState<WorkspacePanel | null>(null);
+  const [loadedPromptContext, setLoadedPromptContext] = React.useState<LoadedPromptContext | null>(null);
+  const [savedPrompts, setSavedPrompts] = React.useState<PromptListItem[]>([]);
+  const [savedPromptsLoading, setSavedPromptsLoading] = React.useState(true);
+  const [savedPromptsError, setSavedPromptsError] = React.useState<string | null>(null);
+  const [selectedPromptId, setSelectedPromptId] = React.useState('');
+  const [selectedPromptData, setSelectedPromptData] = React.useState<PromptWithVersions | null>(null);
+  const [selectedPromptLoading, setSelectedPromptLoading] = React.useState(false);
+  const [comparisonTargets, setComparisonTargets] = React.useState<CompareTarget[]>([]);
+  const [promptIdInput, setPromptIdInput] = React.useState('');
+  const [promptNameInput, setPromptNameInput] = React.useState('');
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = React.useState<string | null>(null);
 
   const [schemaEnabled, setSchemaEnabled] = React.useState(true);
   const [schemaProperties, setSchemaProperties] = React.useState<SchemaProperty[]>(() => createDefaultSchemaProperties());
   const [tools, setTools] = React.useState<PromptTool[]>([]);
 
   const [toolError, setToolError] = React.useState<string | null>(null);
+  const [revisionNote, setRevisionNote] = React.useState('');
+  const [appliedTemplateId, setAppliedTemplateId] = React.useState<string | null>(null);
 
   const {
     loading, setupError, execute,
   } = useRunExecution(onRunComplete);
+
+  const refreshPromptList = React.useCallback(async () => {
+    const prompts = await promptAPI.getAllPrompts();
+    setSavedPrompts(prompts);
+    setSelectedPromptId((current) => current || prompts[0]?.prompt_id || '');
+    return prompts;
+  }, []);
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
@@ -244,6 +341,27 @@ const PromptForm: React.FC<Props> = ({
     };
   }, [activePanel]);
 
+  React.useEffect(() => {
+    refreshPromptList()
+      .catch(() => setSavedPromptsError('Failed to load saved prompts.'))
+      .finally(() => setSavedPromptsLoading(false));
+  }, [refreshPromptList]);
+
+  React.useEffect(() => {
+    if (!selectedPromptId) {
+      setSelectedPromptData(null);
+      return;
+    }
+
+    setComparisonTargets([]);
+
+    setSelectedPromptLoading(true);
+    promptAPI.getPrompt(selectedPromptId)
+      .then(setSelectedPromptData)
+      .catch(() => setSavedPromptsError('Failed to load prompt versions.'))
+      .finally(() => setSelectedPromptLoading(false));
+  }, [selectedPromptId]);
+
   const normalizedTools = React.useMemo(() => {
     return tools
       .map((tool) => ({
@@ -260,7 +378,89 @@ const PromptForm: React.FC<Props> = ({
       .filter((tool) => tool.name || tool.description || tool.arguments.length > 0);
   }, [tools]);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const loadVersionIntoEditor = React.useCallback((prompt: Prompt, version: PromptVersion) => {
+    setPromptComponents(version.components);
+    setTools(version.tools ?? []);
+    setSchemaEnabled(Boolean(version.output_schema));
+    setSchemaProperties(
+      version.output_schema && typeof version.output_schema.properties === 'object'
+        ? Object.entries(version.output_schema.properties as Record<string, Record<string, unknown>>).map(([name, rawSchema]) => {
+            const schema = rawSchema as Record<string, unknown> & {
+              type?: SchemaProperty['type'];
+              description?: string;
+              items?: { type?: SchemaProperty['items'] };
+            };
+            return ({
+            ...createSchemaProperty(),
+            name,
+            type: schema.type ?? 'string',
+            description: typeof schema.description === 'string' ? schema.description : '',
+            required: Array.isArray(version.output_schema?.required)
+              ? version.output_schema.required.includes(name)
+              : false,
+            items: schema.items && typeof schema.items === 'object'
+              ? schema.items.type ?? undefined
+              : undefined,
+          });
+        })
+        : createDefaultSchemaProperties()
+    );
+    setInputVars(version.variables ?? {});
+    setRevisionNote('');
+    setAppliedTemplateId(version.source_template_id ?? null);
+    setPromptIdInput(prompt.prompt_id);
+    setPromptNameInput(prompt.name);
+    setSaveError(null);
+    setSaveMessage(null);
+    setLoadedPromptContext({
+      prompt,
+      version,
+      executeSignature: getExecutionPromptSignature(
+        version.components.filter((component) => component.enabled && component.content.trim()),
+        version.tools ?? [],
+        (version.output_schema as Record<string, unknown> | null) ?? null
+      ),
+      saveSignature: getSavedPromptSignature(
+        version.components,
+        version.variables ?? {},
+        version.tools ?? [],
+        (version.output_schema as Record<string, unknown> | null) ?? null
+      ),
+    });
+  }, []);
+
+  const toggleCompareTarget = React.useCallback((promptName: string, version: PromptVersion) => {
+    setComparisonTargets((current) => {
+      const exists = current.find((target) => (
+        target.promptId === version.prompt_id && target.version.version_id === version.version_id
+      ));
+      if (exists) {
+        return current.filter((target) => !(
+          target.promptId === version.prompt_id && target.version.version_id === version.version_id
+        ));
+      }
+      if (current.length === 2) {
+        return [
+          current[1],
+          {
+            promptId: version.prompt_id,
+            promptName,
+            version,
+          },
+        ];
+      }
+      return [
+        ...current,
+        {
+          promptId: version.prompt_id,
+          promptName,
+          version,
+        },
+      ];
+    });
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setToolError(null);
 
@@ -318,7 +518,7 @@ const PromptForm: React.FC<Props> = ({
         ? toJsonSchema(schemaProperties)
         : null;
 
-    execute({
+    const executionResult = await execute({
       components: activePromptComponents,
       tools: normalizedTools,
       inputVariables: submittedInputVariables,
@@ -327,7 +527,128 @@ const PromptForm: React.FC<Props> = ({
       temperature,
       numRuns,
       outputSchema,
+      promptContext: {
+        promptId: loadedPromptContext?.prompt.prompt_id ?? null,
+        promptName: loadedPromptContext?.prompt.name ?? 'Playground Prompt',
+        versionId: loadedPromptContext?.version.version_id ?? null,
+        branchName: loadedPromptContext?.version.branch_name ?? null,
+        loadedSignature: loadedPromptContext?.executeSignature ?? null,
+        revisionNote: revisionNote.trim() || null,
+        sourceTemplateId: appliedTemplateId,
+      },
     });
+
+    if (!executionResult) {
+      return;
+    }
+
+    await refreshPromptList();
+    if (executionResult.promptId) {
+      setSelectedPromptId(executionResult.promptId);
+      const promptData = await promptAPI.getPrompt(executionResult.promptId);
+      setSelectedPromptData(promptData);
+      const executedVersion = promptData.versions.find((version) => version.version_id === executionResult.versionId);
+      if (executedVersion) {
+        loadVersionIntoEditor(promptData.prompt, executedVersion);
+      }
+    }
+  };
+
+  const handleSavePrompt = async () => {
+    setSaveError(null);
+    setSaveMessage(null);
+
+    const nextPromptId = promptIdInput.trim();
+    const nextPromptName = promptNameInput.trim();
+    if (!nextPromptId || !nextPromptName) {
+      setSaveError('Prompt ID and prompt name are required to save.');
+      return;
+    }
+
+    if (schemaError) {
+      setSaveError(schemaError);
+      return;
+    }
+
+    try {
+      const outputSchema =
+        schemaEnabled && !schemaError
+          ? toJsonSchema(schemaProperties)
+          : null;
+      const savedInputVariables = Object.fromEntries(
+        collectPromptVariables(promptComponents).map((variableName) => [variableName, inputVars[variableName] ?? ''])
+      );
+      const saveSignature = getSavedPromptSignature(
+        promptComponents,
+        savedInputVariables,
+        normalizedTools,
+        outputSchema
+      );
+
+      if (
+        loadedPromptContext &&
+        loadedPromptContext.prompt.prompt_id === nextPromptId &&
+        loadedPromptContext.saveSignature === saveSignature
+      ) {
+        if (loadedPromptContext.prompt.name !== nextPromptName) {
+          await promptAPI.updatePrompt(nextPromptId, {
+            name: nextPromptName,
+            description: loadedPromptContext.prompt.description ?? 'Saved from playground',
+          });
+        }
+        setSaveMessage(`Already saved as ${nextPromptId}/${loadedPromptContext.version.version_id}.`);
+        await refreshPromptList();
+        return;
+      }
+
+      const existingPromptData = await promptAPI.getPrompt(nextPromptId).catch(() => null);
+      if (!existingPromptData) {
+        await promptAPI.createPrompt({
+          prompt_id: nextPromptId,
+          name: nextPromptName,
+          description: 'Saved from playground',
+        });
+      } else if (existingPromptData.prompt.name !== nextPromptName) {
+        await promptAPI.updatePrompt(nextPromptId, {
+          name: nextPromptName,
+          description: existingPromptData.prompt.description ?? 'Saved from playground',
+        });
+      }
+
+      const latestPromptData = existingPromptData ?? await promptAPI.getPrompt(nextPromptId);
+      const parentVersionId =
+        loadedPromptContext?.prompt.prompt_id === nextPromptId
+          ? loadedPromptContext.version.version_id
+          : latestPromptData.prompt.latest_version_id ?? null;
+
+      const createdVersion = await promptAPI.createVersion(nextPromptId, {
+        name: revisionNote.trim() || `${nextPromptName} version`,
+        components: promptComponents,
+        variables: savedInputVariables,
+        output_schema: outputSchema,
+        tools: normalizedTools,
+        parent_version_id: parentVersionId,
+        branch_name: loadedPromptContext?.prompt.prompt_id === nextPromptId
+          ? loadedPromptContext.version.branch_name ?? undefined
+          : undefined,
+        revision_note: revisionNote.trim() || undefined,
+        source_template_id: appliedTemplateId ?? undefined,
+      });
+
+      const promptData = await promptAPI.getPrompt(nextPromptId);
+      setSelectedPromptId(nextPromptId);
+      setSelectedPromptData(promptData);
+      setPromptIdInput(nextPromptId);
+      setPromptNameInput(nextPromptName);
+      const savedVersion = promptData.versions.find((version) => version.version_id === createdVersion.version_id);
+      if (savedVersion) {
+        loadVersionIntoEditor(promptData.prompt, savedVersion);
+      }
+      await refreshPromptList();
+      setSaveMessage(`Saved ${nextPromptId}/${createdVersion.version_id}.`);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save prompt.');
+    }
   };
 
   return (
@@ -346,6 +667,19 @@ const PromptForm: React.FC<Props> = ({
                   </div>
 
                   <div className="create-run__workspace-toolbar">
+                    <button
+                      type="button"
+                      ref={(element) => {
+                        triggerRefs.current.guided = element;
+                      }}
+                      className={`btn btn--secondary btn--sm create-run__panel-btn${activePanel === 'guided' ? ' is-active' : ''}`}
+                      onClick={() => setActivePanel((current) => (current === 'guided' ? null : 'guided'))}
+                      aria-pressed={activePanel === 'guided'}
+                      aria-expanded={activePanel === 'guided'}
+                      aria-controls={activePanel === 'guided' ? activePanelId : undefined}
+                    >
+                      Guided start
+                    </button>
                     <button
                       type="button"
                       ref={(element) => {
@@ -422,16 +756,10 @@ const PromptForm: React.FC<Props> = ({
                       className="create-run__config-popover"
                       role="dialog"
                       aria-modal="true"
-                      aria-label={`${activePanel} configuration`}
+                      aria-label={activePanel ? PANEL_TITLES[activePanel] : 'Workspace panel'}
                     >
                       <div className="create-run__config-popover-head">
-                        <div className="create-run__panel-title">
-                          {activePanel === 'model' && 'Model configuration'}
-                          {activePanel === 'variables' && 'Input variables'}
-                          {activePanel === 'tools' && 'Tools'}
-                          {activePanel === 'schema' && 'Output schema'}
-                          {activePanel === 'anchor' && 'Anchor output'}
-                        </div>
+                        <div className="create-run__panel-title">{activePanel ? PANEL_TITLES[activePanel] : ''}</div>
                         <button
                           type="button"
                           ref={closeButtonRef}
@@ -442,6 +770,47 @@ const PromptForm: React.FC<Props> = ({
                           &times;
                         </button>
                       </div>
+
+                      {activePanel === 'guided' && (
+                        <GuidedPromptStart
+                          onApply={({ templateId, templateName, components, tools: templateTools, outputSchema }) => {
+                            setPromptComponents(components);
+                            setTools(templateTools ?? []);
+                            setAppliedTemplateId(templateId);
+                            setLoadedPromptContext(null);
+                            setRevisionNote('');
+                            setPromptNameInput((current) => current || templateName);
+                            setPromptIdInput((current) => current || templateId);
+                            if (outputSchema && typeof outputSchema === 'object' && 'properties' in outputSchema) {
+                              setSchemaEnabled(true);
+                              setSchemaProperties(
+                                Object.entries(outputSchema.properties as Record<string, Record<string, unknown>>).map(([name, rawSchema]) => {
+                                  const schema = rawSchema as Record<string, unknown> & {
+                                    type?: SchemaProperty['type'];
+                                    description?: string;
+                                    items?: { type?: SchemaProperty['items'] };
+                                  };
+                                  return ({
+                                  ...createSchemaProperty(),
+                                  name,
+                                  type: schema.type ?? 'string',
+                                  description: typeof schema.description === 'string' ? schema.description : '',
+                                  required: Array.isArray((outputSchema as { required?: string[] }).required)
+                                    ? ((outputSchema as { required?: string[] }).required ?? []).includes(name)
+                                    : false,
+                                  items: schema.items && typeof schema.items === 'object'
+                                    ? schema.items.type ?? undefined
+                                    : undefined,
+                                });
+                              })
+                              );
+                            } else {
+                              setSchemaEnabled(false);
+                            }
+                            setActivePanel(null);
+                          }}
+                        />
+                      )}
 
                       {activePanel === 'model' && (
                         <>
@@ -663,6 +1032,33 @@ const PromptForm: React.FC<Props> = ({
               </div>
 
               <div className="create-run__workspace-body">
+                <div className="form-grid create-run__prompt-meta-grid">
+                  <div className="field">
+                    <label className="field__label" htmlFor="playground-prompt-id">
+                      Prompt ID
+                    </label>
+                    <input
+                      id="playground-prompt-id"
+                      className="input"
+                      value={promptIdInput}
+                      onChange={(e) => setPromptIdInput(e.target.value)}
+                      placeholder="planner-prompt"
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field__label" htmlFor="playground-prompt-name">
+                      Prompt name
+                    </label>
+                    <input
+                      id="playground-prompt-name"
+                      className="input"
+                      value={promptNameInput}
+                      onChange={(e) => setPromptNameInput(e.target.value)}
+                      placeholder="Planner agent prompt"
+                    />
+                  </div>
+                </div>
+
                 <div className="field">
                   <div className="create-run__field-head">
                     <label className="field__label">Prompt Components</label>
@@ -678,12 +1074,116 @@ const PromptForm: React.FC<Props> = ({
                     onChange={setPromptComponents}
                   />
                 </div>
+
+                <div className="field create-run__saved-versions">
+                  <div className="create-run__field-head">
+                    <label className="field__label">Saved Versions</label>
+                    <span className="field__hint">
+                      inspect saved history here without leaving the playground
+                    </span>
+                  </div>
+
+                  {loadedPromptContext && (
+                    <div className="create-run__active-version">
+                      <div className="create-run__active-version-head">
+                        <span className="badge badge--primary">
+                          editing {loadedPromptContext.prompt.name} / {loadedPromptContext.version.version_id}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => {
+                            setLoadedPromptContext(null);
+                            setRevisionNote('');
+                          }}
+                        >
+                          detach
+                        </button>
+                      </div>
+                      <div className="field">
+                        <label className="field__label" htmlFor="prompt-revision-note">
+                          Revision note
+                        </label>
+                        <input
+                          id="prompt-revision-note"
+                          className="input"
+                          value={revisionNote}
+                          onChange={(e) => setRevisionNote(e.target.value)}
+                          placeholder="what changed in this revision?"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="create-run__saved-toolbar">
+                    <select
+                      className="select"
+                      value={selectedPromptId}
+                      onChange={(e) => setSelectedPromptId(e.target.value)}
+                      disabled={savedPromptsLoading || savedPrompts.length === 0}
+                    >
+                      <option value="">
+                        {savedPromptsLoading ? 'Loading prompts...' : 'Select saved prompt'}
+                      </option>
+                      {savedPrompts.map((prompt) => (
+                        <option key={prompt.prompt_id} value={prompt.prompt_id}>
+                          {prompt.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {savedPromptsError && <span className="field__error">{savedPromptsError}</span>}
+
+                  {selectedPromptLoading ? (
+                    <div className="create-run__panel-note">Loading saved versions...</div>
+                  ) : selectedPromptData ? (
+                    <>
+                      <PromptVersionTree
+                        promptId={selectedPromptData.prompt.prompt_id}
+                        promptName={selectedPromptData.prompt.name}
+                        versions={selectedPromptData.versions}
+                        activeVersionId={
+                          loadedPromptContext?.prompt.prompt_id === selectedPromptData.prompt.prompt_id
+                            ? loadedPromptContext.version.version_id
+                            : null
+                        }
+                        compareTargets={comparisonTargets.map((target) => ({
+                          promptId: target.promptId,
+                          versionId: target.version.version_id,
+                        }))}
+                        onLoadVersion={(version) => loadVersionIntoEditor(selectedPromptData.prompt, version)}
+                        onToggleCompare={(version) => toggleCompareTarget(selectedPromptData.prompt.name, version)}
+                      />
+                      {comparisonTargets.length > 0 && (
+                        <div className="create-run__compare-targets">
+                          {comparisonTargets.map((target, index) => (
+                            <span key={`${target.promptId}-${target.version.version_id}`} className="badge badge--neutral">
+                              compare {index + 1}: {target.promptName} / {target.version.version_id}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="create-run__panel-note">
+                      select a saved prompt to inspect versions and load one into the editor.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             <hr className="divider" />
 
             <div className="flex-row create-run__actions">
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={handleSavePrompt}
+              >
+                Save prompt
+              </button>
               <button
                 type="button"
                 ref={(element) => {
@@ -706,6 +1206,19 @@ const PromptForm: React.FC<Props> = ({
                 {loading ? 'Executing...' : 'Execute Run'}
               </button>
             </div>
+
+            {saveMessage && (
+              <div className="alert alert--success">
+                <span className="alert__icon">i</span>
+                {saveMessage}
+              </div>
+            )}
+            {saveError && (
+              <div className="alert alert--danger">
+                <span className="alert__icon">!</span>
+                {saveError}
+              </div>
+            )}
           </form>
         </div>
       </div>

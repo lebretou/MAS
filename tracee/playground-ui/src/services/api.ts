@@ -3,6 +3,7 @@ import type { PlaygroundRun, PlaygroundRunCreate, PlaygroundRunResponse } from "
 import type {
   Prompt,
   PromptListItem,
+  PromptTemplate,
   PromptVersion,
   PromptWithVersions,
   CreatePromptRequest,
@@ -39,6 +40,11 @@ export const promptAPI = {
     return response;
   },
 
+  async updatePrompt(promptId: string, data: { name: string; description?: string | null }): Promise<Prompt> {
+    const { data: response } = await client.patch<Prompt>(`/prompts/${promptId}`, data);
+    return response;
+  },
+
   async deletePrompt(promptId: string): Promise<void> {
     await client.delete(`/prompts/${promptId}`);
   },
@@ -60,6 +66,11 @@ export const promptAPI = {
 
   async getLatestVersion(promptId: string): Promise<PromptVersion> {
     const { data } = await client.get<PromptVersion>(`/prompts/${promptId}/latest`);
+    return data;
+  },
+
+  async getPromptTemplates(): Promise<PromptTemplate[]> {
+    const { data } = await client.get<PromptTemplate[]>("/prompt-templates");
     return data;
   },
 };

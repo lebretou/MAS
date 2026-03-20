@@ -5,6 +5,7 @@ import re
 from enum import Enum
 
 from pydantic import BaseModel, Field, model_validator
+from backbone.utils.identifiers import generate_config_id
 
 
 class SchemaMode(str, Enum):
@@ -38,6 +39,7 @@ class PromptComponentType(str, Enum):
 class PromptComponent(BaseModel):
     """A single component of a structured prompt."""
 
+    component_id: str | None = None
     type: PromptComponentType
     content: str
     enabled: bool = True
@@ -57,6 +59,7 @@ class ToolArgumentType(str, Enum):
 class PromptToolArgument(BaseModel):
     """A single tool argument exposed to the model."""
 
+    argument_id: str | None = None
     name: str
     description: str | None = None
     type: ToolArgumentType = ToolArgumentType.string
@@ -77,6 +80,7 @@ class PromptToolArgument(BaseModel):
 class PromptTool(BaseModel):
     """A custom tool definition authored alongside a prompt version."""
 
+    tool_id: str | None = None
     name: str
     description: str
     arguments: list[PromptToolArgument] = Field(default_factory=list)
@@ -140,6 +144,31 @@ class Prompt(BaseModel):
     latest_version_id: str | None = None  # track the latest version
 
 
+class PromptTemplateField(BaseModel):
+    """A structured decision field used to scaffold prompt creation."""
+
+    field_id: str
+    label: str
+    description: str | None = None
+    input_type: str = "textarea"
+    required: bool = True
+    placeholder: str | None = None
+    default_value: str = ""
+
+
+class PromptTemplate(BaseModel):
+    """A reusable prompt-start scaffold for common MAS roles."""
+
+    template_id: str
+    name: str
+    description: str | None = None
+    archetype: str | None = None
+    fields: list[PromptTemplateField] = Field(default_factory=list)
+    components: list[PromptComponent] = Field(default_factory=list)
+    suggested_tools: list[PromptTool] = Field(default_factory=list)
+    suggested_output_schema: dict | None = None
+
+
 class PromptVersion(BaseModel):
     """A versioned of the prompt created in the Playground.
     
@@ -151,6 +180,12 @@ class PromptVersion(BaseModel):
 
     version_id: str  # e.g., "v1", "v2", or a UUID
     name: str  # version-specific name/label
+    parent_version_id: str | None = None
+    root_version_id: str | None = None
+    branch_id: str | None = None
+    branch_name: str | None = None
+    revision_note: str | None = None
+    source_template_id: str | None = None
 
     components: list[PromptComponent]
     variables: dict[str, str] | None = None # we will support placeholders/variables
@@ -165,9 +200,27 @@ class PromptVersion(BaseModel):
                 raise ValueError(
                     "output_schema must have top-level 'type' and 'properties' keys"
                 )
+        for component in self.components:
+            if not component.component_id:
+                component.component_id = generate_config_id()
         tool_names = [tool.name for tool in self.tools]
         if len(tool_names) != len(set(tool_names)):
             raise ValueError("tool names must be unique within a prompt version")
+        for tool in self.tools:
+            if not tool.tool_id:
+                tool.tool_id = generate_config_id()
+            for argument in tool.arguments:
+                if not argument.argument_id:
+                    argument.argument_id = generate_config_id()
+        if self.parent_version_id and self.root_version_id is None:
+            raise ValueError("root_version_id is required when parent_version_id is set")
+        if self.root_version_id is None:
+            self.root_version_id = self.version_id
+        if self.branch_id is None:
+            branch_name = self.branch_name or "main"
+            self.branch_id = f"{self.prompt_id}:{branch_name}"
+        if self.branch_name is None:
+            self.branch_name = "main"
         return self
 
     def resolve(self, *, schema_mode: SchemaMode = SchemaMode.full) -> str:

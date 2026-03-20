@@ -170,6 +170,18 @@ def list_prompts() -> list[PromptRow]:
     ]
 
 
+def list_prompt_version_counts() -> dict[str, int]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            select prompt_id, count(*) as version_count
+            from prompt_versions
+            group by prompt_id
+            """
+        ).fetchall()
+    return {row["prompt_id"]: row["version_count"] for row in rows}
+
+
 def delete_prompt(prompt_id: str) -> None:
     with _connect() as conn:
         conn.execute("delete from prompt_versions where prompt_id = ?", (prompt_id,))

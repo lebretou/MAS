@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { promptAPI } from '../../../services/api';
 import type { PromptListItem, PromptWithVersions } from '../../../types/prompt';
+import PromptVersionTree from './PromptVersionTree';
 
 type ExpandedState = PromptWithVersions | 'loading' | 'error';
 
@@ -91,8 +92,14 @@ const PromptsList: React.FC = () => {
                     <tr
                       role="button"
                       tabIndex={0}
+                      aria-expanded={isExpanded}
                       onClick={() => toggleRow(prompt.prompt_id)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleRow(prompt.prompt_id); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleRow(prompt.prompt_id);
+                        }
+                      }}
                       className="prompts__row"
                     >
                       <td>
@@ -123,20 +130,11 @@ const PromptsList: React.FC = () => {
                             <span className="prompts__error-text">Failed to load versions.</span>
                           )}
                           {expandedData !== 'loading' && expandedData !== 'error' && expandedData && (
-                            <table className="table prompts__nested-table">
-                              <thead>
-                                <tr>
-                                  <th>Version ID</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {expandedData.versions.map(version => (
-                                  <tr key={version.version_id}>
-                                    <td className="table__mono">{version.version_id}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                            <PromptVersionTree
+                              promptId={expandedData.prompt.prompt_id}
+                              promptName={expandedData.prompt.name}
+                              versions={expandedData.versions}
+                            />
                           )}
                         </td>
                       </tr>

@@ -32,6 +32,15 @@ interface RunExecutionParams {
   temperature: number;
   numRuns: number;
   outputSchema: Record<string, unknown> | null;
+  promptContext?: {
+    promptId: string | null;
+    promptName: string;
+    versionId: string | null;
+    branchName?: string | null;
+    loadedSignature?: string | null;
+    revisionNote?: string | null;
+    sourceTemplateId?: string | null;
+  };
 }
 
 interface RunExecutionState {
@@ -86,11 +95,33 @@ export function useRunExecution(
     try {
       const signature = getPromptSignature(params);
       const cachedPromptVersion = cachedPromptVersionsRef.current.get(signature);
+      const promptContext = params.promptContext;
 
       let promptId = '';
       let versionId = '';
 
-      if (cachedPromptVersion) {
+      if (
+        promptContext?.promptId &&
+        promptContext.versionId &&
+        promptContext.loadedSignature === signature
+      ) {
+        promptId = promptContext.promptId;
+        versionId = promptContext.versionId;
+      } else if (promptContext?.promptId) {
+        promptId = promptContext.promptId;
+        const createdVersion = await promptAPI.createVersion(promptId, {
+          name: `${promptContext.promptName} revision`,
+          components: params.components,
+          variables: null,
+          output_schema: params.outputSchema,
+          tools: params.tools,
+          parent_version_id: promptContext.versionId,
+          branch_name: promptContext.branchName ?? undefined,
+          revision_note: promptContext.revisionNote ?? undefined,
+          source_template_id: promptContext.sourceTemplateId ?? undefined,
+        });
+        versionId = createdVersion.version_id;
+      } else if (cachedPromptVersion) {
         promptId = cachedPromptVersion.promptId;
         versionId = cachedPromptVersion.versionId;
       } else {
@@ -109,6 +140,7 @@ export function useRunExecution(
           variables: null,
           output_schema: params.outputSchema,
           tools: params.tools,
+          source_template_id: promptContext?.sourceTemplateId ?? undefined,
         });
 
         versionId = createdVersion.version_id;
@@ -139,12 +171,14 @@ export function useRunExecution(
 
       onRunComplete(results, errors);
       setState(prev => ({ ...prev, loading: false }));
+      return { promptId, versionId };
     } catch (err: unknown) {
       setState(prev => ({
         ...prev,
         loading: false,
         setupError: 'Setup failed: ' + getErrorMessage(err),
       }));
+      return null;
     }
   }, [onRunComplete]);
 

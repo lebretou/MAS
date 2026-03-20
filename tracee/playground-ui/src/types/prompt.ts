@@ -12,6 +12,7 @@ export type PromptComponentType =
   | "external_information";
 
 export interface PromptComponent {
+  component_id?: string | null;
   type: PromptComponentType;
   content: string;
   enabled: boolean;
@@ -26,6 +27,7 @@ export type ToolArgumentType =
   | "object";
 
 export interface PromptToolArgument {
+  argument_id?: string | null;
   name: string;
   description?: string | null;
   type: ToolArgumentType;
@@ -34,6 +36,7 @@ export interface PromptToolArgument {
 }
 
 export interface PromptTool {
+  tool_id?: string | null;
   name: string;
   description: string;
   arguments: PromptToolArgument[];
@@ -52,6 +55,12 @@ export interface PromptVersion {
   prompt_id: string;
   version_id: string;
   name: string;
+  parent_version_id?: string | null;
+  root_version_id?: string | null;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  revision_note?: string | null;
+  source_template_id?: string | null;
   components: PromptComponent[];
   variables?: Record<string, string> | null;
   output_schema?: Record<string, unknown> | null;
@@ -74,6 +83,27 @@ export interface PromptWithVersions {
   versions: PromptVersion[];
 }
 
+export interface PromptTemplateField {
+  field_id: string;
+  label: string;
+  description?: string | null;
+  input_type: string;
+  required: boolean;
+  placeholder?: string | null;
+  default_value?: string;
+}
+
+export interface PromptTemplate {
+  template_id: string;
+  name: string;
+  description?: string | null;
+  archetype?: string | null;
+  fields: PromptTemplateField[];
+  components: PromptComponent[];
+  suggested_tools?: PromptTool[];
+  suggested_output_schema?: Record<string, unknown> | null;
+}
+
 export interface CreatePromptRequest {
   prompt_id: string;
   name: string;
@@ -86,6 +116,10 @@ export interface CreateVersionRequest {
   variables?: Record<string, string> | null;
   output_schema?: Record<string, unknown> | null;
   tools?: PromptTool[];
+  parent_version_id?: string | null;
+  branch_name?: string | null;
+  revision_note?: string | null;
+  source_template_id?: string | null;
 }
 
 export type SchemaPropertyType = "string" | "number" | "integer" | "boolean" | "null" | "array";
