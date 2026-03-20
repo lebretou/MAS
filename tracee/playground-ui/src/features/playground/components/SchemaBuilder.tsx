@@ -1,5 +1,6 @@
 import React from 'react';
 import type { SchemaArrayItemType, SchemaProperty, SchemaPropertyType } from '../../../types/prompt';
+import { resizeTextarea } from '../../../utils/resizeTextarea';
 
 interface Props {
   properties: SchemaProperty[];
@@ -71,6 +72,8 @@ export function toJsonSchema(props: SchemaProperty[]): Record<string, unknown> {
 }
 
 const SchemaBuilder: React.FC<Props> = ({ properties, onChange }) => {
+  const textareaRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
+
   const addProperty = () => {
     onChange([
       ...properties,
@@ -85,6 +88,12 @@ const SchemaBuilder: React.FC<Props> = ({ properties, onChange }) => {
   const updateProperty = (index: number, patch: Partial<SchemaProperty>) => {
     onChange(properties.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   };
+
+  React.useEffect(() => {
+    Object.values(textareaRefs.current).forEach((textarea) => {
+      resizeTextarea(textarea);
+    });
+  }, [properties]);
 
   return (
     <div className="schema-builder">
@@ -138,10 +147,17 @@ const SchemaBuilder: React.FC<Props> = ({ properties, onChange }) => {
                       )}
                     </td>
                     <td>
-                      <input
-                        className="input"
+                      <textarea
+                        ref={(element) => {
+                          textareaRefs.current[prop.id] = element;
+                        }}
+                        className="textarea textarea--adaptive schema-builder__description"
                         value={prop.description}
-                        onChange={e => updateProperty(i, { description: e.target.value })}
+                        onChange={e => {
+                          resizeTextarea(e.target);
+                          updateProperty(i, { description: e.target.value });
+                        }}
+                        rows={2}
                         placeholder="Optional description"
                       />
                     </td>

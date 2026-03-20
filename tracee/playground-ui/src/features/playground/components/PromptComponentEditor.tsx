@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PromptComponent, PromptComponentType } from '../../../types/prompt';
+import { resizeTextarea } from '../../../utils/resizeTextarea';
 
 interface Props {
   components: PromptComponent[];
@@ -60,9 +61,7 @@ const PromptComponentEditor: React.FC<Props> = ({
 
   React.useEffect(() => {
     textareaRefs.current.forEach((textarea) => {
-      if (!textarea) return;
-      textarea.style.height = '0px';
-      textarea.style.height = `${textarea.scrollHeight}px`;
+      resizeTextarea(textarea);
     });
   }, [components]);
 
@@ -111,11 +110,10 @@ const PromptComponentEditor: React.FC<Props> = ({
               ref={(element) => {
                 textareaRefs.current[i] = element;
               }}
-              className="textarea"
+              className="textarea textarea--adaptive"
               value={comp.content}
               onChange={e => {
-                e.target.style.height = '0px';
-                e.target.style.height = `${e.target.scrollHeight}px`;
+                resizeTextarea(e.target);
                 updateComponent(i, { content: e.target.value });
               }}
               rows={2}

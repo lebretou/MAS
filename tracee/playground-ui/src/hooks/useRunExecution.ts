@@ -3,6 +3,7 @@ import axios from 'axios';
 import type { PromptComponent, PromptTool } from '../types/prompt';
 import type { PlaygroundRun, PlaygroundRunCreate } from '../types/playground';
 import { playgroundAPI, promptAPI } from '../services/api';
+import { generateUniquePromptId } from '../utils/promptNaming';
 
 function getErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
@@ -70,11 +71,20 @@ function stableSerialize(value: unknown): string {
 }
 
 function getPromptSignature(params: RunExecutionParams): string {
-  return stableSerialize({
-    components: params.components,
-    tools: params.tools,
-    outputSchema: params.outputSchema,
-  });
+  return stableSerialize(
+    params.promptContext?.promptId
+      ? {
+          components: params.components,
+          tools: params.tools,
+          outputSchema: params.outputSchema,
+        }
+      : {
+          components: params.components,
+          tools: params.tools,
+          outputSchema: params.outputSchema,
+          promptName: params.promptContext?.promptName ?? null,
+        }
+  );
 }
 
 export function useRunExecution(
@@ -112,7 +122,7 @@ export function useRunExecution(
         const createdVersion = await promptAPI.createVersion(promptId, {
           name: `${promptContext.promptName} revision`,
           components: params.components,
-          variables: null,
+          variables: params.inputVariables,
           output_schema: params.outputSchema,
           tools: params.tools,
           parent_version_id: promptContext.versionId,
@@ -126,18 +136,19 @@ export function useRunExecution(
         versionId = cachedPromptVersion.versionId;
       } else {
         const timestamp = Date.now();
-        promptId = `prompt_${timestamp}`;
+        const promptName = params.promptContext?.promptName?.trim() || `Playground Prompt ${timestamp}`;
+        promptId = await generateUniquePromptId(promptName, promptAPI.getPrompt);
 
         await promptAPI.createPrompt({
           prompt_id: promptId,
-          name: `Playground Prompt ${timestamp}`,
+          name: promptName,
           description: 'Created from playground',
         });
 
         const createdVersion = await promptAPI.createVersion(promptId, {
           name: 'v1',
           components: params.components,
-          variables: null,
+          variables: params.inputVariables,
           output_schema: params.outputSchema,
           tools: params.tools,
           source_template_id: promptContext?.sourceTemplateId ?? undefined,

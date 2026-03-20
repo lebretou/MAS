@@ -1,6 +1,7 @@
 import React from 'react';
 import { promptAPI } from '../../../services/api';
 import type { PromptComponent, PromptTemplate } from '../../../types/prompt';
+import { resizeTextarea } from '../../../utils/resizeTextarea';
 
 interface GuidedPromptStartResult {
   templateId: string;
@@ -21,6 +22,7 @@ function fillTemplateValue(template: string, values: Record<string, string>) {
 }
 
 const GuidedPromptStart: React.FC<Props> = ({ onApply }) => {
+  const textareaRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [templates, setTemplates] = React.useState<PromptTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = React.useState<string>('');
   const [fieldValues, setFieldValues] = React.useState<Record<string, string>>({});
@@ -53,6 +55,12 @@ const GuidedPromptStart: React.FC<Props> = ({ onApply }) => {
       : [],
     [fieldValues, selectedTemplate]
   );
+
+  React.useEffect(() => {
+    Object.values(textareaRefs.current).forEach((textarea) => {
+      resizeTextarea(textarea);
+    });
+  }, [fieldValues, selectedTemplateId]);
 
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -107,14 +115,20 @@ const GuidedPromptStart: React.FC<Props> = ({ onApply }) => {
             </label>
             <textarea
               id={`guided-${field.field_id}`}
-              className="textarea"
+              ref={(element) => {
+                textareaRefs.current[field.field_id] = element;
+              }}
+              className="textarea textarea--adaptive guided-start__textarea"
               value={fieldValues[field.field_id] ?? ''}
               rows={field.input_type === 'text' ? 2 : 4}
               placeholder={field.placeholder ?? ''}
-              onChange={(e) => setFieldValues((current) => ({
-                ...current,
-                [field.field_id]: e.target.value,
-              }))}
+              onChange={(e) => {
+                resizeTextarea(e.target);
+                setFieldValues((current) => ({
+                  ...current,
+                  [field.field_id]: e.target.value,
+                }));
+              }}
             />
             {showValidation && field.required && !fieldValues[field.field_id]?.trim() && (
               <span className="field__error">{field.label} is required.</span>

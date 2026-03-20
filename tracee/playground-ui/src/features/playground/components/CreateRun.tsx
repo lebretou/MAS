@@ -7,6 +7,7 @@ import ResultsComparison from './ResultsComparison';
 import RunDetailView from './RunDetailView';
 
 const CreateRun: React.FC = () => {
+  const [workspaceMode, setWorkspaceMode] = useState<'author' | 'analysis'>('author');
   const [results, setResults] = useState<Array<PlaygroundRun | null>>([]);
   const [runErrors, setRunErrors] = useState<Array<string | null>>([]);
   const [selectedRun, setSelectedRun] = useState<number | null>(null);
@@ -21,6 +22,7 @@ const CreateRun: React.FC = () => {
     setResults(newResults);
     setRunErrors(newErrors);
     setSelectedRun(null);
+    setWorkspaceMode('analysis');
     setAnchor((currentAnchor) => {
       if (currentAnchor?.source !== 'run') {
         return currentAnchor;
@@ -41,6 +43,11 @@ const CreateRun: React.FC = () => {
 
   const handleBack = useCallback(() => {
     setSelectedRun(null);
+  }, []);
+
+  const handleBackToEdit = useCallback(() => {
+    setSelectedRun(null);
+    setWorkspaceMode('author');
   }, []);
 
   const handleAnchorChange = useCallback((value: string) => {
@@ -75,26 +82,15 @@ const CreateRun: React.FC = () => {
     });
   }, [results]);
 
-  const showDetails = selectedRun !== null;
+  const hasResults = results.some((result) => result !== null) || runErrors.some((error) => Boolean(error));
 
   return (
-    <div className={`split-layout ${showDetails ? 'split-layout--with-detail' : 'split-layout--workspace'}`}>
-      <div className="split-layout__panel">
-        <span className="section-label">Prompt Configuration</span>
-        <div style={{ marginTop: 12 }}>
-          <PromptForm
-            onRunComplete={handleRunComplete}
-            anchorOutput={anchor?.output ?? ''}
-            anchorLabel={anchor?.label ?? null}
-            onAnchorChange={handleAnchorChange}
-            onClearAnchor={handleClearAnchor}
-          />
-        </div>
-      </div>
-
-      <div className="split-layout__panel">
-        <span className="section-label">Visualization + Results</span>
-        <div style={{ marginTop: 12 }}>
+    <PromptForm
+      mode={workspaceMode}
+      hasResults={hasResults}
+      onBackToEdit={handleBackToEdit}
+      analysisContent={(
+        <div className="playground-analysis">
           <ResultsComparison
             analyzed={analysis.analyzed}
             reference={analysis.reference}
@@ -106,21 +102,28 @@ const CreateRun: React.FC = () => {
             onSelectRun={handleSelectRun}
             onPromoteRun={handlePromoteRunToAnchor}
           />
-        </div>
-      </div>
-
-      {showDetails && (
-        <div className="split-layout__panel split-layout__panel--detail">
-          <RunDetailView
-            analyzed={analysis.analyzed}
-            selectedRun={selectedRun}
-            reference={analysis.reference}
-            onBack={handleBack}
-            onPromoteRun={handlePromoteRunToAnchor}
-          />
+          {selectedRun !== null && (
+            <div className="playground-analysis__detail">
+              <span className="section-label">Run Detail</span>
+              <div style={{ marginTop: 12 }}>
+                <RunDetailView
+                  analyzed={analysis.analyzed}
+                  selectedRun={selectedRun}
+                  reference={analysis.reference}
+                  onBack={handleBack}
+                  onPromoteRun={handlePromoteRunToAnchor}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
-    </div>
+      onRunComplete={handleRunComplete}
+      anchorOutput={anchor?.output ?? ''}
+      anchorLabel={anchor?.label ?? null}
+      onAnchorChange={handleAnchorChange}
+      onClearAnchor={handleClearAnchor}
+    />
   );
 };
 

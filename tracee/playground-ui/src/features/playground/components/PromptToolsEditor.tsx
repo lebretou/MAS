@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PromptTool, PromptToolArgument, ToolArgumentType } from '../../../types/prompt';
+import { resizeTextarea } from '../../../utils/resizeTextarea';
 
 interface Props {
   tools: PromptTool[];
@@ -34,6 +35,8 @@ function createArgument(): PromptToolArgument {
 }
 
 const PromptToolsEditor: React.FC<Props> = ({ tools, onChange }) => {
+  const textareaRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
+
   const updateTool = (toolIndex: number, patch: Partial<PromptTool>) => {
     onChange(tools.map((tool, index) => (index === toolIndex ? { ...tool, ...patch } : tool)));
   };
@@ -89,14 +92,14 @@ const PromptToolsEditor: React.FC<Props> = ({ tools, onChange }) => {
     );
   };
 
+  React.useEffect(() => {
+    Object.values(textareaRefs.current).forEach((textarea) => {
+      resizeTextarea(textarea);
+    });
+  }, [tools]);
+
   return (
     <div className="prompt-tools">
-      <div className="prompt-tools__intro">
-        <div className="field__hint">
-          tools are available during playground runs, but tool calls are only recorded right now.
-        </div>
-      </div>
-
       {tools.map((tool, toolIndex) => (
         <div key={`tool-${toolIndex}`} className="card prompt-tools__card">
           <div className="card__header prompt-tools__header">
@@ -128,10 +131,17 @@ const PromptToolsEditor: React.FC<Props> = ({ tools, onChange }) => {
 
               <div className="field">
                 <label className="field__label">Description</label>
-                <input
-                  className="input"
+                <textarea
+                  ref={(element) => {
+                    textareaRefs.current[`tool-${toolIndex}-description`] = element;
+                  }}
+                  className="textarea textarea--adaptive prompt-tools__textarea"
                   value={tool.description}
-                  onChange={(e) => updateTool(toolIndex, { description: e.target.value })}
+                  onChange={(e) => {
+                    resizeTextarea(e.target);
+                    updateTool(toolIndex, { description: e.target.value });
+                  }}
+                  rows={2}
                   placeholder="Return basic information about a dataset."
                 />
               </div>
@@ -187,10 +197,17 @@ const PromptToolsEditor: React.FC<Props> = ({ tools, onChange }) => {
                   <div className="form-grid">
                     <div className="field">
                       <label className="field__label">Description</label>
-                      <input
-                        className="input"
+                      <textarea
+                        ref={(element) => {
+                          textareaRefs.current[`tool-${toolIndex}-argument-${argumentIndex}-description`] = element;
+                        }}
+                        className="textarea textarea--adaptive prompt-tools__textarea"
                         value={argument.description ?? ''}
-                        onChange={(e) => updateArgument(toolIndex, argumentIndex, { description: e.target.value })}
+                        onChange={(e) => {
+                          resizeTextarea(e.target);
+                          updateArgument(toolIndex, argumentIndex, { description: e.target.value });
+                        }}
+                        rows={2}
                         placeholder="Description of argument..."
                       />
                     </div>

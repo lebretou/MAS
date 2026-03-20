@@ -132,7 +132,6 @@ const PromptsList: React.FC = () => {
                           {expandedData !== 'loading' && expandedData !== 'error' && expandedData && (
                             <PromptVersionTree
                               promptId={expandedData.prompt.prompt_id}
-                              promptName={expandedData.prompt.name}
                               versions={expandedData.versions}
                             />
                           )}
