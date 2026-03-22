@@ -44,8 +44,8 @@ def _make_version(output_schema: dict | None = None) -> PromptVersion:
         version_id="v1",
         name="Test Version",
         components=[
-            PromptComponent(type=PromptComponentType.role, content="You are a planner."),
-            PromptComponent(type=PromptComponentType.task, content="Create a plan."),
+            PromptComponent(type=PromptComponentType.role, name="Role", content="You are a planner."),
+            PromptComponent(type=PromptComponentType.task, name="Task", content="Create a plan."),
         ],
         variables={"max_steps": "5"},
         output_schema=output_schema,
@@ -110,8 +110,8 @@ class TestPromptVersionOutputSchema:
         """resolve() should still concatenate enabled components regardless of schema."""
         version = _make_version(output_schema=SAMPLE_SCHEMA)
         resolved = version.resolve()
-        assert "You are a planner." in resolved
-        assert "Create a plan." in resolved
+        assert "Role:\nYou are a planner." in resolved
+        assert "Task:\nCreate a plan." in resolved
 
     def test_model_dump_includes_output_schema(self):
         """model_dump() should include output_schema in the dict."""
@@ -218,7 +218,7 @@ class TestPromptLoaderGetWithSchema:
         loader._fetch_latest = MagicMock(return_value=version)
 
         text, schema = loader.get_with_schema("test-prompt")
-        assert "You are a planner." in text
+        assert "Role:\nYou are a planner." in text
         assert schema == SAMPLE_SCHEMA
 
     def test_get_with_schema_none_when_no_schema(self):
@@ -231,7 +231,7 @@ class TestPromptLoaderGetWithSchema:
         loader._fetch_latest = MagicMock(return_value=version)
 
         text, schema = loader.get_with_schema("test-prompt")
-        assert "You are a planner." in text
+        assert "Role:\nYou are a planner." in text
         assert schema is None
 
     def test_get_with_schema_stays_pure_during_tracing(self):
@@ -248,7 +248,7 @@ class TestPromptLoaderGetWithSchema:
         with enable_tracing() as ctx:
             text, schema = loader.get_with_schema("test-prompt", agent_id="planner")
 
-        assert "You are a planner." in text
+        assert "Role:\nYou are a planner." in text
         assert schema == SAMPLE_SCHEMA
         assert ctx.event_sink.events == []
 
@@ -263,12 +263,27 @@ class TestPromptLoaderGetWithSchema:
 
         text = loader.get("test-prompt", agent_id="planner")
 
-        assert "You are a planner." in text
+        assert "Role:\nYou are a planner." in text
         loader._upsert_agent_registry.assert_called_once_with(
             agent_id="planner",
             prompt_id="test-prompt",
             prompt_version_id="v1",
         )
+
+
+class TestPlaygroundVariableSubstitution:
+    """Test variable replacement used before playground runs."""
+
+    def test_preserves_unset_placeholders_and_handles_whitespace(self):
+        """Only provided variables should be substituted in the final prompt text."""
+        from server.playground_routes import _substitute_variables
+
+        resolved = _substitute_variables(
+            "Task:\nReview {{ release_brief }} and answer {{missing_var}}.",
+            {"release_brief": "brief-1"},
+        )
+
+        assert resolved == "Task:\nReview brief-1 and answer {{missing_var}}."
 
     def test_get_with_schema_registers_prompt_with_agent_registry(self):
         """get_with_schema should sync prompt ownership when agent_id is provided."""
@@ -281,7 +296,7 @@ class TestPromptLoaderGetWithSchema:
 
         text, schema = loader.get_with_schema("test-prompt", agent_id="planner")
 
-        assert "You are a planner." in text
+        assert "Role:\nYou are a planner." in text
         assert schema == SAMPLE_SCHEMA
         loader._upsert_agent_registry.assert_called_once_with(
             agent_id="planner",

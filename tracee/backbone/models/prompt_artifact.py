@@ -3,6 +3,7 @@
 import json
 import re
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 from backbone.utils.identifiers import generate_config_id
@@ -34,6 +35,46 @@ class PromptComponentType(str, Enum):
     safety = "safety"
     tool_instructions = "tool_instructions"
     external_information = "external_information"
+    custom = "custom"
+
+
+DEFAULT_COMPONENT_NAMES: dict[PromptComponentType, str] = {
+    PromptComponentType.role: "Role",
+    PromptComponentType.goal: "Goal",
+    PromptComponentType.constraints: "Constraints",
+    PromptComponentType.task: "Task",
+    PromptComponentType.io_rules: "I/O Rules",
+    PromptComponentType.inputs: "Inputs",
+    PromptComponentType.outputs: "Outputs",
+    PromptComponentType.examples: "Examples",
+    PromptComponentType.safety: "Safety",
+    PromptComponentType.tool_instructions: "Tool Instructions",
+    PromptComponentType.external_information: "External Information",
+    PromptComponentType.custom: "Custom Section",
+}
+
+DEFAULT_MESSAGE_ROLES: dict[PromptComponentType, "PromptMessageRole"] = {
+    PromptComponentType.role: "system",
+    PromptComponentType.goal: "system",
+    PromptComponentType.constraints: "system",
+    PromptComponentType.io_rules: "system",
+    PromptComponentType.outputs: "system",
+    PromptComponentType.safety: "system",
+    PromptComponentType.tool_instructions: "system",
+    PromptComponentType.custom: "system",
+    PromptComponentType.task: "human",
+    PromptComponentType.inputs: "human",
+    PromptComponentType.external_information: "human",
+    PromptComponentType.examples: "ai",
+}
+
+
+class PromptMessageRole(str, Enum):
+    """Execution-layer role for chat-style prompts."""
+
+    system = "system"
+    human = "human"
+    ai = "ai"
 
 
 class PromptComponent(BaseModel):
@@ -41,8 +82,23 @@ class PromptComponent(BaseModel):
 
     component_id: str | None = None
     type: PromptComponentType
+    name: str | None = None
+    message_role: PromptMessageRole | None = None
     content: str
     enabled: bool = True
+
+    @model_validator(mode="after")
+    def normalize_component_name(self) -> "PromptComponent":
+        if self.name is not None:
+            normalized_name = self.name.strip()
+            self.name = normalized_name or None
+        return self
+
+    def display_name(self) -> str:
+        return self.name or DEFAULT_COMPONENT_NAMES[self.type]
+
+    def resolved_message_role(self) -> PromptMessageRole:
+        return self.message_role or PromptMessageRole(DEFAULT_MESSAGE_ROLES[self.type])
 
 
 class ToolArgumentType(str, Enum):
@@ -169,6 +225,98 @@ class PromptTemplate(BaseModel):
     suggested_output_schema: dict | None = None
 
 
+class GuidedStartStage(str, Enum):
+    """Ordered stages used by guided prompt authoring."""
+
+    role = "role"
+    questions = "questions"
+    tools = "tools"
+    schema = "schema"
+    review = "review"
+
+
+class GuidedStartQuestion(BaseModel):
+    """A starter question shown during guided prompt setup."""
+
+    question_id: str
+    label: str
+    description: str | None = None
+    input_type: str = "textarea"
+    required: bool = True
+    placeholder: str | None = None
+    default_value: str = ""
+
+
+class GuidedStartSuggestedComponent(BaseModel):
+    """A suggested prompt component with evidence metadata."""
+
+    component_type: PromptComponentType
+    title: str
+    prevalence: float
+    order_rank: int
+    content_template: str
+
+
+class GuidedStartArchetype(BaseModel):
+    """Curated guided-start metadata for a supported archetype."""
+
+    archetype_id: str
+    title: str
+    summary: str
+    example_jobs: list[str] = Field(default_factory=list)
+    sample_size: int
+    starter_questions: list[GuidedStartQuestion] = Field(default_factory=list)
+    suggested_components: list[GuidedStartSuggestedComponent] = Field(default_factory=list)
+    suggested_tools: list[PromptTool] = Field(default_factory=list)
+    suggested_output_schema: dict | None = None
+
+
+class GuidedStartCatalog(BaseModel):
+    """Source-of-truth data for guided-start archetypes."""
+
+    version: str
+    generated_at: str
+    fallback_questions: list[GuidedStartQuestion] = Field(default_factory=list)
+    fallback_components: list[GuidedStartSuggestedComponent] = Field(default_factory=list)
+    archetypes: list[GuidedStartArchetype] = Field(default_factory=list)
+
+
+class GuidedStartConversationTurn(BaseModel):
+    """A user-visible turn in the guided-start conversation."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class GuidedStartLlmRequest(BaseModel):
+    """Request payload for guided-start LLM refinement."""
+
+    provider: str = Field(min_length=1, max_length=64)
+    model: str = Field(min_length=1, max_length=128)
+    temperature: float = 0
+    stage: GuidedStartStage
+    selected_archetype: str | None = Field(default=None, max_length=64)
+    custom_role: str | None = Field(default=None, max_length=1000)
+    answers: dict[str, str] = Field(default_factory=dict, max_length=16)
+    current_draft: list[PromptComponent] = Field(default_factory=list, max_length=12)
+    conversation_history: list[GuidedStartConversationTurn] = Field(default_factory=list, max_length=24)
+    latest_user_turn: str = Field(min_length=1, max_length=4000)
+
+
+class GuidedStartLlmResponse(BaseModel):
+    """Structured response contract for guided-start assistance."""
+
+    assistant_message: str
+    selected_archetype: str | None = None
+    selected_archetype_title: str | None = None
+    component_draft: list[PromptComponent] = Field(default_factory=list)
+    current_stage: GuidedStartStage
+    follow_up_questions: list[str] = Field(default_factory=list)
+    stage_complete: bool = False
+    status: Literal["needs_input", "ready_for_next_stage", "ready_to_apply"]
+    updated_component_types: list[PromptComponentType] = Field(default_factory=list)
+
+
 class PromptVersion(BaseModel):
     """A versioned of the prompt created in the Playground.
     
@@ -233,7 +381,9 @@ class PromptVersion(BaseModel):
                 - none: no schema mention at all
         """
         text = "\n\n".join(
-            component.content
+            f"{component.display_name()}:\n{component.content}"
+            if component.content
+            else f"{component.display_name()}:"
             for component in self.components
             if component.enabled
         )

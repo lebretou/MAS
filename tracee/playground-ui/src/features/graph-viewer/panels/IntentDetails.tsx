@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import type { GraphNodeData } from "../../../types/node-data";
 import { componentColors } from "../constants";
 import { SchemaTable } from "./SchemaTable";
+import { getPromptComponentDisplayName } from "../../playground/promptEditor";
 
 interface Props {
   node: GraphNodeData;
@@ -21,7 +22,7 @@ export function IntentDetails({ node }: Props) {
     return components
       .map((c) => {
         const status = c.enabled ? "" : " [disabled]";
-        return `## ${c.type}${status}\n${c.content}`;
+        return `## ${getPromptComponentDisplayName(c)}${status}\n${c.content}`;
       })
       .join("\n\n");
   }, [components]);
@@ -116,7 +117,7 @@ export function IntentDetails({ node }: Props) {
                         : "#d1d5db",
                     }}
                   />
-                  {component.type}
+                  {getPromptComponentDisplayName(component)}
                 </button>
               ))}
             </div>
@@ -124,7 +125,7 @@ export function IntentDetails({ node }: Props) {
               {activeComponent ? (
                 <>
                   <div className="side-panel__component-head">
-                    <span className="side-panel__component-type">{activeComponent.type}</span>
+                    <span className="side-panel__component-type">{getPromptComponentDisplayName(activeComponent)}</span>
                     {!activeComponent.enabled && (
                       <span className="side-panel__component-off">off</span>
                     )}

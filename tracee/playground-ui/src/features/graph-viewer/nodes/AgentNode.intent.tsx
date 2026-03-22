@@ -1,5 +1,6 @@
 import type { GraphNodeData } from "../../../types/node-data";
 import { componentColors } from "../constants";
+import { getPromptComponentDisplayName } from "../../playground/promptEditor";
 
 interface Props {
   data: GraphNodeData;
@@ -33,25 +34,25 @@ export function IntentContent({ data }: Props) {
             <span className="agent-node__components-label">PROMPT COMPONENTS</span>
           </div>
           <div className="agent-node__component-chips">
-            {enabledComponents.map((c) => (
+            {enabledComponents.map((c, index) => (
               <span
-                key={c.type}
+                key={c.component_id ?? `${c.type}-${index}`}
                 className="agent-node__chip"
                 style={{ borderColor: componentColors[c.type] }}
                 title={c.content}
               >
                 <span className="agent-node__chip-dot" style={{ background: componentColors[c.type] }} />
-                {c.type}
+                {getPromptComponentDisplayName(c)}
               </span>
             ))}
-            {disabledComponents.map((c) => (
+            {disabledComponents.map((c, index) => (
               <span
-                key={c.type}
+                key={c.component_id ?? `${c.type}-disabled-${index}`}
                 className="agent-node__chip agent-node__chip--disabled"
                 title={`[disabled] ${c.content}`}
               >
                 <span className="agent-node__chip-dot" />
-                {c.type}
+                {getPromptComponentDisplayName(c)}
               </span>
             ))}
           </div>

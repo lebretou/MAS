@@ -9,11 +9,16 @@ export type PromptComponentType =
   | "examples"
   | "safety"
   | "tool_instructions"
-  | "external_information";
+  | "external_information"
+  | "custom";
+
+export type PromptMessageRole = "system" | "human" | "ai";
 
 export interface PromptComponent {
   component_id?: string | null;
   type: PromptComponentType;
+  name?: string | null;
+  message_role?: PromptMessageRole | null;
   content: string;
   enabled: boolean;
 }

@@ -1,4 +1,10 @@
 import client from "../api/client";
+import type {
+  GuidedStartArchetype,
+  GuidedStartCatalog,
+  GuidedStartLlmRequest,
+  GuidedStartLlmResponse,
+} from "../types/guidedStart";
 import type { PlaygroundRun, PlaygroundRunCreate, PlaygroundRunResponse } from "../types/playground";
 import type {
   Prompt,
@@ -72,5 +78,22 @@ export const promptAPI = {
   async getPromptTemplates(): Promise<PromptTemplate[]> {
     const { data } = await client.get<PromptTemplate[]>("/prompt-templates");
     return data;
+  },
+};
+
+export const guidedStartAPI = {
+  async getCatalog(): Promise<GuidedStartCatalog> {
+    const { data } = await client.get<GuidedStartCatalog>("/guided-start/catalog");
+    return data;
+  },
+
+  async getArchetype(archetypeId: string): Promise<GuidedStartArchetype> {
+    const { data } = await client.get<GuidedStartArchetype>(`/guided-start/archetypes/${archetypeId}`);
+    return data;
+  },
+
+  async respond(data: GuidedStartLlmRequest): Promise<GuidedStartLlmResponse> {
+    const { data: response } = await client.post<GuidedStartLlmResponse>("/guided-start/llm/respond", data);
+    return response;
   },
 };

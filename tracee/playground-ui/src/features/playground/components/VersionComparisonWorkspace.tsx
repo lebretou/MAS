@@ -3,6 +3,8 @@ import type { PromptVersion } from '../../../types/prompt';
 import type { PlaygroundRun } from '../../../types/playground';
 import { playgroundAPI } from '../../../services/api';
 import { computeDiff } from '../../../utils/jsonDiff';
+import { getDefaultPromptMessageRole, getPromptComponentDisplayName } from '../promptEditor';
+import { getPromptVersionDiffSummary } from '../promptVersionDiff';
 
 interface CompareTarget {
   promptId: string;
@@ -57,7 +59,10 @@ function formatPromptVersion(version: PromptVersion): string {
     sections.push('- none');
   } else {
     version.components.forEach((component, index) => {
-      sections.push(`- [${index + 1}] ${component.type} (${component.enabled ? 'enabled' : 'disabled'})`);
+      const role = component.message_role ?? getDefaultPromptMessageRole(component.type);
+      sections.push(
+        `- [${index + 1}] ${getPromptComponentDisplayName(component)} (${component.enabled ? 'enabled' : 'disabled'}, ${role})`
+      );
       sections.push(component.content || '(empty)');
     });
   }
@@ -74,46 +79,8 @@ function getComponentSummary(version: PromptVersion) {
     .filter((component) => component.enabled)
     .map((component, index) => ({
       key: component.component_id ?? `${component.type}-${index}`,
-      label: component.type.replace(/_/g, ' '),
+      label: getPromptComponentDisplayName(component),
     }));
-}
-
-function getComponentDelta(
-  baseVersion: PromptVersion,
-  targetVersion: PromptVersion,
-): Array<{ kind: 'added' | 'removed' | 'changed'; label: string }> {
-  const baseMap = new Map(
-    baseVersion.components.map((component, index) => [
-      component.component_id ?? `${component.type}:${index}`,
-      component,
-    ]),
-  );
-  const targetMap = new Map(
-    targetVersion.components.map((component, index) => [
-      component.component_id ?? `${component.type}:${index}`,
-      component,
-    ]),
-  );
-  const delta: Array<{ kind: 'added' | 'removed' | 'changed'; label: string }> = [];
-
-  targetMap.forEach((component, key) => {
-    const previous = baseMap.get(key);
-    if (!previous) {
-      delta.push({ kind: 'added', label: component.type.replace(/_/g, ' ') });
-      return;
-    }
-    if (previous.content !== component.content || previous.enabled !== component.enabled) {
-      delta.push({ kind: 'changed', label: component.type.replace(/_/g, ' ') });
-    }
-  });
-
-  baseMap.forEach((component, key) => {
-    if (!targetMap.has(key)) {
-      delta.push({ kind: 'removed', label: component.type.replace(/_/g, ' ') });
-    }
-  });
-
-  return delta;
 }
 
 function buildRunSet(runs: PlaygroundRun[]): VersionRunSet {
@@ -223,7 +190,31 @@ const VersionComparisonWorkspace: React.FC<Props> = ({ targets }) => {
     return computeDiff(formatOutput(leftRun.output), formatOutput(rightRun.output));
   }, [leftTarget, rightTarget, runSets]);
   const componentDelta = React.useMemo(
-    () => getComponentDelta(leftTarget.version, rightTarget.version),
+    () => {
+      const diffSummary = getPromptVersionDiffSummary(
+        {
+          components: rightTarget.version.components,
+          tools: rightTarget.version.tools ?? [],
+          outputSchema: rightTarget.version.output_schema ?? null,
+          variables: rightTarget.version.variables ?? null,
+        },
+        {
+          components: leftTarget.version.components,
+          tools: leftTarget.version.tools ?? [],
+          outputSchema: leftTarget.version.output_schema ?? null,
+          variables: leftTarget.version.variables ?? null,
+        }
+      );
+
+      return [
+        ...diffSummary.added.map((label) => ({ kind: 'added' as const, label })),
+        ...diffSummary.removed.map((label) => ({ kind: 'removed' as const, label })),
+        ...diffSummary.changed.map((label) => ({ kind: 'changed' as const, label })),
+        ...(diffSummary.toolChanged ? [{ kind: 'changed' as const, label: 'tools' }] : []),
+        ...(diffSummary.schemaChanged ? [{ kind: 'changed' as const, label: 'schema' }] : []),
+        ...(diffSummary.variableChanged ? [{ kind: 'changed' as const, label: 'variables' }] : []),
+      ];
+    },
     [leftTarget.version, rightTarget.version],
   );
 
@@ -294,7 +285,7 @@ const VersionComparisonWorkspace: React.FC<Props> = ({ targets }) => {
 
       <div className="card">
         <div className="card__body version-compare__delta-card">
-          <div className="section-label">Component delta</div>
+          <div className="section-label">Prompt delta</div>
           {componentDelta.length > 0 ? (
             <div className="version-compare__delta-chips">
               {componentDelta.map((item, index) => (
@@ -308,7 +299,7 @@ const VersionComparisonWorkspace: React.FC<Props> = ({ targets }) => {
               ))}
             </div>
           ) : (
-            <div className="field__hint">the selected versions keep the same enabled component structure.</div>
+            <div className="field__hint">the selected versions keep the same component, tool, schema, and variable state.</div>
           )}
         </div>
       </div>

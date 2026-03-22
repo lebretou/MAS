@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from server.agent_routes import router as agent_router
 from server.graph_routes import router as graph_router
+from server.guided_start_routes import router as guided_start_router
 from server.trace_routes import router as trace_router
 from server.prompt_routes import router as prompt_router
 from server.playground_routes import router as playground_router
@@ -53,6 +54,7 @@ app.add_middleware(
 app.include_router(trace_router, prefix="/api")
 app.include_router(prompt_router, prefix="/api")
 app.include_router(playground_router, prefix="/api")
+app.include_router(guided_start_router, prefix="/api")
 app.include_router(model_config_router, prefix="/api")
 app.include_router(agent_router, prefix="/api")
 app.include_router(graph_router, prefix="/api")
@@ -69,6 +71,7 @@ def health():
             "traces": "/api/traces",
             "prompts": "/api/prompts",
             "playground": "/api/playground/run",
+            "guided_start": "/api/guided-start/catalog",
             "model_configs": "/api/model-configs",
             "agents": "/api/agents",
             "graphs": "/api/graphs",

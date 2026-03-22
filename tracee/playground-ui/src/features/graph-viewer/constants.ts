@@ -17,4 +17,5 @@ export const componentColors: Record<PromptComponentType, string> = {
   safety: "#ef4444",
   tool_instructions: "#6366f1",
   external_information: "#84cc16",
+  custom: "#64748b",
 };

@@ -115,7 +115,6 @@ html, body {
 .textarea--adaptive {
   resize: none;
   overflow-y: hidden;
-  max-height: min(44vh, 360px);
 }
 .textarea--code {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -125,12 +124,19 @@ html, body {
 /* ── Select ────────────────────────────────────────── */
 .select {
   font-family: inherit; font-size: 13px; color: #374151;
-  padding: 8px 12px; border-radius: 10px;
+  padding: 7px 12px; border-radius: 8px;
   border: 1px solid #e5e7eb; background: #ffffff;
-  box-shadow: 0 2px 6px rgba(0,0,0,.06);
   cursor: pointer; width: 100%;
 }
-.select:focus { outline: 2px solid #219ebc; outline-offset: 2px; }
+.select:focus {
+  outline: none;
+  border-color: #d1d5db;
+  box-shadow: none;
+}
+.select:focus-visible {
+  outline: 2px solid rgba(148, 163, 184, 0.65);
+  outline-offset: 1px;
+}
 
 /* ── Checkbox & Radio ──────────────────────────────── */
 .check-group { display: flex; flex-direction: column; gap: 8px; }

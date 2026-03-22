@@ -1,8 +1,10 @@
 import React from 'react';
-import type { PromptComponent, PromptVersion } from '../../../types/prompt';
+import type { PromptComponent, PromptTool, PromptVersion } from '../../../types/prompt';
 import iconLoad from '../../../assets/icon-load.svg';
 import iconCompare from '../../../assets/icon-compare.svg';
 import { componentColors } from '../../graph-viewer/constants';
+import { getPromptComponentDisplayName } from '../promptEditor';
+import { getPromptVersionDiffSummary } from '../promptVersionDiff';
 
 function getMaskIconStyle(icon: string): React.CSSProperties {
   return {
@@ -28,15 +30,12 @@ interface Props {
     name: string;
     revisionNote?: string;
     components: PromptComponent[];
+    variables?: Record<string, string> | null;
+    tools?: PromptTool[] | null;
+    outputSchema?: Record<string, unknown> | null;
   } | null;
   onLoadVersion?: (version: PromptVersion) => void;
   onToggleCompare?: (version: PromptVersion) => void;
-}
-
-interface ComponentDiffSummary {
-  added: string[];
-  removed: string[];
-  changed: string[];
 }
 
 interface RenderEntry {
@@ -46,6 +45,9 @@ interface RenderEntry {
   parentVersionId: string | null;
   createdAt: string;
   components: PromptComponent[];
+  variables?: Record<string, string> | null;
+  tools?: PromptTool[] | null;
+  outputSchema?: Record<string, unknown> | null;
   revisionNote?: string;
   version?: PromptVersion;
 }
@@ -78,50 +80,8 @@ function getComponentLabels(components: PromptComponent[]) {
     .filter((component) => component.enabled)
     .map((component, index) => ({
       key: component.component_id ?? `${component.type}-${index}`,
-      label: component.type.replace(/_/g, ' '),
+      label: getPromptComponentDisplayName(component),
     }));
-}
-
-function getComponentDiffSummary(version: PromptVersion, parent: PromptVersion | null): ComponentDiffSummary {
-  if (!parent) {
-    return { added: [], removed: [], changed: [] };
-  }
-
-  const currentMap = new Map(
-    version.components.map((component, index) => [
-      component.component_id ?? `${component.type}:${index}`,
-      component,
-    ])
-  );
-  const parentMap = new Map(
-    parent.components.map((component, index) => [
-      component.component_id ?? `${component.type}:${index}`,
-      component,
-    ])
-  );
-
-  const added: string[] = [];
-  const removed: string[] = [];
-  const changed: string[] = [];
-
-  currentMap.forEach((component, key) => {
-    const previous = parentMap.get(key);
-    if (!previous) {
-      added.push(component.type.replace(/_/g, ' '));
-      return;
-    }
-    if (previous.content !== component.content || previous.enabled !== component.enabled) {
-      changed.push(component.type.replace(/_/g, ' '));
-    }
-  });
-
-  parentMap.forEach((component, key) => {
-    if (!currentMap.has(key)) {
-      removed.push(component.type.replace(/_/g, ' '));
-    }
-  });
-
-  return { added, removed, changed };
 }
 
 function buildEntries(
@@ -138,6 +98,9 @@ function buildEntries(
       parentVersionId: version.parent_version_id ?? null,
       createdAt: version.created_at,
       components: version.components,
+      variables: version.variables ?? null,
+      tools: version.tools ?? [],
+      outputSchema: version.output_schema ?? null,
       revisionNote: version.revision_note ?? undefined,
       version,
     }));
@@ -154,6 +117,9 @@ function buildEntries(
       parentVersionId: draftLeaf.parentVersionId,
       createdAt: new Date().toISOString(),
       components: draftLeaf.components,
+      variables: draftLeaf.variables ?? null,
+      tools: draftLeaf.tools ?? [],
+      outputSchema: draftLeaf.outputSchema ?? null,
       revisionNote: draftLeaf.revisionNote,
     },
     ...savedEntries,
@@ -271,20 +237,11 @@ const PromptVersionTree: React.FC<Props> = ({
     : activeVersionId;
 
   const renderDiffTags = (entry: RenderEntry) => {
-    if (entry.kind === 'draft') {
-      return (
-        <div className="version-tree__delta">
-          <span className="version-tree__edge-tag version-tree__edge-tag--changed">~ unsaved draft</span>
-        </div>
-      );
-    }
-
-    const version = entry.version;
-    if (!version?.parent_version_id) {
+    if (!entry.parentVersionId) {
       return null;
     }
 
-    const parent = versionMap.get(version.parent_version_id) ?? null;
+    const parent = versionMap.get(entry.parentVersionId) ?? null;
 
     if (!parent) {
       return (
@@ -294,11 +251,35 @@ const PromptVersionTree: React.FC<Props> = ({
       );
     }
 
-    const diffSummary = getComponentDiffSummary(version, parent);
+    const diffSummary = getPromptVersionDiffSummary(
+      {
+        components: entry.components,
+        variables: entry.variables ?? null,
+        tools: entry.tools ?? [],
+        outputSchema: entry.outputSchema ?? null,
+      },
+      {
+        components: parent.components,
+        variables: parent.variables ?? null,
+        tools: parent.tools ?? [],
+        outputSchema: parent.output_schema ?? null,
+      }
+    );
+    const hasStructuralChange = (
+      diffSummary.added.length > 0
+      || diffSummary.removed.length > 0
+      || diffSummary.changed.length > 0
+      || diffSummary.toolChanged
+      || diffSummary.schemaChanged
+      || diffSummary.variableChanged
+    );
 
     return (
       <div className="version-tree__delta">
-        {diffSummary.added.length === 0 && diffSummary.removed.length === 0 && diffSummary.changed.length === 0 ? (
+        {entry.kind === 'draft' && (
+          <span className="version-tree__edge-tag version-tree__edge-tag--changed">~ unsaved draft</span>
+        )}
+        {!hasStructuralChange ? (
           <span className="version-tree__edge-tag">no component edit</span>
         ) : (
           <>
@@ -317,6 +298,15 @@ const PromptVersionTree: React.FC<Props> = ({
                 ~ {label}
               </span>
             ))}
+            {diffSummary.toolChanged && (
+              <span className="version-tree__edge-tag version-tree__edge-tag--changed">~ tools</span>
+            )}
+            {diffSummary.schemaChanged && (
+              <span className="version-tree__edge-tag version-tree__edge-tag--changed">~ schema</span>
+            )}
+            {diffSummary.variableChanged && (
+              <span className="version-tree__edge-tag version-tree__edge-tag--changed">~ variables</span>
+            )}
           </>
         )}
       </div>
@@ -460,13 +450,10 @@ const PromptVersionTree: React.FC<Props> = ({
                       {entry.kind === 'draft' && (
                         <span className="badge badge--warning">draft</span>
                       )}
-                      {compareIndex >= 0 && (
-                        <span className="badge badge--primary">compare {compareIndex + 1}</span>
-                      )}
                     </div>
                   </div>
                   <div className="version-tree__node-actions">
-                    {onLoadVersion && isSavedVersion && (
+                    {onLoadVersion && isSavedVersion && !isActive && (
                       <button
                         type="button"
                         className="btn btn--ghost btn--sm version-tree__action-btn"
@@ -482,7 +469,7 @@ const PromptVersionTree: React.FC<Props> = ({
                         <span>Load</span>
                       </button>
                     )}
-                    {onToggleCompare && isSavedVersion && (
+                    {onToggleCompare && isSavedVersion && !isActive && (
                       <button
                         type="button"
                         className="btn btn--ghost btn--sm version-tree__action-btn"

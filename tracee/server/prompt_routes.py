@@ -6,13 +6,12 @@ from pydantic import BaseModel, Field
 from backbone.models.prompt_artifact import (
     Prompt,
     PromptComponent,
-    PromptComponentType,
     PromptTemplate,
-    PromptTemplateField,
     PromptTool,
     PromptVersion,
 )
 from backbone.utils.identifiers import utc_timestamp
+from server.guided_start_service import build_prompt_templates_from_catalog
 from server.prompt_db import (
     create_prompt as db_create_prompt,
     delete_prompt as db_delete_prompt,
@@ -80,151 +79,6 @@ class PromptListItem(BaseModel):
     updated_at: str
 
 
-def _default_prompt_templates() -> list[PromptTemplate]:
-    return [
-        PromptTemplate(
-            template_id="planner-archetype",
-            name="Planner agent",
-            description="Break work into steps, plan execution, and keep the output bounded.",
-            archetype="planner",
-            fields=[
-                PromptTemplateField(
-                    field_id="system_role",
-                    label="System role",
-                    placeholder="You are a planning agent for a multi-agent workflow.",
-                    default_value="You are a planning agent for a multi-agent workflow.",
-                ),
-                PromptTemplateField(
-                    field_id="goal",
-                    label="Primary goal",
-                    placeholder="Describe what the planner should accomplish.",
-                ),
-                PromptTemplateField(
-                    field_id="inputs",
-                    label="Inputs",
-                    placeholder="What context or variables does the planner receive?",
-                ),
-                PromptTemplateField(
-                    field_id="outputs",
-                    label="Outputs",
-                    placeholder="What should the planner return?",
-                ),
-                PromptTemplateField(
-                    field_id="constraints",
-                    label="Constraints",
-                    placeholder="Any boundaries or non-goals for the planner.",
-                    required=False,
-                ),
-            ],
-            components=[
-                PromptComponent(
-                    type=PromptComponentType.role,
-                    content="{{system_role}}",
-                ),
-                PromptComponent(
-                    type=PromptComponentType.goal,
-                    content="Goal:\n{{goal}}",
-                ),
-                PromptComponent(
-                    type=PromptComponentType.inputs,
-                    content="Available inputs:\n{{inputs}}",
-                ),
-                PromptComponent(
-                    type=PromptComponentType.outputs,
-                    content="Return:\n{{outputs}}",
-                ),
-                PromptComponent(
-                    type=PromptComponentType.constraints,
-                    content="Constraints:\n{{constraints}}",
-                ),
-            ],
-        ),
-        PromptTemplate(
-            template_id="tool-user-archetype",
-            name="Tool-using agent",
-            description="Use tools deliberately and explain when tool usage is appropriate.",
-            archetype="tool_user",
-            fields=[
-                PromptTemplateField(
-                    field_id="system_role",
-                    label="System role",
-                    default_value="You are an execution agent that may use tools when needed.",
-                ),
-                PromptTemplateField(
-                    field_id="goal",
-                    label="Primary goal",
-                    placeholder="Describe the task the agent should solve.",
-                ),
-                PromptTemplateField(
-                    field_id="tool_policy",
-                    label="Tool policy",
-                    placeholder="When should the agent use tools versus reason directly?",
-                ),
-                PromptTemplateField(
-                    field_id="output_contract",
-                    label="Output contract",
-                    placeholder="How should the answer be formatted?",
-                ),
-            ],
-            components=[
-                PromptComponent(type=PromptComponentType.role, content="{{system_role}}"),
-                PromptComponent(type=PromptComponentType.task, content="Task:\n{{goal}}"),
-                PromptComponent(
-                    type=PromptComponentType.tool_instructions,
-                    content="Tool usage policy:\n{{tool_policy}}",
-                ),
-                PromptComponent(
-                    type=PromptComponentType.outputs,
-                    content="Output contract:\n{{output_contract}}",
-                ),
-            ],
-        ),
-        PromptTemplate(
-            template_id="critic-archetype",
-            name="Critic agent",
-            description="Review work, identify issues, and explain the reasoning behind the critique.",
-            archetype="critic",
-            fields=[
-                PromptTemplateField(
-                    field_id="system_role",
-                    label="System role",
-                    default_value="You are a critical reviewer in a multi-agent workflow.",
-                ),
-                PromptTemplateField(
-                    field_id="review_target",
-                    label="Review target",
-                    placeholder="What artifact or output is being reviewed?",
-                ),
-                PromptTemplateField(
-                    field_id="evaluation_criteria",
-                    label="Evaluation criteria",
-                    placeholder="What should the critic optimize for?",
-                ),
-                PromptTemplateField(
-                    field_id="response_format",
-                    label="Response format",
-                    placeholder="How should the review be structured?",
-                ),
-            ],
-            components=[
-                PromptComponent(type=PromptComponentType.role, content="{{system_role}}"),
-                PromptComponent(
-                    type=PromptComponentType.task,
-                    content="Review this target:\n{{review_target}}",
-                ),
-                PromptComponent(
-                    type=PromptComponentType.constraints,
-                    content="Evaluate using these criteria:\n{{evaluation_criteria}}",
-                ),
-                PromptComponent(
-                    type=PromptComponentType.outputs,
-                    content="Respond in this format:\n{{response_format}}",
-                ),
-            ],
-        ),
-    ]
-
-
 def _generate_version_id(prompt_id: str) -> str:
     """Generate the next version ID for a prompt."""
     versions = db_list_versions(prompt_id)
@@ -246,7 +100,7 @@ def _generate_version_id(prompt_id: str) -> str:
 @router.get("/prompt-templates")
 def list_prompt_templates() -> list[PromptTemplate]:
     """List built-in prompt templates and agent archetypes."""
-    return _default_prompt_templates()
+    return build_prompt_templates_from_catalog()
 
 
 @router.get("/prompts")
@@ -366,7 +220,6 @@ def create_version(prompt_id: str, request: CreateVersionRequest) -> PromptVersi
         source_template_id=request.source_template_id,
         created_at=now,
     )
-    
     db_insert_version(version)
     
     # Update prompt metadata with latest version

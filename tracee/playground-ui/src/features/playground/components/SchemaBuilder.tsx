@@ -20,7 +20,7 @@ export function createSchemaProperty(): SchemaProperty {
     name: '',
     type: 'string',
     description: '',
-    required: false,
+    required: true,
   };
 }
 
@@ -67,7 +67,7 @@ export function toJsonSchema(props: SchemaProperty[]): Record<string, unknown> {
         },
       ])
     ),
-    required: validProps.filter(p => p.required).map(p => p.name.trim()),
+    required: validProps.map(p => p.name.trim()),
   };
 }
 
@@ -106,7 +106,6 @@ const SchemaBuilder: React.FC<Props> = ({ properties, onChange }) => {
                   <th>Name</th>
                   <th>Type</th>
                   <th>Description</th>
-                  <th>Required</th>
                   <th></th>
                 </tr>
               </thead>
@@ -159,14 +158,6 @@ const SchemaBuilder: React.FC<Props> = ({ properties, onChange }) => {
                         }}
                         rows={2}
                         placeholder="Optional description"
-                      />
-                    </td>
-                    <td className="schema-builder__center">
-                      <input
-                        type="checkbox"
-                        checked={prop.required}
-                        onChange={e => updateProperty(i, { required: e.target.checked })}
-                        className="schema-builder__checkbox"
                       />
                     </td>
                     <td>

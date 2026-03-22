@@ -18,9 +18,13 @@ import PromptToolsEditor from './PromptToolsEditor';
 import PromptVersionTree from './PromptVersionTree';
 import GuidedPromptStart from './GuidedPromptStart';
 import VersionComparisonWorkspace from './VersionComparisonWorkspace';
+import PromptStructureOutline from './PromptStructureOutline';
+import PromptResolvedView from './PromptResolvedView';
+import PromptDiffWorkspace from './PromptDiffWorkspace';
 import { useRunExecution } from '../../../hooks/useRunExecution';
 import type { PlaygroundRun } from '../../../types/playground';
 import iconModelConfig from '../../../assets/icon-modelconfig.svg';
+import iconGuidedStart from '../../../assets/icon-guidedstart.svg';
 import iconTool from '../../../assets/icon-tool.svg';
 import iconOutputSchema from '../../../assets/icon-outputschema.svg';
 import iconVariable from '../../../assets/icon-variable.svg';
@@ -32,6 +36,12 @@ import iconLoadFromExisting from '../../../assets/icon-loadfromexisting.svg';
 import { promptAPI } from '../../../services/api';
 import { generateUniquePromptId, slugifyPromptName } from '../../../utils/promptNaming';
 import { resizeTextarea } from '../../../utils/resizeTextarea';
+import {
+  normalizePromptComponents,
+  preparePromptComponentsForEditor,
+  resolvePromptMessages,
+  serializePromptMessages,
+} from '../promptEditor';
 
 function getMaskIconStyle(icon: string): React.CSSProperties {
   return {
@@ -43,8 +53,10 @@ function getMaskIconStyle(icon: string): React.CSSProperties {
 interface Props {
   mode: 'author' | 'analysis';
   hasResults: boolean;
+  resultCount: number;
   analysisContent: React.ReactNode;
   onBackToEdit: () => void;
+  onViewResults: () => void;
   onRunComplete: (results: Array<PlaygroundRun | null>, errors: Array<string | null>) => void;
   anchorOutput: string;
   anchorLabel: string | null;
@@ -54,7 +66,6 @@ interface Props {
 
 const PROVIDER_MODELS: Record<string, string[]> = {
   openai: ['gpt-4o', 'gpt-4o-mini'],
-  anthropic: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
 };
 
 const DEFAULT_PROMPT_COMPONENTS: PromptComponent[] = [
@@ -102,6 +113,7 @@ const TOOL_ARGUMENT_NAME_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 type WorkspacePanel = 'guided' | 'model' | 'variables' | 'tools' | 'schema' | 'anchor';
 type PromptWorkflow = 'new' | 'existing';
 type SaveIntent = 'current' | 'new';
+type EditorView = 'components' | 'resolved' | 'diff';
 
 interface LoadedPromptContext {
   prompt: Prompt;
@@ -322,11 +334,47 @@ function normalizePromptTools(tools: PromptTool[]) {
     .filter((tool) => tool.name || tool.description || tool.arguments.length > 0);
 }
 
+function mergeGuidedComponents(current: PromptComponent[], guided: PromptComponent[]) {
+  const currentByType = new Map(current.map((component) => [component.type, component]));
+  const merged = current.map((component) => {
+    const scaffold = guided.find((candidate) => candidate.type === component.type);
+    if (!scaffold) {
+      return component;
+    }
+    if (component.content.trim()) {
+      return component;
+    }
+    return {
+      ...scaffold,
+      component_id: component.component_id ?? scaffold.component_id,
+      enabled: component.enabled || scaffold.enabled,
+    };
+  });
+
+  guided.forEach((component) => {
+    if (!currentByType.has(component.type)) {
+      merged.push(component);
+    }
+  });
+
+  return merged;
+}
+
+function mergeGuidedTools(current: PromptTool[], guided: PromptTool[]) {
+  const existingNames = new Set(current.map((tool) => tool.name));
+  return [
+    ...current,
+    ...guided.filter((tool) => !existingNames.has(tool.name)),
+  ];
+}
+
 const PromptForm: React.FC<Props> = ({
   mode,
   hasResults,
+  resultCount,
   analysisContent,
   onBackToEdit,
+  onViewResults,
   onRunComplete,
   anchorOutput,
   anchorLabel,
@@ -346,13 +394,16 @@ const PromptForm: React.FC<Props> = ({
   const saveActionRef = React.useRef<HTMLButtonElement | null>(null);
   const inputVarRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
   const anchorOutputRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const sectionRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
   const promptRequestIdRef = React.useRef(0);
   const saveRequestIdRef = React.useRef(0);
   const saveInFlightRef = React.useRef(false);
   const previousActivePanelRef = React.useRef<WorkspacePanel | null>(null);
   const selectedPromptIdRef = React.useRef('');
   const promptWorkflowRef = React.useRef<PromptWorkflow>('new');
-  const [promptComponents, setPromptComponents] = React.useState<PromptComponent[]>(DEFAULT_PROMPT_COMPONENTS);
+  const [promptComponents, setPromptComponents] = React.useState<PromptComponent[]>(
+    () => preparePromptComponentsForEditor(DEFAULT_PROMPT_COMPONENTS)
+  );
   const [inputVars, setInputVars] = React.useState<Record<string, string>>(DEFAULT_INPUT_VARS);
   const [provider, setProvider] = React.useState('openai');
   const [model, setModel] = React.useState('gpt-4o');
@@ -368,13 +419,16 @@ const PromptForm: React.FC<Props> = ({
   const [selectedPromptLoading, setSelectedPromptLoading] = React.useState(false);
   const [comparisonTargets, setComparisonTargets] = React.useState<CompareTarget[]>([]);
   const [analysisPanel, setAnalysisPanel] = React.useState<'results' | 'compare'>('results');
+  const [editorView, setEditorView] = React.useState<EditorView>('components');
+  const [editorCompareTarget, setEditorCompareTarget] = React.useState<CompareTarget | null>(null);
+  const [collapsedSections, setCollapsedSections] = React.useState<Record<string, boolean>>({});
+  const [pendingScrollSectionKey, setPendingScrollSectionKey] = React.useState<string | null>(null);
   const [promptWorkflow, setPromptWorkflow] = React.useState<PromptWorkflow>('new');
   const [saveDialogOpen, setSaveDialogOpen] = React.useState(false);
   const [saveIntent, setSaveIntent] = React.useState<SaveIntent>('current');
   const [saveLoading, setSaveLoading] = React.useState(false);
   const [promptNameInput, setPromptNameInput] = React.useState('');
   const [saveError, setSaveError] = React.useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = React.useState<string | null>(null);
 
   const [schemaEnabled, setSchemaEnabled] = React.useState(true);
   const [schemaProperties, setSchemaProperties] = React.useState<SchemaProperty[]>(() => createDefaultSchemaProperties());
@@ -383,10 +437,67 @@ const PromptForm: React.FC<Props> = ({
   const [toolError, setToolError] = React.useState<string | null>(null);
   const [revisionNote, setRevisionNote] = React.useState('');
   const [appliedTemplateId, setAppliedTemplateId] = React.useState<string | null>(null);
+  const workspaceModeHintId = React.useId();
 
   const {
     loading, setupError, execute,
   } = useRunExecution(onRunComplete);
+
+  React.useEffect(() => {
+    setActivePanel(null);
+  }, [mode]);
+
+  const handleEditorViewClick = React.useCallback((view: EditorView) => {
+    if (mode !== 'author') {
+      onBackToEdit();
+    }
+    setEditorView(view);
+  }, [mode, onBackToEdit]);
+
+  const isEditorActive = (view: EditorView) => mode === 'author' && editorView === view;
+
+  const workspaceNav = (
+    <div className="seg-control playground-workspace-nav" role="group" aria-label="Workspace view">
+      <button
+        type="button"
+        className={`seg-control__btn${isEditorActive('components') ? ' is-active' : ''}`}
+        onClick={() => handleEditorViewClick('components')}
+        aria-pressed={isEditorActive('components')}
+      >
+        Components
+      </button>
+      <button
+        type="button"
+        className={`seg-control__btn${isEditorActive('resolved') ? ' is-active' : ''}`}
+        onClick={() => handleEditorViewClick('resolved')}
+        aria-pressed={isEditorActive('resolved')}
+      >
+        Resolved
+      </button>
+      {editorCompareTarget && (
+        <button
+          type="button"
+          className={`seg-control__btn${isEditorActive('diff') ? ' is-active' : ''}`}
+          onClick={() => handleEditorViewClick('diff')}
+          aria-pressed={isEditorActive('diff')}
+        >
+          Diff
+        </button>
+      )}
+      <span className="playground-workspace-nav__divider" aria-hidden="true" />
+      <button
+        type="button"
+        className={`seg-control__btn${mode === 'analysis' ? ' is-active' : ''}`}
+        onClick={onViewResults}
+        aria-pressed={mode === 'analysis'}
+        aria-describedby={!hasResults ? workspaceModeHintId : undefined}
+        disabled={!hasResults}
+      >
+        <span>Analysis</span>
+        {hasResults && <span className="playground-workspace-nav__count">{resultCount}</span>}
+      </button>
+    </div>
+  );
 
   const refreshPromptList = React.useCallback(async () => {
     const prompts = await promptAPI.getAllPrompts();
@@ -417,13 +528,17 @@ const PromptForm: React.FC<Props> = ({
   const schemaError = schemaEnabled
     ? getSchemaValidationError(schemaProperties)
     : null;
+  const normalizedPromptComponents = React.useMemo(
+    () => normalizePromptComponents(promptComponents),
+    [promptComponents]
+  );
   const activePanelId = activePanel ? `playground-config-panel-${activePanel}` : undefined;
   const activePanelDescriptionId = activePanel ? `${activePanelId}-description` : undefined;
   const existingPromptHintId = 'playground-existing-prompt-hint';
   const existingPromptErrorId = 'playground-existing-prompt-error';
   const activePromptComponents = React.useMemo(
-    () => promptComponents.filter((component) => component.enabled && component.content.trim()),
-    [promptComponents]
+    () => normalizedPromptComponents.filter((component) => component.enabled && component.content.trim()),
+    [normalizedPromptComponents]
   );
   const detectedVariables = React.useMemo(
     () => collectPromptVariables(activePromptComponents),
@@ -494,6 +609,27 @@ const PromptForm: React.FC<Props> = ({
 
     return undefined;
   }, [activePanel]);
+  React.useEffect(() => {
+    if (editorView !== 'components' || !pendingScrollSectionKey) {
+      return;
+    }
+
+    const target = sectionRefs.current[pendingScrollSectionKey];
+    if (!target) {
+      setPendingScrollSectionKey(null);
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      target.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+      setPendingScrollSectionKey(null);
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [editorView, pendingScrollSectionKey]);
 
   React.useEffect(() => {
     if (!saveDialogOpen) {
@@ -517,14 +653,49 @@ const PromptForm: React.FC<Props> = ({
     () => (schemaEnabled && !schemaError ? toJsonSchema(schemaProperties) : null),
     [schemaEnabled, schemaError, schemaProperties]
   );
+  const currentResolvedPrompt = React.useMemo(
+    () => serializePromptMessages(resolvePromptMessages(normalizedPromptComponents, inputVars)),
+    [normalizedPromptComponents, inputVars]
+  );
+  const defaultEditorSaveSignature = React.useMemo(
+    () => {
+      const defaultComponents = preparePromptComponentsForEditor(DEFAULT_PROMPT_COMPONENTS);
+      return getSavedPromptSignature(
+        defaultComponents,
+        snapshotPromptVariables(defaultComponents, DEFAULT_INPUT_VARS),
+        [],
+        toJsonSchema(createDefaultSchemaProperties())
+      );
+    },
+    []
+  );
   const currentSaveSignature = React.useMemo(
     () => getSavedPromptSignature(
-      promptComponents,
-      snapshotPromptVariables(promptComponents, inputVars),
+      normalizedPromptComponents,
+      snapshotPromptVariables(normalizedPromptComponents, inputVars),
       normalizedTools,
       currentOutputSchema
     ),
-    [promptComponents, inputVars, normalizedTools, currentOutputSchema]
+    [normalizedPromptComponents, inputVars, normalizedTools, currentOutputSchema]
+  );
+  const hasGuidedApplyChoice = React.useMemo(
+    () => Boolean(
+      loadedPromptContext
+      || selectedPromptData
+      || promptWorkflow === 'existing'
+      || promptNameInput.trim()
+      || revisionNote.trim()
+      || currentSaveSignature !== defaultEditorSaveSignature
+    ),
+    [
+      currentSaveSignature,
+      defaultEditorSaveSignature,
+      loadedPromptContext,
+      promptNameInput,
+      promptWorkflow,
+      revisionNote,
+      selectedPromptData,
+    ]
   );
   const draftLeaf = React.useMemo(() => {
     if (
@@ -542,9 +713,21 @@ const PromptForm: React.FC<Props> = ({
       versionId: `draft-${loadedPromptContext.version.version_id}`,
       name: revisionNote.trim() || 'unsaved draft',
       revisionNote: revisionNote.trim() || 'current editor changes',
-      components: promptComponents,
+      components: normalizedPromptComponents,
+      variables: snapshotPromptVariables(normalizedPromptComponents, inputVars),
+      tools: normalizedTools,
+      outputSchema: currentOutputSchema,
     };
-  }, [loadedPromptContext, selectedPromptData, currentSaveSignature, revisionNote, promptComponents]);
+  }, [
+    loadedPromptContext,
+    selectedPromptData,
+    currentSaveSignature,
+    currentOutputSchema,
+    inputVars,
+    normalizedPromptComponents,
+    normalizedTools,
+    revisionNote,
+  ]);
   const generatedPromptIdPreview = React.useMemo(
     () => slugifyPromptName(promptNameInput || 'playground prompt'),
     [promptNameInput]
@@ -584,8 +767,42 @@ const PromptForm: React.FC<Props> = ({
     schemaEnabled,
     schemaProperties.length,
   ]);
+  const currentEditorVersionLabel = React.useMemo(() => {
+    if (loadedPromptContext) {
+      return loadedPromptContext.prompt.name;
+    }
+
+    return promptNameInput.trim() || 'Untitled prompt';
+  }, [loadedPromptContext, promptNameInput]);
+  const currentEditorPromptId = loadedPromptContext?.prompt.prompt_id
+    ?? (promptWorkflow === 'new' ? generatedPromptIdPreview : selectedPromptData?.prompt.prompt_id ?? null);
+  const currentEditorVersionId = draftLeaf?.versionId
+    ?? loadedPromptContext?.version.version_id
+    ?? null;
+  const editorCompareTargetResolvedPrompt = React.useMemo(() => {
+    if (!editorCompareTarget) {
+      return '';
+    }
+
+    return serializePromptMessages(resolvePromptMessages(
+      normalizePromptComponents(editorCompareTarget.version.components),
+      editorCompareTarget.version.variables ?? {}
+    ));
+  }, [editorCompareTarget]);
+  const versionTreeCompareTargets = React.useMemo(() => {
+    if (mode === 'author') {
+      return editorCompareTarget
+        ? [{ promptId: editorCompareTarget.promptId, versionId: editorCompareTarget.version.version_id }]
+        : [];
+    }
+
+    return comparisonTargets.map((target) => ({
+      promptId: target.promptId,
+      versionId: target.version.version_id,
+    }));
+  }, [comparisonTargets, editorCompareTarget, mode]);
   const resetEditorState = React.useCallback((nextPromptName = '') => {
-    setPromptComponents(DEFAULT_PROMPT_COMPONENTS);
+    setPromptComponents(preparePromptComponentsForEditor(DEFAULT_PROMPT_COMPONENTS));
     setInputVars(DEFAULT_INPUT_VARS);
     setTools([]);
     setToolError(null);
@@ -595,9 +812,14 @@ const PromptForm: React.FC<Props> = ({
     setAppliedTemplateId(null);
     setPromptNameInput(nextPromptName);
     setLoadedPromptContext(null);
+    setCollapsedSections({});
+    setPendingScrollSectionKey(null);
+    setEditorCompareTarget(null);
+    setEditorView('components');
   }, []);
 
   const loadVersionIntoEditor = React.useCallback((prompt: Prompt, version: PromptVersion) => {
+    const editorComponents = preparePromptComponentsForEditor(version.components);
     const parsedSchemaProperties = schemaPropertiesFromOutputSchema(
       (version.output_schema as Record<string, unknown> | null) ?? null
     );
@@ -605,7 +827,7 @@ const PromptForm: React.FC<Props> = ({
       ? toJsonSchema(parsedSchemaProperties)
       : null;
 
-    setPromptComponents(version.components);
+    setPromptComponents(editorComponents);
     setTools(version.tools ?? []);
     setSchemaEnabled(Boolean(version.output_schema));
     setSchemaProperties(parsedSchemaProperties);
@@ -616,18 +838,21 @@ const PromptForm: React.FC<Props> = ({
     setPromptWorkflow('existing');
     setSelectedPromptId(prompt.prompt_id);
     setSaveError(null);
-    setSaveMessage(null);
+    setCollapsedSections({});
+    setPendingScrollSectionKey(null);
+    setEditorCompareTarget(null);
+    setEditorView('components');
     setLoadedPromptContext({
       prompt,
       version,
       executeSignature: getExecutionPromptSignature(
-        version.components.filter((component) => component.enabled && component.content.trim()),
+        editorComponents.filter((component) => component.enabled && component.content.trim()),
         normalizePromptTools(version.tools ?? []),
         canonicalOutputSchema
       ),
       saveSignature: getSavedPromptSignature(
-        version.components,
-        snapshotPromptVariables(version.components, version.variables ?? {}),
+        editorComponents,
+        snapshotPromptVariables(editorComponents, version.variables ?? {}),
         normalizePromptTools(version.tools ?? []),
         canonicalOutputSchema
       ),
@@ -716,6 +941,68 @@ const PromptForm: React.FC<Props> = ({
       ];
     });
   }, []);
+  const toggleEditorCompareTarget = React.useCallback((promptName: string, version: PromptVersion) => {
+    setEditorCompareTarget((current) => {
+      const isSameTarget = current?.promptId === version.prompt_id && current.version.version_id === version.version_id;
+      if (isSameTarget) {
+        setEditorView((currentView) => (currentView === 'diff' ? 'components' : currentView));
+        return null;
+      }
+
+      setEditorView('diff');
+      return {
+        promptId: version.prompt_id,
+        promptName,
+        version,
+      };
+    });
+  }, []);
+  const toggleCollapsedSection = React.useCallback((componentKey: string) => {
+    setCollapsedSections((current) => ({
+      ...current,
+      [componentKey]: !(current[componentKey] ?? false),
+    }));
+  }, []);
+  const copyPromptComponentContent = React.useCallback((index: number) => {
+    const source = normalizedPromptComponents[index];
+    if (!source?.content || !globalThis.navigator?.clipboard?.writeText) {
+      return;
+    }
+
+    void globalThis.navigator.clipboard.writeText(source.content);
+  }, [normalizedPromptComponents]);
+  const reorderPromptComponent = React.useCallback((fromIndex: number, toIndex: number) => {
+    setPromptComponents((current) => {
+      if (
+        fromIndex === toIndex
+        || fromIndex < 0
+        || toIndex < 0
+        || fromIndex >= current.length
+        || toIndex >= current.length
+      ) {
+        return current;
+      }
+
+      const next = [...current];
+      const [item] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, item);
+      return next;
+    });
+  }, []);
+  const handleJumpToSection = React.useCallback((componentKey: string) => {
+    setCollapsedSections((current) => {
+      if (!(current[componentKey] ?? false)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [componentKey]: false,
+      };
+    });
+    setEditorView('components');
+    setPendingScrollSectionKey(componentKey);
+  }, []);
 
   const handleStartNewPrompt = React.useCallback((nextPromptName = '') => {
     setPromptWorkflow('new');
@@ -724,7 +1011,6 @@ const PromptForm: React.FC<Props> = ({
     setComparisonTargets([]);
     resetEditorState(nextPromptName);
     setSaveError(null);
-    setSaveMessage(null);
   }, [resetEditorState]);
 
   const validateNormalizedTools = React.useCallback(() => {
@@ -771,7 +1057,6 @@ const PromptForm: React.FC<Props> = ({
     setActivePanel(null);
     setSaveDialogOpen(true);
     setSaveError(null);
-    setSaveMessage(null);
   }, []);
 
   React.useEffect(() => {
@@ -882,7 +1167,6 @@ const PromptForm: React.FC<Props> = ({
     const promptWorkflowAtSave = promptWorkflowRef.current;
     setSaveLoading(true);
     setSaveError(null);
-    setSaveMessage(null);
 
     const effectiveWorkflow: PromptWorkflow =
       intent === 'new' ? 'new' : promptWorkflow;
@@ -921,14 +1205,13 @@ const PromptForm: React.FC<Props> = ({
     }
 
     try {
-      const savedInputVariables = snapshotPromptVariables(promptComponents, inputVars);
+      const savedInputVariables = snapshotPromptVariables(normalizedPromptComponents, inputVars);
       const saveSignature = getSavedPromptSignature(
-        promptComponents,
+        normalizedPromptComponents,
         savedInputVariables,
         normalizedTools,
         currentOutputSchema
       );
-
       const nextPromptId = effectiveWorkflow === 'existing'
         ? loadedPromptContext?.prompt.prompt_id ?? selectedPromptData?.prompt.prompt_id ?? ''
         : await generateUniquePromptId(nextPromptName, promptAPI.getPrompt);
@@ -953,7 +1236,6 @@ const PromptForm: React.FC<Props> = ({
         ) {
           setSaveDialogOpen(false);
         }
-        setSaveMessage(`Already saved as ${nextPromptId}/${loadedPromptContext.version.version_id}.`);
         await refreshPromptList().catch(() => setSavedPromptsError('Prompt saved, but prompt list refresh failed.'));
         return;
       }
@@ -982,7 +1264,7 @@ const PromptForm: React.FC<Props> = ({
 
       const createdVersion = await promptAPI.createVersion(nextPromptId, {
         name: revisionNote.trim() || `${nextPromptName} version`,
-        components: promptComponents,
+        components: normalizedPromptComponents,
         variables: savedInputVariables,
         output_schema: currentOutputSchema,
         tools: normalizedTools,
@@ -993,7 +1275,6 @@ const PromptForm: React.FC<Props> = ({
         revision_note: revisionNote.trim() || undefined,
         source_template_id: appliedTemplateId ?? undefined,
       });
-
       const promptData = await promptAPI.getPrompt(nextPromptId);
       if (
         saveRequestIdRef.current === requestId
@@ -1010,7 +1291,6 @@ const PromptForm: React.FC<Props> = ({
         setSaveDialogOpen(false);
       }
       await refreshPromptList().catch(() => setSavedPromptsError('Prompt saved, but prompt list refresh failed.'));
-      setSaveMessage(`Saved ${nextPromptId}/${createdVersion.version_id}.`);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to save prompt.');
     } finally {
@@ -1032,7 +1312,6 @@ const PromptForm: React.FC<Props> = ({
               <aside className="playground-shell__rail">
                 <div className="card">
                   <div className="card__body playground-rail__section">
-                    {draftLeaf && <span className="badge badge--warning">draft</span>}
                     <div className="seg-control playground-seg-control" role="group" aria-label="Prompt workflow">
                       <button
                         type="button"
@@ -1117,7 +1396,7 @@ const PromptForm: React.FC<Props> = ({
                     <div className="create-run__field-head">
                       <label className="field__label">Version history</label>
                     </div>
-                    {comparisonTargets.length > 0 && (
+                    {mode !== 'author' && comparisonTargets.length > 0 && (
                       <div className="create-run__compare-targets">
                         {comparisonTargets.map((target, index) => (
                           <span key={`${target.promptId}-${target.version.version_id}`} className="badge badge--neutral">
@@ -1137,13 +1416,14 @@ const PromptForm: React.FC<Props> = ({
                             ? loadedPromptContext.version.version_id
                             : null
                         }
-                        compareTargets={comparisonTargets.map((target) => ({
-                          promptId: target.promptId,
-                          versionId: target.version.version_id,
-                        }))}
+                        compareTargets={versionTreeCompareTargets}
                         draftLeaf={draftLeaf}
                         onLoadVersion={(version) => loadVersionIntoEditor(selectedPromptData.prompt, version)}
-                        onToggleCompare={(version) => toggleCompareTarget(selectedPromptData.prompt.name, version)}
+                        onToggleCompare={(version) => (
+                          mode === 'author'
+                            ? toggleEditorCompareTarget(selectedPromptData.prompt.name, version)
+                            : toggleCompareTarget(selectedPromptData.prompt.name, version)
+                        )}
                       />
                     ) : (
                       <div className="create-run__panel-note">
@@ -1162,7 +1442,7 @@ const PromptForm: React.FC<Props> = ({
                         <div className="create-run__workspace-copy">
                           <label className="field__label">Author mode</label>
                           <span className="field__hint">
-                            shape the prompt first, then open model, tools, or schema only when you need them.
+                            shape the prompt in components, inspect the resolved prompt text, or compare the current draft against another version.
                           </span>
                         </div>
 
@@ -1178,6 +1458,7 @@ const PromptForm: React.FC<Props> = ({
                             aria-expanded={activePanel === 'guided'}
                             aria-controls={activePanel === 'guided' ? activePanelId : undefined}
                           >
+                            <img src={iconGuidedStart} alt="" className="create-run__panel-btn-icon" aria-hidden />
                             Guided start
                           </button>
                           <button
@@ -1239,6 +1520,74 @@ const PromptForm: React.FC<Props> = ({
                         </div>
                       </div>
 
+                      <div className="create-run__workspace-subheader">
+                        <div className="create-run__workspace-subheader-main">
+                          {workspaceNav}
+                        </div>
+                        <div className="create-run__workspace-subheader-actions">
+                          {editorCompareTarget && (
+                            <button
+                              type="button"
+                              className="btn btn--primary create-run__compare-clear-btn"
+                              onClick={() => {
+                                setEditorCompareTarget(null);
+                                setEditorView('components');
+                              }}
+                            >
+                              clear compare
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn--secondary create-run__action-btn"
+                            onClick={() => openSaveDialog('current')}
+                          >
+                            <span
+                              className="create-run__action-icon"
+                              style={getMaskIconStyle(iconSave)}
+                              aria-hidden
+                            />
+                            <span>Save prompt</span>
+                          </button>
+                          <button
+                            type="button"
+                            ref={(element) => {
+                              triggerRefs.current.anchor = element;
+                            }}
+                            className={`btn btn--secondary create-run__action-btn${activePanel === 'anchor' ? ' is-active' : ''}`}
+                            onClick={() => setActivePanel((current) => (current === 'anchor' ? null : 'anchor'))}
+                            aria-pressed={activePanel === 'anchor'}
+                            aria-expanded={activePanel === 'anchor'}
+                            aria-controls={activePanel === 'anchor' ? activePanelId : undefined}
+                          >
+                            <span
+                              className="create-run__action-icon"
+                              style={getMaskIconStyle(iconAnchor)}
+                              aria-hidden
+                            />
+                            <span>Anchor output{anchorOutput.trim() ? ' (set)' : ''}</span>
+                          </button>
+                          <button
+                            type="submit"
+                            className="btn btn--primary create-run__action-btn"
+                            disabled={loading || !!schemaError || (promptWorkflow === 'existing' && !loadedPromptContext)}
+                          >
+                            <span
+                              className="create-run__action-icon"
+                              style={getMaskIconStyle(iconExecuteRun)}
+                              aria-hidden
+                            />
+                            <span>{loading ? 'Executing...' : 'Execute Run'}</span>
+                            {loading && <span className="spinner create-run__spinner" />}
+                          </button>
+                        </div>
+                        {!hasResults && (
+                          <span id={workspaceModeHintId} className="field__hint create-run__workspace-mode-hint">
+                            run the prompt once to unlock analysis.
+                          </span>
+                        )}
+                      </div>
+
                       {schemaError && activePanel !== 'schema' && (
                         <div className="alert alert--warning create-run__config-alert">
                           <span className="alert__icon">!</span>
@@ -1248,68 +1597,51 @@ const PromptForm: React.FC<Props> = ({
                     </div>
 
                     <div className="create-run__workspace-body">
-                      <div className="field">
-                        <div className="create-run__field-head">
-                          <label className="field__label">Prompt Components</label>
-                          <span className="field__hint">
-                            {promptComponents.filter((component) => component.enabled && component.content.trim()).length} active
-                          </span>
+                      {editorView === 'components' && (
+                        <div className="field">
+                          <div className="create-run__field-head">
+                            <label className="field__label">Prompt Components</label>
+                            <span className="field__hint">
+                              {normalizedPromptComponents.filter((component) => component.enabled && component.content.trim()).length} active
+                            </span>
+                          </div>
+                          <PromptComponentEditor
+                            components={normalizedPromptComponents}
+                            onChange={setPromptComponents}
+                            collapsedSections={collapsedSections}
+                            onToggleCollapse={toggleCollapsedSection}
+                            onCopyComponentContent={copyPromptComponentContent}
+                            onReorderComponent={reorderPromptComponent}
+                            registerSectionRef={(componentKey, element) => {
+                              sectionRefs.current[componentKey] = element;
+                            }}
+                          />
                         </div>
-                        <span className="field__hint create-run__component-hint">
-                          use {'{{variable_name}}'} anywhere in the prompt when you want to reference input variables.
-                        </span>
-                        <PromptComponentEditor
-                          components={promptComponents}
-                          onChange={setPromptComponents}
+                      )}
+                      {editorView === 'resolved' && (
+                        <PromptResolvedView resolvedPrompt={currentResolvedPrompt} />
+                      )}
+                      {editorView === 'diff' && editorCompareTarget && (
+                        <PromptDiffWorkspace
+                          currentDraft={{
+                            label: currentEditorVersionLabel,
+                            promptId: currentEditorPromptId,
+                            versionId: currentEditorVersionId,
+                            revisionNote: revisionNote.trim() || loadedPromptContext?.version.revision_note || null,
+                            components: normalizedPromptComponents,
+                            resolvedPrompt: currentResolvedPrompt,
+                          }}
+                          target={editorCompareTarget}
+                          targetResolvedPrompt={editorCompareTargetResolvedPrompt}
                         />
-                      </div>
+                      )}
+                      {editorView === 'diff' && !editorCompareTarget && (
+                        <div className="create-run__panel-note">
+                          choose a saved version from the history rail to compare it with the current editor state.
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex-row create-run__actions">
-                      <button
-                        type="button"
-                        className="btn btn--secondary create-run__action-btn"
-                        onClick={() => openSaveDialog('current')}
-                      >
-                        <span
-                          className="create-run__action-icon"
-                          style={getMaskIconStyle(iconSave)}
-                          aria-hidden
-                        />
-                        <span>Save prompt</span>
-                      </button>
-                      <button
-                        type="button"
-                        ref={(element) => {
-                          triggerRefs.current.anchor = element;
-                        }}
-                        className={`btn btn--secondary create-run__action-btn${activePanel === 'anchor' ? ' is-active' : ''}`}
-                        onClick={() => setActivePanel((current) => (current === 'anchor' ? null : 'anchor'))}
-                        aria-pressed={activePanel === 'anchor'}
-                        aria-expanded={activePanel === 'anchor'}
-                        aria-controls={activePanel === 'anchor' ? activePanelId : undefined}
-                      >
-                        <span
-                          className="create-run__action-icon"
-                          style={getMaskIconStyle(iconAnchor)}
-                          aria-hidden
-                        />
-                        <span>Anchor output{anchorOutput.trim() ? ' (set)' : ''}</span>
-                      </button>
-                      <button
-                        type="submit"
-                        className="btn btn--primary create-run__action-btn"
-                        disabled={loading || !!schemaError || (promptWorkflow === 'existing' && !loadedPromptContext)}
-                      >
-                        <span
-                          className="create-run__action-icon"
-                          style={getMaskIconStyle(iconExecuteRun)}
-                          aria-hidden
-                        />
-                        <span>{loading ? 'Executing...' : 'Execute Run'}</span>
-                        {loading && <span className="spinner create-run__spinner" />}
-                      </button>
-                    </div>
                   </div>
                 ) : (
                   <div className="playground-analysis-shell">
@@ -1322,9 +1654,7 @@ const PromptForm: React.FC<Props> = ({
                           </span>
                         </div>
                         <div className="playground-analysis-shell__actions">
-                          <button type="button" className="btn btn--secondary" onClick={onBackToEdit}>
-                            Back to edit
-                          </button>
+                          {workspaceNav}
                           <button type="button" className="btn btn--secondary" onClick={() => openSaveDialog('current')}>
                             Save prompt
                           </button>
@@ -1387,6 +1717,20 @@ const PromptForm: React.FC<Props> = ({
                   </div>
                 )}
               </div>
+              {mode === 'author' && (
+                <aside className="playground-shell__right">
+                  <PromptStructureOutline
+                    components={normalizedPromptComponents}
+                    tools={normalizedTools}
+                    outputSchema={currentOutputSchema}
+                    schemaEnabled={schemaEnabled}
+                    schemaError={schemaError}
+                    detectedVariables={detectedVariables}
+                    inputVars={inputVars}
+                    onJumpToSection={handleJumpToSection}
+                  />
+                </aside>
+              )}
             </div>
 
             {activePanel && (
@@ -1397,7 +1741,7 @@ const PromptForm: React.FC<Props> = ({
                 />
                 <div
                   id={activePanelId}
-                  className={`create-run__config-popover create-run__config-popover--${activePanel}`}
+                  className={`create-run__config-popover create-run__config-popover--workspace create-run__config-popover--${activePanel}`}
                   role="dialog"
                   aria-modal="true"
                   aria-label={activePanel ? PANEL_TITLES[activePanel] : 'Workspace panel'}
@@ -1419,291 +1763,291 @@ const PromptForm: React.FC<Props> = ({
                     </button>
                   </div>
 
-                  <div className="create-run__panel-intro">
-                    <div className="create-run__panel-intro-copy">
-                      <span className="section-label">{PANEL_SUMMARIES[activePanel].eyebrow}</span>
-                      <span id={activePanelDescriptionId} className="field__hint">
-                        {PANEL_SUMMARIES[activePanel].description}
-                      </span>
-                    </div>
-                    {activePanelBadges.length > 0 && (
-                      <div className="create-run__panel-intro-meta">
-                        {activePanelBadges.map((badge) => (
-                          <span key={badge} className="badge badge--neutral">
-                            {badge}
-                          </span>
-                        ))}
+                  <div className="create-run__config-popover-scroll">
+                    <div className="create-run__panel-intro">
+                      <div className="create-run__panel-intro-copy">
+                        <span className="section-label">{PANEL_SUMMARIES[activePanel].eyebrow}</span>
+                        <span id={activePanelDescriptionId} className="field__hint">
+                          {PANEL_SUMMARIES[activePanel].description}
+                        </span>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="create-run__panel-stack">
-                  {activePanel === 'guided' && (
-                    <div className="create-run__panel-surface">
-                      <GuidedPromptStart
-                        onApply={({ templateId, templateName, components, tools: templateTools, outputSchema }) => {
-                          setPromptComponents(components);
-                          setTools(templateTools ?? []);
-                          setAppliedTemplateId(templateId);
-                          setPromptWorkflow('new');
-                          setSelectedPromptId('');
-                          setSelectedPromptData(null);
-                          setLoadedPromptContext(null);
-                          setRevisionNote('');
-                          setPromptNameInput((current) => current || templateName);
-                          if (outputSchema && typeof outputSchema === 'object' && 'properties' in outputSchema) {
-                            setSchemaEnabled(true);
-                            setSchemaProperties(
-                              Object.entries(outputSchema.properties as Record<string, Record<string, unknown>>).map(([name, rawSchema]) => {
-                                const schema = rawSchema as Record<string, unknown> & {
-                                  type?: SchemaProperty['type'];
-                                  description?: string;
-                                  items?: { type?: SchemaProperty['items'] };
-                                };
-                                return ({
-                                  ...createSchemaProperty(),
-                                  name,
-                                  type: schema.type ?? 'string',
-                                  description: typeof schema.description === 'string' ? schema.description : '',
-                                  required: Array.isArray((outputSchema as { required?: string[] }).required)
-                                    ? ((outputSchema as { required?: string[] }).required ?? []).includes(name)
-                                    : false,
-                                  items: schema.items && typeof schema.items === 'object'
-                                    ? schema.items.type ?? undefined
-                                    : undefined,
-                                });
-                              })
-                            );
-                          } else {
-                            setSchemaEnabled(false);
-                          }
-                          setActivePanel(null);
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {activePanel === 'model' && (
-                    <div className="create-run__panel-surface">
-                      <div className="create-run__panel-surface-head">
-                        <div className="create-run__panel-surface-copy">
-                          <span className="field__label">Execution settings</span>
-                          <span className="field__hint">Provider and run controls follow the same compact form layout as the rest of the panel system.</span>
-                        </div>
-                      </div>
-                      <div className="form-grid">
-                        <div className="field">
-                          <label className="field__label" htmlFor="playground-provider">
-                            Provider
-                          </label>
-                          <select
-                            id="playground-provider"
-                            className="select"
-                            value={provider}
-                            onChange={(e) => handleProviderChange(e.target.value)}
-                          >
-                            <option value="openai">OpenAI</option>
-                            <option value="anthropic">Anthropic</option>
-                          </select>
-                        </div>
-
-                        <div className="field">
-                          <label className="field__label" htmlFor="playground-model">
-                            Model
-                          </label>
-                          <select
-                            id="playground-model"
-                            className="select"
-                            value={model}
-                            onChange={(e) => setModel(e.target.value)}
-                          >
-                            {(PROVIDER_MODELS[provider] ?? []).map((availableModel) => (
-                              <option key={availableModel} value={availableModel}>
-                                {availableModel}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="form-grid">
-                        <div className="field">
-                          <label className="field__label" htmlFor="playground-temperature">
-                            Temperature: {temperature}
-                          </label>
-                          <input
-                            id="playground-temperature"
-                            className="input"
-                            type="range"
-                            min="0"
-                            max="2"
-                            step="0.1"
-                            value={temperature}
-                            onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                          />
-                        </div>
-
-                        <div className="field">
-                          <label className="field__label" htmlFor="playground-num-runs">
-                            Number of Runs (max 10)
-                          </label>
-                          <input
-                            id="playground-num-runs"
-                            className="input"
-                            type="number"
-                            min="1"
-                            max="10"
-                            value={numRuns}
-                            onChange={(e) =>
-                              setNumRuns(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))
-                            }
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activePanel === 'variables' && (
-                    <div className="create-run__panel-surface">
-                      <div className="create-run__panel-surface-head">
-                        <div className="create-run__panel-surface-copy">
-                          <span className="field__label">Detected variables</span>
-                          <span className="field__hint">Rows appear automatically when the prompt includes {'{{variable_name}}'} placeholders.</span>
-                        </div>
-                      </div>
-                      {detectedVariables.length > 0 ? (
-                        <div className="create-run__variables-table">
-                          <div className="create-run__variables-head">
-                            <span>Variable</span>
-                            <span>Value</span>
-                          </div>
-                          {detectedVariables.map((variableName) => (
-                            <div key={variableName} className="create-run__variables-row">
-                              <div className="create-run__variables-name">
-                                <code>{`{{${variableName}}}`}</code>
-                              </div>
-                              <textarea
-                                ref={(element) => {
-                                  inputVarRefs.current[variableName] = element;
-                                }}
-                                className="textarea textarea--adaptive textarea--code create-run__variables-textarea"
-                                value={inputVars[variableName] ?? ''}
-                                onChange={(e) => {
-                                  resizeTextarea(e.target);
-                                  setInputVars((current) => ({
-                                    ...current,
-                                    [variableName]: e.target.value,
-                                  }));
-                                }}
-                                rows={2}
-                                placeholder={`value for ${variableName}`}
-                                aria-label={`${variableName} input variable value`}
-                              />
-                            </div>
+                      {activePanelBadges.length > 0 && (
+                        <div className="create-run__panel-intro-meta">
+                          {activePanelBadges.map((badge) => (
+                            <span key={badge} className="badge badge--neutral">
+                              {badge}
+                            </span>
                           ))}
                         </div>
-                      ) : (
-                        <div className="create-run__panel-note">
-                          add a placeholder like {'{{release_brief}}'} in the prompt and a variable row will appear here.
-                        </div>
                       )}
                     </div>
-                  )}
 
-                  {activePanel === 'tools' && (
-                    <div className="create-run__panel-surface">
-                      <div className="create-run__panel-surface-head">
-                        <div className="create-run__panel-surface-copy">
-                          <span className="field__label">Tool definitions</span>
-                          <span className="field__hint">Longer descriptions expand in place so tool setup stays readable.</span>
+                    <div className="create-run__panel-stack">
+                    {activePanel === 'guided' && (
+                      <div className="create-run__panel-surface">
+                        <GuidedPromptStart
+                          onClose={() => setActivePanel(null)}
+                          existingDraft={{
+                            components: normalizedPromptComponents,
+                            tools,
+                            outputSchema: currentOutputSchema,
+                            hasUserContent: hasGuidedApplyChoice,
+                          }}
+                          modelConfig={{
+                            provider,
+                            model,
+                            temperature,
+                          }}
+                          onApply={({ sourceTemplateId, templateName, promptName, components, tools: guidedTools, outputSchema, applyMode }) => {
+                            const nextComponents = applyMode === 'merge'
+                              ? mergeGuidedComponents(normalizedPromptComponents, components)
+                              : components;
+                            const nextTools = applyMode === 'merge'
+                              ? mergeGuidedTools(tools, guidedTools ?? [])
+                              : (guidedTools ?? []);
+                            const shouldKeepCurrentSchema = applyMode === 'merge' && schemaEnabled && Boolean(currentOutputSchema);
+                            const nextSchemaEnabled = shouldKeepCurrentSchema
+                              ? schemaEnabled
+                              : Boolean(outputSchema);
+                            const nextSchemaProperties = shouldKeepCurrentSchema
+                              ? schemaProperties
+                              : (outputSchema ? schemaPropertiesFromOutputSchema(outputSchema) : []);
+
+                            const normalizedNextComponents = preparePromptComponentsForEditor(nextComponents);
+                            setPromptComponents(normalizedNextComponents);
+                            setInputVars((current) => snapshotPromptVariables(normalizedNextComponents, current));
+                            setTools(nextTools);
+                            setAppliedTemplateId(sourceTemplateId);
+                            setRevisionNote('');
+                            setPromptNameInput((current) => current || promptName || templateName);
+                            setSchemaEnabled(nextSchemaEnabled);
+                            setSchemaProperties(nextSchemaProperties);
+                            setCollapsedSections({});
+                            setPendingScrollSectionKey(null);
+                            setEditorCompareTarget(null);
+                            setEditorView('components');
+                            setActivePanel(null);
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {activePanel === 'model' && (
+                      <div className="create-run__panel-surface">
+                        <div className="create-run__panel-surface-head">
+                          <div className="create-run__panel-surface-copy">
+                            <span className="field__label">Execution settings</span>
+                            <span className="field__hint">OpenAI model and run controls follow the same compact form layout as the rest of the panel system.</span>
+                          </div>
+                        </div>
+                        <div className="form-grid">
+                          <div className="field">
+                            <label className="field__label" htmlFor="playground-provider">
+                              Provider
+                            </label>
+                            <select
+                              id="playground-provider"
+                              className="select"
+                              value={provider}
+                              onChange={(e) => handleProviderChange(e.target.value)}
+                            >
+                              <option value="openai">OpenAI</option>
+                            </select>
+                          </div>
+
+                          <div className="field">
+                            <label className="field__label" htmlFor="playground-model">
+                              Model
+                            </label>
+                            <select
+                              id="playground-model"
+                              className="select"
+                              value={model}
+                              onChange={(e) => setModel(e.target.value)}
+                            >
+                              {(PROVIDER_MODELS[provider] ?? []).map((availableModel) => (
+                                <option key={availableModel} value={availableModel}>
+                                  {availableModel}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="form-grid">
+                          <div className="field">
+                            <label className="field__label" htmlFor="playground-temperature">
+                              Temperature: {temperature}
+                            </label>
+                            <input
+                              id="playground-temperature"
+                              className="input"
+                              type="range"
+                              min="0"
+                              max="2"
+                              step="0.1"
+                              value={temperature}
+                              onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                            />
+                          </div>
+
+                          <div className="field">
+                            <label className="field__label" htmlFor="playground-num-runs">
+                              Number of Runs (max 10)
+                            </label>
+                            <input
+                              id="playground-num-runs"
+                              className="input"
+                              type="number"
+                              min="1"
+                              max="10"
+                              value={numRuns}
+                              onChange={(e) =>
+                                setNumRuns(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))
+                              }
+                            />
+                          </div>
                         </div>
                       </div>
-                      <PromptToolsEditor
-                        tools={tools}
-                        onChange={(nextTools) => {
-                          setTools(nextTools);
-                          setToolError(null);
-                        }}
-                      />
-                      {schemaEnabled && normalizedTools.length > 0 && (
-                        <span className="field__hint">
-                          when tools are attached, the full schema stays in the prompt text, but provider-side schema enforcement is disabled.
-                        </span>
-                      )}
-                      {toolError && <span className="field__error">{toolError}</span>}
-                    </div>
-                  )}
+                    )}
 
-                  {activePanel === 'schema' && (
-                    <div className="create-run__panel-surface">
-                      <div className="create-run__panel-surface-head">
-                        <div className="create-run__panel-surface-copy">
-                          <span className="field__label">Schema fields</span>
-                          <span className="field__hint">Use schema enforcement when you want structured output checks and comparison-ready fields.</span>
+                    {activePanel === 'variables' && (
+                      <div className="create-run__panel-surface">
+                        <div className="create-run__panel-surface-head">
+                          <div className="create-run__panel-surface-copy">
+                            <span className="field__label">Detected variables</span>
+                            <span className="field__hint">Rows appear automatically when the prompt includes {'{{variable_name}}'} placeholders.</span>
+                          </div>
                         </div>
-                        <label className="check-label create-run__panel-check">
-                          <input
-                            type="checkbox"
-                            checked={schemaEnabled}
-                            onChange={(e) => handleSchemaToggle(e.target.checked)}
-                          />
-                          Enable output schema
-                        </label>
-                      </div>
-
-                      {schemaEnabled ? (
-                        <>
-                          <SchemaBuilder
-                            properties={schemaProperties}
-                            onChange={setSchemaProperties}
-                          />
-                          {schemaError && <span className="field__error">{schemaError}</span>}
-                        </>
-                      ) : (
-                        <div className="create-run__panel-note">
-                          turn this on when you want provider-side schema guidance and field-level deviation analysis.
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {activePanel === 'anchor' && (
-                    <div className="create-run__panel-surface">
-                      <div className="create-run__anchor-header">
-                        <div className="create-run__panel-surface-copy">
-                          <span className="field__label">Reference output</span>
-                          <span className="field__hint">Store an example output here when you want to compare future runs against it.</span>
-                        </div>
-                        {anchorOutput.trim() && (
-                          <button
-                            type="button"
-                            className="btn btn--ghost btn--sm"
-                            onClick={onClearAnchor}
-                          >
-                            Clear anchor
-                          </button>
+                        {detectedVariables.length > 0 ? (
+                          <div className="create-run__variables-table">
+                            <div className="create-run__variables-head">
+                              <span>Variable</span>
+                              <span>Value</span>
+                            </div>
+                            {detectedVariables.map((variableName) => (
+                              <div key={variableName} className="create-run__variables-row">
+                                <div className="create-run__variables-name">
+                                  <code>{`{{${variableName}}}`}</code>
+                                </div>
+                                <textarea
+                                  ref={(element) => {
+                                    inputVarRefs.current[variableName] = element;
+                                  }}
+                                  className="textarea textarea--adaptive textarea--code create-run__variables-textarea"
+                                  value={inputVars[variableName] ?? ''}
+                                  onChange={(e) => {
+                                    resizeTextarea(e.target);
+                                    setInputVars((current) => ({
+                                      ...current,
+                                      [variableName]: e.target.value,
+                                    }));
+                                  }}
+                                  rows={2}
+                                  placeholder={`value for ${variableName}`}
+                                  aria-label={`${variableName} input variable value`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="create-run__panel-note">
+                            add a placeholder like {'{{release_brief}}'} in the prompt and a variable row will appear here.
+                          </div>
                         )}
                       </div>
+                    )}
 
-                      <textarea
-                        ref={anchorOutputRef}
-                        id="anchor-output"
-                        className="textarea textarea--adaptive textarea--code create-run__panel-textarea create-run__panel-textarea--lg"
-                        value={anchorOutput}
-                        onChange={(e) => {
-                          resizeTextarea(e.target);
-                          onAnchorChange(e.target.value);
-                        }}
-                        rows={8}
-                        placeholder="optional example output to use as an anchor in the visualization"
-                      />
-                      <span className="field__hint">
-                        {anchorLabel
-                          ? `active reference: ${anchorLabel}. edit this field to replace it.`
-                          : 'paste an example output here to compare future runs against it.'}
-                      </span>
+                    {activePanel === 'tools' && (
+                      <div className="create-run__panel-surface">
+                        <div className="create-run__panel-surface-head">
+                          <div className="create-run__panel-surface-copy">
+                            <span className="field__label">Tool definitions</span>
+                            <span className="field__hint">Longer descriptions expand in place so tool setup stays readable.</span>
+                          </div>
+                        </div>
+                        <PromptToolsEditor
+                          tools={tools}
+                          onChange={(nextTools) => {
+                            setTools(nextTools);
+                            setToolError(null);
+                          }}
+                        />
+                        {toolError && <span className="field__error">{toolError}</span>}
+                      </div>
+                    )}
+
+                    {activePanel === 'schema' && (
+                      <div className="create-run__panel-surface">
+                        <div className="create-run__panel-surface-head">
+                          <div className="create-run__panel-surface-copy">
+                            <span className="field__label">Schema fields</span>
+                            <span className="field__hint">Use schema enforcement when you want structured output checks and comparison-ready fields.</span>
+                          </div>
+                          <label className="check-label create-run__panel-check">
+                            <input
+                              type="checkbox"
+                              checked={schemaEnabled}
+                              onChange={(e) => handleSchemaToggle(e.target.checked)}
+                            />
+                            Enable output schema
+                          </label>
+                        </div>
+
+                        {schemaEnabled ? (
+                          <>
+                            <SchemaBuilder
+                              properties={schemaProperties}
+                              onChange={setSchemaProperties}
+                            />
+                            {schemaError && <span className="field__error">{schemaError}</span>}
+                          </>
+                        ) : (
+                          <div className="create-run__panel-note">
+                            turn this on when you want provider-side schema guidance and field-level deviation analysis.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activePanel === 'anchor' && (
+                      <div className="create-run__panel-surface">
+                        <div className="create-run__anchor-header">
+                          <div className="create-run__panel-surface-copy">
+                            <span className="field__label">Reference output</span>
+                            <span className="field__hint">Store an example output here when you want to compare future runs against it.</span>
+                          </div>
+                          {anchorOutput.trim() && (
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              onClick={onClearAnchor}
+                            >
+                              Clear anchor
+                            </button>
+                          )}
+                        </div>
+
+                        <textarea
+                          ref={anchorOutputRef}
+                          id="anchor-output"
+                          className="textarea textarea--adaptive textarea--code create-run__panel-textarea create-run__panel-textarea--lg"
+                          value={anchorOutput}
+                          onChange={(e) => {
+                            resizeTextarea(e.target);
+                            onAnchorChange(e.target.value);
+                          }}
+                          rows={8}
+                          placeholder="optional example output to use as an anchor in the visualization"
+                        />
+                        <span className="field__hint">
+                          {anchorLabel
+                            ? `active reference: ${anchorLabel}. edit this field to replace it.`
+                            : 'paste an example output here to compare future runs against it.'}
+                        </span>
+                      </div>
+                    )}
                     </div>
-                  )}
                   </div>
                 </div>
               </div>
@@ -1847,12 +2191,6 @@ const PromptForm: React.FC<Props> = ({
               </div>
             )}
 
-            {saveMessage && (
-              <div className="alert alert--success">
-                <span className="alert__icon">i</span>
-                {saveMessage}
-              </div>
-            )}
             {saveError && (
               <div className="alert alert--danger">
                 <span className="alert__icon">!</span>

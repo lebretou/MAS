@@ -42,7 +42,7 @@ class PlaygroundRun(BaseModel):
 
     # IO
     input_variables: dict[str, str]  # Template variable substitutions
-    resolved_prompt: str  # The final prompt text sent to LLM
+    resolved_prompt: str  # Human-readable transcript of the chat payload sent to LLM
     output_schema: dict | None = None  # JSON Schema used for this run, if any
     tools: list[PromptTool] | None = None
     tool_calls: list[PlaygroundToolCall] | None = None

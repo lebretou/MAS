@@ -8,6 +8,7 @@ from backbone.models.playground_run import PlaygroundRun, PlaygroundRunCreate
 from backbone.models.prompt_artifact import (
     PromptComponent,
     PromptComponentType,
+    PromptMessageRole,
     PromptTool,
     PromptToolArgument,
     PromptVersion,
@@ -28,6 +29,8 @@ class TestPromptArtifactRoundTrip:
         """PromptComponent should serialize and deserialize cleanly."""
         component = PromptComponent(
             type=PromptComponentType.role,
+            name="Role",
+            message_role=PromptMessageRole.system,
             content="You are a helpful assistant.",
             enabled=True,
         )
@@ -35,6 +38,8 @@ class TestPromptArtifactRoundTrip:
         restored = PromptComponent.model_validate_json(json_str)
 
         assert restored.type == component.type
+        assert restored.name == component.name
+        assert restored.message_role == component.message_role
         assert restored.content == component.content
         assert restored.enabled == component.enabled
 
@@ -70,8 +75,8 @@ class TestOutputSchema:
             version_id="v1",
             name="Test",
             components=[
-                PromptComponent(type=PromptComponentType.role, content="You are a helpful assistant."),
-                PromptComponent(type=PromptComponentType.task, content="Answer the question."),
+                PromptComponent(type=PromptComponentType.role, name="Role", content="You are a helpful assistant."),
+                PromptComponent(type=PromptComponentType.task, name="Task", content="Answer the question."),
             ],
             created_at=utc_timestamp(),
             output_schema=output_schema,
@@ -80,7 +85,7 @@ class TestOutputSchema:
     def test_resolve_without_schema_is_unchanged(self):
         """resolve() with no output_schema returns the same plain text as before."""
         version = self._make_version()
-        assert version.resolve() == "You are a helpful assistant.\n\nAnswer the question."
+        assert version.resolve() == "Role:\nYou are a helpful assistant.\n\nTask:\nAnswer the question."
 
     def test_resolve_with_schema_appends_block(self):
         """resolve() appends a JSON Schema block after components when output_schema is set."""
@@ -95,7 +100,7 @@ class TestOutputSchema:
         version = self._make_version(output_schema=schema)
         resolved = version.resolve()
 
-        assert resolved.startswith("You are a helpful assistant.\n\nAnswer the question.\n\n")
+        assert resolved.startswith("Role:\nYou are a helpful assistant.\n\nTask:\nAnswer the question.\n\n")
         assert "Respond with a JSON object that conforms to the following JSON Schema:" in resolved
         assert "```json" in resolved
         assert '"type": "object"' in resolved
