@@ -1,6 +1,9 @@
 import React from 'react';
-import type { PromptComponent, PromptVersion } from '../../../types/prompt';
+import type { PromptComponent, PromptTool, PromptVersion } from '../../../types/prompt';
 import { computeDiff } from '../../../utils/jsonDiff';
+import iconOutputSchema from '../../../assets/icon-outputschema.svg';
+import iconTool from '../../../assets/icon-tool.svg';
+import iconVariable from '../../../assets/icon-variable.svg';
 import { normalizePromptComponents } from '../promptEditor';
 import { getPromptVersionDiffSummary } from '../promptVersionDiff';
 
@@ -16,6 +19,9 @@ interface CurrentDraft {
   versionId: string | null;
   revisionNote?: string | null;
   components: PromptComponent[];
+  variables?: Record<string, string> | null;
+  tools?: PromptTool[] | null;
+  outputSchema?: Record<string, unknown> | null;
   resolvedPrompt: string;
 }
 
@@ -31,6 +37,30 @@ const PREFIX = {
   removed: '- ',
 } as const;
 
+function getMaskIconStyle(icon: string): React.CSSProperties {
+  return {
+    WebkitMaskImage: `url("${icon}")`,
+    maskImage: `url("${icon}")`,
+  };
+}
+
+function renderMetaChangeTag(
+  key: string,
+  label: string,
+  icon: string,
+) {
+  return (
+    <span key={key} className="version-tree__edge-tag version-tree__edge-tag--changed">
+      <span
+        className="version-tree__edge-tag-icon"
+        style={getMaskIconStyle(icon)}
+        aria-hidden
+      />
+      <span>~ {label}</span>
+    </span>
+  );
+}
+
 const PromptDiffWorkspace: React.FC<Props> = ({
   currentDraft,
   target,
@@ -41,15 +71,15 @@ const PromptDiffWorkspace: React.FC<Props> = ({
       const diffSummary = getPromptVersionDiffSummary(
         {
           components: normalizePromptComponents(currentDraft.components),
-          tools: [],
-          outputSchema: null,
-          variables: null,
+          tools: currentDraft.tools ?? [],
+          outputSchema: currentDraft.outputSchema ?? null,
+          variables: currentDraft.variables ?? null,
         },
         {
           components: normalizePromptComponents(target.version.components),
-          tools: [],
-          outputSchema: null,
-          variables: null,
+          tools: target.version.tools ?? [],
+          outputSchema: target.version.output_schema ?? null,
+          variables: target.version.variables ?? null,
         }
       );
 
@@ -57,15 +87,29 @@ const PromptDiffWorkspace: React.FC<Props> = ({
         ...diffSummary.added.map((label) => ({ kind: 'added' as const, label })),
         ...diffSummary.removed.map((label) => ({ kind: 'removed' as const, label })),
         ...diffSummary.changed.map((label) => ({ kind: 'changed' as const, label })),
+        ...(diffSummary.toolChanged ? [{ kind: 'tool' as const, label: 'tools' }] : []),
+        ...(diffSummary.schemaChanged ? [{ kind: 'schema' as const, label: 'schema' }] : []),
+        ...(diffSummary.variableChanged ? [{ kind: 'variable' as const, label: 'variables' }] : []),
       ];
     },
-    [currentDraft.components, target.version.components]
+    [
+      currentDraft.components,
+      currentDraft.outputSchema,
+      currentDraft.tools,
+      currentDraft.variables,
+      target.version.components,
+      target.version.output_schema,
+      target.version.tools,
+      target.version.variables,
+    ]
   );
   const resolvedDiff = React.useMemo(
     () => computeDiff(targetResolvedPrompt, currentDraft.resolvedPrompt),
     [currentDraft.resolvedPrompt, targetResolvedPrompt]
   );
   const hasResolvedChanges = resolvedDiff.some((line) => line.type !== 'same');
+  const compareVersionLabel = `${target.promptId} / ${target.version.version_id}`;
+  const compareVersionName = target.version.name?.trim() || target.promptName;
 
   return (
     <div className="prompt-diff">
@@ -90,16 +134,15 @@ const PromptDiffWorkspace: React.FC<Props> = ({
             </div>
           </div>
         </div>
-        <div className="card">
-          <div className="card__body version-compare__meta-card">
+        <div className="card version-compare__meta-card-shell version-compare__meta-card-shell--compare">
+          <div className="card__body version-compare__meta-card version-compare__meta-card--compare">
             <div className="version-compare__meta-head">
-              <span className="version-compare__meta-chip version-compare__meta-chip--saved">saved version</span>
-              {target.version.branch_name ? (
-                <span className="badge badge--neutral">{target.version.branch_name}</span>
-              ) : null}
+              <span className="version-compare__meta-chip version-compare__meta-chip--compare">comparing</span>
             </div>
-            <div className="version-compare__version-name">{target.version.name || target.promptName}</div>
-            <div className="field__hint">{target.promptId} / {target.version.version_id}</div>
+            <div className="version-compare__version-name">{compareVersionLabel}</div>
+            {compareVersionName ? (
+              <div className="field__hint">{compareVersionName}</div>
+            ) : null}
             {target.version.revision_note ? (
               <div className="version-compare__revision-note">{target.version.revision_note}</div>
             ) : null}
@@ -117,13 +160,21 @@ const PromptDiffWorkspace: React.FC<Props> = ({
           {componentDelta.length > 0 ? (
             <div className="version-compare__delta-chips">
               {componentDelta.map((item, index) => (
-                <span
-                  key={`${item.kind}-${item.label}-${index}`}
-                  className={`version-tree__edge-tag version-tree__edge-tag--${item.kind === 'added' ? 'added' : item.kind === 'removed' ? 'removed' : 'changed'}`}
-                >
-                  {item.kind === 'added' ? '+ ' : item.kind === 'removed' ? '- ' : '~ '}
-                  {item.label}
-                </span>
+                item.kind === 'tool'
+                  ? renderMetaChangeTag(`${item.kind}-${item.label}-${index}`, item.label, iconTool)
+                  : item.kind === 'schema'
+                    ? renderMetaChangeTag(`${item.kind}-${item.label}-${index}`, item.label, iconOutputSchema)
+                    : item.kind === 'variable'
+                      ? renderMetaChangeTag(`${item.kind}-${item.label}-${index}`, item.label, iconVariable)
+                      : (
+                        <span
+                          key={`${item.kind}-${item.label}-${index}`}
+                          className={`version-tree__edge-tag version-tree__edge-tag--${item.kind === 'added' ? 'added' : item.kind === 'removed' ? 'removed' : 'changed'}`}
+                        >
+                          {item.kind === 'added' ? '+ ' : item.kind === 'removed' ? '- ' : '~ '}
+                          {item.label}
+                        </span>
+                      )
               ))}
             </div>
           ) : (

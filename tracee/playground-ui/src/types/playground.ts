@@ -1,4 +1,4 @@
-import type { PromptTool } from "./prompt";
+import type { PromptComponent, PromptTool } from "./prompt";
 
 export interface PlaygroundToolCall {
   call_id?: string | null;
@@ -37,7 +37,10 @@ export interface PlaygroundRunCreate {
   prompt_id: string;
   version_id?: string;
   input_variables?: Record<string, string>;
+  components?: PromptComponent[] | null;
   output_schema?: Record<string, unknown> | null;
+  disable_output_schema?: boolean;
+  tools?: PromptTool[] | null;
   model?: string;
   provider?: string;
   temperature?: number;
@@ -49,4 +52,39 @@ export interface PlaygroundRunCreate {
 export interface PlaygroundRunResponse {
   run: PlaygroundRun;
   message: string;
+}
+
+export interface PlaygroundAnalysisItem {
+  id: string;
+  group_id: string;
+  label: string;
+  output: string;
+}
+
+export interface PlaygroundAnalysisRequest {
+  items: PlaygroundAnalysisItem[];
+  embedding_model?: string;
+}
+
+export interface PlaygroundAnalysisPoint {
+  id: string;
+  group_id: string;
+  label: string;
+  x: number;
+  y: number;
+  average_similarity: number;
+}
+
+export interface PlaygroundAnalysisResponse {
+  points: PlaygroundAnalysisPoint[];
+}
+
+export interface PlaygroundAnalysisGroup {
+  id: string;
+  label: string;
+  tone: 'primary' | 'compare';
+  promptId: string | null;
+  versionId: string | null;
+  results: Array<PlaygroundRun | null>;
+  runErrors: Array<string | null>;
 }

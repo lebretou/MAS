@@ -41,6 +41,7 @@ interface RunExecutionParams {
     loadedSignature?: string | null;
     revisionNote?: string | null;
     sourceTemplateId?: string | null;
+    useExistingVersion?: boolean;
   };
 }
 
@@ -52,6 +53,27 @@ interface RunExecutionState {
 interface CachedPromptVersion {
   promptId: string;
   versionId: string;
+}
+
+interface RunExecutionPlanBase {
+  promptId: string;
+  versionId: string;
+}
+
+type RunExecutionPlan =
+  | (RunExecutionPlanBase & { kind: 'existing_saved' })
+  | (RunExecutionPlanBase & {
+    kind: 'existing_draft';
+    requestOverrides: Pick<PlaygroundRunCreate, 'components' | 'tools' | 'output_schema' | 'disable_output_schema'>;
+  })
+  | (RunExecutionPlanBase & { kind: 'cached' })
+  | { kind: 'create'; promptName: string };
+
+export interface RunExecutionResult {
+  promptId: string;
+  versionId: string;
+  results: Array<PlaygroundRun | null>;
+  errors: Array<string | null>;
 }
 
 function stableSerialize(value: unknown): string {
@@ -87,8 +109,60 @@ function getPromptSignature(params: RunExecutionParams): string {
   );
 }
 
+function shouldDisableOutputSchema(
+  tools: PromptTool[],
+) {
+  return tools.length > 0;
+}
+
+export function planRunExecution(
+  params: RunExecutionParams,
+  cachedPromptVersion?: CachedPromptVersion | null,
+): RunExecutionPlan {
+  const signature = getPromptSignature(params);
+  const promptContext = params.promptContext;
+
+  if (
+    promptContext?.promptId &&
+    promptContext.versionId &&
+    (promptContext.useExistingVersion || promptContext.loadedSignature === signature)
+  ) {
+    return {
+      kind: 'existing_saved',
+      promptId: promptContext.promptId,
+      versionId: promptContext.versionId,
+    };
+  }
+
+  if (promptContext?.promptId && promptContext.versionId) {
+    return {
+      kind: 'existing_draft',
+      promptId: promptContext.promptId,
+      versionId: promptContext.versionId,
+      requestOverrides: {
+        components: params.components,
+        tools: params.tools,
+        output_schema: params.outputSchema,
+        disable_output_schema: shouldDisableOutputSchema(params.tools),
+      },
+    };
+  }
+
+  if (cachedPromptVersion) {
+    return {
+      kind: 'cached',
+      promptId: cachedPromptVersion.promptId,
+      versionId: cachedPromptVersion.versionId,
+    };
+  }
+
+  return {
+    kind: 'create',
+    promptName: params.promptContext?.promptName?.trim() || `Playground Prompt ${Date.now()}`,
+  };
+}
+
 export function useRunExecution(
-  onRunComplete: (results: Array<PlaygroundRun | null>, errors: Array<string | null>) => void,
 ) {
   const [state, setState] = useState<RunExecutionState>({
     loading: false,
@@ -106,42 +180,20 @@ export function useRunExecution(
       const signature = getPromptSignature(params);
       const cachedPromptVersion = cachedPromptVersionsRef.current.get(signature);
       const promptContext = params.promptContext;
+      const plan = planRunExecution(params, cachedPromptVersion);
 
       let promptId = '';
       let versionId = '';
 
-      if (
-        promptContext?.promptId &&
-        promptContext.versionId &&
-        promptContext.loadedSignature === signature
-      ) {
-        promptId = promptContext.promptId;
-        versionId = promptContext.versionId;
-      } else if (promptContext?.promptId) {
-        promptId = promptContext.promptId;
-        const createdVersion = await promptAPI.createVersion(promptId, {
-          name: `${promptContext.promptName} revision`,
-          components: params.components,
-          variables: params.inputVariables,
-          output_schema: params.outputSchema,
-          tools: params.tools,
-          parent_version_id: promptContext.versionId,
-          branch_name: promptContext.branchName ?? undefined,
-          revision_note: promptContext.revisionNote ?? undefined,
-          source_template_id: promptContext.sourceTemplateId ?? undefined,
-        });
-        versionId = createdVersion.version_id;
-      } else if (cachedPromptVersion) {
-        promptId = cachedPromptVersion.promptId;
-        versionId = cachedPromptVersion.versionId;
+      if (plan.kind === 'existing_saved' || plan.kind === 'existing_draft' || plan.kind === 'cached') {
+        promptId = plan.promptId;
+        versionId = plan.versionId;
       } else {
-        const timestamp = Date.now();
-        const promptName = params.promptContext?.promptName?.trim() || `Playground Prompt ${timestamp}`;
-        promptId = await generateUniquePromptId(promptName, promptAPI.getPrompt);
+        promptId = await generateUniquePromptId(plan.promptName, promptAPI.getPrompt);
 
         await promptAPI.createPrompt({
           prompt_id: promptId,
-          name: promptName,
+          name: plan.promptName,
           description: 'Created from playground',
         });
 
@@ -169,6 +221,8 @@ export function useRunExecution(
         provider: params.provider,
         temperature: params.temperature,
         output_schema: params.outputSchema,
+        disable_output_schema: shouldDisableOutputSchema(params.tools),
+        ...(plan.kind === 'existing_draft' ? plan.requestOverrides : {}),
       };
 
       const settled = await Promise.allSettled(
@@ -180,9 +234,8 @@ export function useRunExecution(
         r.status === 'rejected' ? getErrorMessage(r.reason) : null
       );
 
-      onRunComplete(results, errors);
       setState(prev => ({ ...prev, loading: false }));
-      return { promptId, versionId };
+      return { promptId, versionId, results, errors } satisfies RunExecutionResult;
     } catch (err: unknown) {
       setState(prev => ({
         ...prev,
@@ -191,7 +244,7 @@ export function useRunExecution(
       }));
       return null;
     }
-  }, [onRunComplete]);
+  }, []);
 
   return { ...state, execute };
 }

@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab Meeting Presentation</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+        /* viewport fitting: mandatory base styles */
+
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        html {
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+
+        .slide {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .slide-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            max-height: 100%;
+            overflow: hidden;
+            padding: var(--slide-padding);
+        }
+
+        :root {
+            --title-size: clamp(1.5rem, 5vw, 4rem);
+            --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
+            --h3-size: clamp(1rem, 2.5vw, 1.75rem);
+            --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
+            --small-size: clamp(0.65rem, 1vw, 0.875rem);
+
+            --slide-padding: clamp(1rem, 4vw, 4rem);
+            --content-gap: clamp(0.5rem, 2vw, 2rem);
+            --element-gap: clamp(0.25rem, 1vw, 1rem);
+        }
+
+        .card, .container, .content-box {
+            max-width: min(90vw, 1000px);
+            max-height: min(80vh, 700px);
+        }
+
+        .feature-list, .bullet-list {
+            gap: clamp(0.4rem, 1vh, 1rem);
+        }
+
+        .feature-list li, .bullet-list li {
+            font-size: var(--body-size);
+            line-height: 1.4;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+        }
+
+        img, .image-container {
+            max-width: 100%;
+            max-height: min(50vh, 400px);
+            object-fit: contain;
+        }
+
+        @media (max-height: 700px) {
+            :root {
+                --slide-padding: clamp(0.75rem, 3vw, 2rem);
+                --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+                --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
+                --h2-size: clamp(1rem, 3vw, 1.75rem);
+            }
+        }
+
+        @media (max-height: 600px) {
+            :root {
+                --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+                --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+                --title-size: clamp(1.1rem, 4vw, 2rem);
+                --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
+            }
+
+            .nav-dots, .keyboard-hint, .decorative {
+                display: none;
+            }
+        }
+
+        @media (max-height: 500px) {
+            :root {
+                --slide-padding: clamp(0.4rem, 2vw, 1rem);
+                --title-size: clamp(1rem, 3.5vw, 1.5rem);
+                --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
+                --body-size: clamp(0.65rem, 1vw, 0.85rem);
+            }
+        }
+
+        @media (max-width: 600px) {
+            :root {
+                --title-size: clamp(1.25rem, 7vw, 2.5rem);
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.2s !important;
+            }
+
+            html {
+                scroll-behavior: auto;
+            }
+        }
+
+        :root {
+            --bg: #f5f3ee;
+            --bg-soft: #ebe6db;
+            --panel: rgba(255, 255, 255, 0.72);
+            --panel-strong: rgba(255, 255, 255, 0.92);
+            --text: #101418;
+            --text-soft: #42505e;
+            --line: rgba(16, 20, 24, 0.12);
+            --accent: #bc2f2f;
+            --accent-soft: rgba(188, 47, 47, 0.12);
+            --accent-strong: #7e1111;
+            --signal: #17232f;
+            --shadow: 0 1.2rem 3rem rgba(15, 23, 42, 0.08);
+            --radius-lg: clamp(1rem, 1.6vw, 1.8rem);
+            --radius-md: clamp(0.8rem, 1.2vw, 1.2rem);
+            --max-width: min(1180px, 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "IBM Plex Sans", sans-serif;
+            background:
+                radial-gradient(circle at 15% 20%, rgba(188, 47, 47, 0.10), transparent 26%),
+                radial-gradient(circle at 85% 18%, rgba(23, 35, 47, 0.08), transparent 24%),
+                linear-gradient(180deg, #f7f4ee 0%, #f2eee5 100%);
+            color: var(--text);
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(16, 20, 24, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(16, 20, 24, 0.035) 1px, transparent 1px);
+            background-size: clamp(28px, 4vw, 54px) clamp(28px, 4vw, 54px);
+            mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 92%);
+            z-index: 0;
+        }
+
+        main {
+            position: relative;
+            z-index: 1;
+        }
+
+        section:nth-of-type(even) {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
+        }
+
+        h1, h2, h3 {
+            margin: 0;
+            font-family: "Archivo", sans-serif;
+            line-height: 1.02;
+            letter-spacing: -0.04em;
+        }
+
+        h1 {
+            font-size: var(--title-size);
+            max-width: 12ch;
+        }
+
+        h2 {
+            font-size: var(--h2-size);
+            max-width: 16ch;
+        }
+
+        h3 {
+            font-size: var(--h3-size);
+        }
+
+        p, li {
+            font-size: var(--body-size);
+            line-height: 1.45;
+            margin: 0;
+            color: var(--text-soft);
+        }
+
+        ul {
+            margin: 0;
+            padding-left: 1.2em;
+        }
+
+        .slide-content > * {
+            width: 100%;
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.7em;
+            font-size: var(--small-size);
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent-strong);
+        }
+
+        .eyebrow::before {
+            content: "";
+            width: clamp(1.2rem, 4vw, 3rem);
+            height: 1px;
+            background: currentColor;
+            opacity: 0.65;
+        }
+
+        .stack {
+            display: flex;
+            flex-direction: column;
+            gap: var(--content-gap);
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+            gap: clamp(1.2rem, 4vw, 4rem);
+            align-items: end;
+        }
+
+        .hero-copy {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.8rem, 2vw, 1.4rem);
+        }
+
+        .lede {
+            max-width: 54ch;
+            font-size: clamp(0.95rem, 1.7vw, 1.28rem);
+            color: var(--signal);
+        }
+
+        .hero-panel,
+        .panel,
+        .card,
+        .mini-card,
+        .stat,
+        .metric,
+        .step,
+        .domain-row,
+        .chain-card {
+            background: var(--panel);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--line);
+            box-shadow: var(--shadow);
+        }
+
+        .hero-panel {
+            border-radius: var(--radius-lg);
+            padding: clamp(1rem, 2vw, 1.5rem);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.7rem, 1.4vw, 1rem);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-panel::after {
+            content: "";
+            position: absolute;
+            inset: auto calc(-1 * clamp(1rem, 3vw, 2rem)) calc(-1 * clamp(2rem, 7vw, 4rem)) auto;
+            width: clamp(7rem, 25vw, 13rem);
+            aspect-ratio: 1;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(188, 47, 47, 0.2), transparent 70%);
+        }
+
+        .hero-metric {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: clamp(0.5rem, 1vw, 0.9rem);
+        }
+
+        .metric {
+            border-radius: var(--radius-md);
+            padding: clamp(0.7rem, 1vw, 1rem);
+        }
+
+        .metric strong {
+            display: block;
+            font-size: clamp(1.1rem, 2.6vw, 2rem);
+            font-family: "Archivo", sans-serif;
+            color: var(--signal);
+        }
+
+        .metric span {
+            display: block;
+            margin-top: 0.25rem;
+            font-size: var(--small-size);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-soft);
+        }
+
+        .layout-two {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            gap: clamp(1rem, 2.4vw, 2.2rem);
+            align-items: stretch;
+        }
+
+        .layout-tight {
+            display: grid;
+            grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+            gap: clamp(1rem, 2.4vw, 2.2rem);
+            align-items: start;
+        }
+
+        .panel {
+            border-radius: var(--radius-lg);
+            padding: clamp(1rem, 2vw, 1.6rem);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.7rem, 1.3vw, 1rem);
+        }
+
+        .panel-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 1rem;
+        }
+
+        .muted {
+            color: var(--text-soft);
+        }
+
+        .definition {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: clamp(0.7rem, 1.2vw, 1rem);
+        }
+
+        .mini-card,
+        .card,
+        .stat,
+        .step,
+        .chain-card {
+            border-radius: var(--radius-md);
+            padding: clamp(0.8rem, 1.4vw, 1.1rem);
+        }
+
+        .question-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: clamp(0.7rem, 1.2vw, 1rem);
+        }
+
+        .question-index,
+        .step-index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: clamp(1.7rem, 2vw, 2rem);
+            height: clamp(1.7rem, 2vw, 2rem);
+            border-radius: 999px;
+            background: var(--accent);
+            color: #fff8f3;
+            font-weight: 700;
+            font-size: var(--small-size);
+        }
+
+        .card {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.45rem, 1vw, 0.7rem);
+        }
+
+        .card p strong,
+        .highlight {
+            color: var(--signal);
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: clamp(0.7rem, 1.2vw, 1rem);
+        }
+
+        .stat strong {
+            display: block;
+            font-size: clamp(1.2rem, 2.8vw, 2.2rem);
+            font-family: "Archivo", sans-serif;
+            color: var(--accent-strong);
+        }
+
+        .flow {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: clamp(0.7rem, 1.2vw, 1rem);
+            align-items: stretch;
+        }
+
+        .step {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.45rem, 1vw, 0.7rem);
+        }
+
+        .step::after {
+            content: "→";
+            position: absolute;
+            right: calc(-1 * clamp(0.9rem, 1.5vw, 1.2rem));
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(16, 20, 24, 0.25);
+            font-size: clamp(1.1rem, 2vw, 1.5rem);
+        }
+
+        .step:last-child::after {
+            display: none;
+        }
+
+        .domain-list {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.45rem, 0.8vw, 0.75rem);
+        }
+
+        .domain-row {
+            border-radius: var(--radius-md);
+            padding: clamp(0.65rem, 1vw, 0.95rem);
+            display: grid;
+            grid-template-columns: minmax(180px, 1.2fr) minmax(0, 2fr) auto;
+            gap: clamp(0.7rem, 1vw, 0.9rem);
+            align-items: center;
+        }
+
+        .domain-title {
+            font-weight: 700;
+            color: var(--signal);
+        }
+
+        .bar-track {
+            position: relative;
+            height: clamp(0.55rem, 0.9vw, 0.8rem);
+            border-radius: 999px;
+            background: rgba(16, 20, 24, 0.08);
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--accent), #d65a4d);
+        }
+
+        .bar-label {
+            font-size: var(--small-size);
+            color: var(--signal);
+            text-align: right;
+            font-weight: 700;
+        }
+
+        .process-rail {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            gap: clamp(0.8rem, 2vw, 1.6rem);
+            align-items: center;
+        }
+
+        .process-box {
+            border-radius: var(--radius-lg);
+            padding: clamp(1rem, 1.6vw, 1.25rem);
+            background: var(--panel-strong);
+            border: 1px solid var(--line);
+            box-shadow: var(--shadow);
+            min-height: clamp(9rem, 18vh, 12rem);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.65rem;
+        }
+
+        .process-arrow {
+            font-family: "Archivo", sans-serif;
+            font-size: clamp(1.5rem, 4vw, 3rem);
+            color: var(--accent);
+        }
+
+        .pill-row,
+        .tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: clamp(0.35rem, 0.6vw, 0.55rem);
+        }
+
+        .pill,
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.45em 0.8em;
+            font-size: var(--small-size);
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .pill {
+            background: rgba(23, 35, 47, 0.08);
+            color: var(--signal);
+        }
+
+        .tag {
+            background: var(--accent-soft);
+            color: var(--accent-strong);
+        }
+
+        .pain-grid,
+        .contrib-grid,
+        .pipeline {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: clamp(0.8rem, 1.2vw, 1rem);
+        }
+
+        .chain-visual {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: clamp(0.55rem, 1vw, 0.8rem);
+            align-items: center;
+        }
+
+        .chain-card {
+            min-height: clamp(6.2rem, 12vh, 8rem);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.45rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chain-card.bad::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(188, 47, 47, 0.2), transparent 65%);
+        }
+
+        .chain-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(16, 20, 24, 0.35);
+            font-size: clamp(1rem, 2vw, 1.4rem);
+        }
+
+        .criteria-list {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: clamp(0.65rem, 1vw, 0.9rem);
+        }
+
+        .criteria-list .mini-card {
+            min-height: clamp(6rem, 12vh, 7.5rem);
+        }
+
+        .criteria-list .mini-card p + p {
+            margin-top: 0.5rem;
+        }
+
+        .pipeline {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .pipeline .step {
+            min-height: clamp(10rem, 18vh, 12rem);
+            justify-content: flex-start;
+        }
+
+        .closing {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            gap: clamp(1rem, 2vw, 2rem);
+            align-items: stretch;
+        }
+
+        .quote-box {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 1rem;
+            border-radius: var(--radius-lg);
+            padding: clamp(1rem, 2vw, 1.6rem);
+            background: linear-gradient(145deg, rgba(23, 35, 47, 0.94), rgba(38, 47, 58, 0.92));
+            color: #f8f6f2;
+            box-shadow: 0 1.3rem 3rem rgba(15, 23, 42, 0.16);
+        }
+
+        .quote-box p,
+        .quote-box .muted,
+        .quote-box .eyebrow {
+            color: inherit;
+        }
+
+        .quote-box .eyebrow::before {
+            background: currentColor;
+        }
+
+        .quote-text {
+            font-size: clamp(1.05rem, 2vw, 1.45rem);
+            line-height: 1.35;
+            max-width: 28ch;
+        }
+
+        .footer-note {
+            font-size: var(--small-size);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .nav-shell {
+            position: fixed;
+            right: clamp(0.7rem, 2vw, 1.3rem);
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .slide-counter {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-size: var(--small-size);
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(16, 20, 24, 0.55);
+        }
+
+        .nav-dots {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+            padding: 0.6rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(16, 20, 24, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-dot {
+            width: 0.7rem;
+            height: 0.7rem;
+            border-radius: 999px;
+            border: none;
+            background: rgba(16, 20, 24, 0.16);
+            cursor: pointer;
+            transition: transform 180ms ease, background 180ms ease;
+        }
+
+        .nav-dot.active {
+            background: var(--accent);
+            transform: scale(1.15);
+        }
+
+        .keyboard-hint {
+            position: fixed;
+            left: clamp(0.8rem, 2vw, 1.4rem);
+            bottom: clamp(0.7rem, 2vw, 1.2rem);
+            z-index: 10;
+            font-size: var(--small-size);
+            color: rgba(16, 20, 24, 0.6);
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(16, 20, 24, 0.09);
+            border-radius: 999px;
+            padding: 0.5rem 0.9rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .reveal {
+            opacity: 0;
+            transform: translateY(22px);
+            transition: opacity 540ms ease, transform 540ms ease;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (max-width: 980px) {
+            .hero,
+            .layout-two,
+            .layout-tight,
+            .closing,
+            .process-rail,
+            .pipeline,
+            .pain-grid,
+            .contrib-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .definition,
+            .question-grid,
+            .flow,
+            .stats-row,
+            .criteria-list {
+                grid-template-columns: 1fr;
+            }
+
+            .domain-row {
+                grid-template-columns: 1fr;
+            }
+
+            .chain-visual {
+                grid-template-columns: 1fr;
+            }
+
+            .chain-arrow {
+                transform: rotate(90deg);
+                min-height: 1.6rem;
+            }
+
+            .step::after {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav-shell" aria-label="slide navigation">
+        <div class="slide-counter"><span id="slide-current">01</span> / <span id="slide-total">12</span></div>
+        <div class="nav-dots" id="nav-dots"></div>
+    </nav>
+
+    <div class="keyboard-hint">use arrow keys, wheel, or swipe</div>
+
+    <main>
+        <section class="slide" id="slide-1" aria-label="title slide">
+            <div class="slide-content">
+                <div class="hero">
+                    <div class="hero-copy stack reveal">
+                        <span class="eyebrow">lab meeting presentation</span>
+                        <h1>mapping how developers build multi-agent systems</h1>
+                        <p class="lede">An interview-driven project on real-world MAS workflows, prompt complexity, and how these findings can inform better development support tools.</p>
+                        <div class="tag-row">
+                            <span class="tag">phd project</span>
+                            <span class="tag">semi-formal research update</span>
+                            <span class="tag">interviews + component analysis</span>
+                        </div>
+                    </div>
+
+                    <aside class="hero-panel reveal">
+                        <span class="eyebrow">core arc</span>
+                        <h3>from developer practice to prompt structure</h3>
+                        <p>This talk moves from what MAS builders say they struggle with to what prompt artifacts reveal about recurring roles and components.</p>
+                        <div class="hero-metric">
+                            <div class="metric">
+                                <strong>20</strong>
+                                <span>interview projects</span>
+                            </div>
+                            <div class="metric">
+                                <strong>27</strong>
+                                <span>open repos</span>
+                            </div>
+                            <div class="metric">
+                                <strong>268</strong>
+                                <span>prompt units</span>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-2" aria-label="motivation and definitions">
+            <div class="slide-content">
+                <div class="layout-two">
+                    <div class="stack reveal">
+                        <span class="eyebrow">motivation</span>
+                        <h2>Why study MAS development practice?</h2>
+                        <p class="lede">Multi-agent systems are increasingly used for complex workflows, but the tooling story is still immature. I want to understand how developers actually build them, where time goes, and what kinds of support would matter in practice.</p>
+                        <div class="pill-row">
+                            <span class="pill">ground tool ideas in observed workflows</span>
+                            <span class="pill">focus on pain points, not idealized pipelines</span>
+                        </div>
+                    </div>
+
+                    <div class="panel reveal">
+                        <div class="panel-title">
+                            <h3>working definitions</h3>
+                            <span class="muted">for this project</span>
+                        </div>
+                        <div class="definition">
+                            <div class="mini-card">
+                                <h3>AI agent</h3>
+                                <p>An LLM-guided component with a role, prompt, context, and some decision or action responsibility.</p>
+                            </div>
+                            <div class="mini-card">
+                                <h3>multi-agent system</h3>
+                                <p>A workflow where multiple specialized agents coordinate, pass outputs, and contribute to a larger task.</p>
+                            </div>
+                        </div>
+                        <p>That makes MAS development less like writing one prompt and more like designing a stochastic, interconnected software pipeline.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-3" aria-label="research questions">
+            <div class="slide-content">
+                <div class="stack">
+                    <div class="stack reveal">
+                        <span class="eyebrow">research questions</span>
+                        <h2>What I wanted to learn</h2>
+                    </div>
+                    <div class="question-grid">
+                        <article class="card reveal">
+                            <span class="question-index">1</span>
+                            <h3>Domains and use cases</h3>
+                            <p>What do people use multi-agent systems for, and what kinds of tasks justify multiple agent roles?</p>
+                        </article>
+                        <article class="card reveal">
+                            <span class="question-index">2</span>
+                            <h3>Frameworks and roles</h3>
+                            <p>Which MAS frameworks do they use, and what agent roles or prompt ingredients recur across projects?</p>
+                        </article>
+                        <article class="card reveal">
+                            <span class="question-index">3</span>
+                            <h3>Development bottlenecks</h3>
+                            <p>What takes the longest, and where does the friction appear when people are actually trying to ship these systems?</p>
+                        </article>
+                        <article class="card reveal">
+                            <span class="question-index">4</span>
+                            <h3>Desired support</h3>
+                            <p>What interactions, interfaces, or tooling would help developers iterate faster and debug with more confidence?</p>
+                        </article>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-4" aria-label="study design">
+            <div class="slide-content">
+                <div class="stack">
+                    <div class="stack reveal">
+                        <span class="eyebrow">study design</span>
+                        <h2>Interview first, then synthesize themes</h2>
+                        <p class="lede">I started with semi-structured interviews with developers who had experience building LLM-based MAS, then used two rounds of coding across two authors to identify recurring themes.</p>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat reveal">
+                            <strong>20</strong>
+                            <p>distinct projects represented in the interview sample</p>
+                        </div>
+                        <div class="stat reveal">
+                            <strong>2</strong>
+                            <p>rounds of coding with two authors for theme development</p>
+                        </div>
+                        <div class="stat reveal">
+                            <strong>industry-leaning</strong>
+                            <p>which likely amplifies concerns about reliability, stability, and output consistency</p>
+                        </div>
+                    </div>
+                    <div class="flow">
+                        <div class="step reveal">
+                            <span class="step-index">1</span>
+                            <h3>interviews</h3>
+                            <p>Gather concrete stories about domains, frameworks, roles, pain points, and wished-for support.</p>
+                        </div>
+                        <div class="step reveal">
+                            <span class="step-index">2</span>
+                            <h3>coding</h3>
+                            <p>Iteratively mark patterns in how developers describe building, testing, and debugging MAS.</p>
+                        </div>
+                        <div class="step reveal">
+                            <span class="step-index">3</span>
+                            <h3>synthesis</h3>
+                            <p>Use the interview themes to motivate a second artifact-level analysis of prompt structure.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-5" aria-label="domains">
+            <div class="slide-content">
+                <div class="layout-tight">
+                    <div class="stack reveal">
+                        <span class="eyebrow">sample composition</span>
+                        <h2>Interviewed projects spanned six main domains</h2>
+                        <p class="lede">The sample is broad, but a large share clusters around analysis, research workflows, and productivity support rather than embodied or robotics-heavy systems.</p>
+                        <div class="pill-row">
+                            <span class="pill">20 distinct projects total</span>
+                            <span class="pill">applied + research-facing uses</span>
+                        </div>
+                    </div>
+                    <div class="panel reveal">
+                        <div class="domain-list">
+                            <div class="domain-row">
+                                <div>
+                                    <div class="domain-title">analytics / extraction / evaluation</div>
+                                    <p>financial PDFs, fact-checking, root-cause analysis</p>
+                                </div>
+                                <div class="bar-track"><span class="bar-fill" style="width: 100%;"></span></div>
+                                <div class="bar-label">6</div>
+                            </div>
+                            <div class="domain-row">
+                                <div>
+                                    <div class="domain-title">research / report / content</div>
+                                    <p>literature review, research reports, drafting-reviewing</p>
+                                </div>
+                                <div class="bar-track"><span class="bar-fill" style="width: 67%;"></span></div>
+                                <div class="bar-label">4</div>
+                            </div>
+                            <div class="domain-row">
+                                <div>
+                                    <div class="domain-title">task automation / support</div>
+                                    <p>planning assistants, shopping support, coordination</p>
+                                </div>
+                                <div class="bar-track"><span class="bar-fill" style="width: 67%;"></span></div>
+                                <div class="bar-label">4</div>
+                            </div>
+                            <div class="domain-row">
+                                <div>
+                                    <div class="domain-title">healthcare / medical</div>
+                                    <p>decision support and medical imaging assistance</p>
+                                </div>
+                                <div class="bar-track"><span class="bar-fill" style="width: 34%;"></span></div>
+                                <div class="bar-label">2</div>
+                            </div>
+                            <div class="domain-row">
+                                <div>
+                                    <div class="domain-title">safety / simulation / benchmarking</div>
+                                    <p>social simulation and alignment / jailbreak settings</p>
+                                </div>
+                                <div class="bar-track"><span class="bar-fill" style="width: 34%;"></span></div>
+                                <div class="bar-label">2</div>
+                            </div>
+                            <div class="domain-row">
+                                <div>
+                                    <div class="domain-title">robotics / prototyping</div>
+                                    <p>multi-drone search-and-rescue and one hackathon exploration</p>
+                                </div>
+                                <div class="bar-track"><span class="bar-fill" style="width: 18%;"></span></div>
+                                <div class="bar-label">1 + 1</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-6" aria-label="two stage workflow">
+            <div class="slide-content">
+                <div class="stack">
+                    <div class="stack reveal">
+                        <span class="eyebrow">finding 1</span>
+                        <h2>Developers describe a two-stage workflow</h2>
+                        <p class="lede">A recurring pattern is to first tune or validate individual agents in isolation, then move to end-to-end workflow testing where coordination failures begin to surface.</p>
+                    </div>
+                    <div class="process-rail">
+                        <div class="process-box reveal">
+                            <h3>stage 1: local agent testing</h3>
+                            <p>Prompt a single agent, inspect examples, patch instructions, and push on obvious failure modes.</p>
+                            <div class="pill-row">
+                                <span class="pill">fast feedback</span>
+                                <span class="pill">role-level iteration</span>
+                            </div>
+                        </div>
+                        <div class="process-arrow reveal">→</div>
+                        <div class="process-box reveal">
+                            <h3>stage 2: workflow validation</h3>
+                            <p>Run the full chain and watch whether outputs remain stable once agents depend on one another.</p>
+                            <div class="pill-row">
+                                <span class="pill">slower feedback</span>
+                                <span class="pill">cross-agent failures</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel reveal">
+                        <p><span class="highlight">important implication:</span> the critical transition is not “does one prompt work?” but “does the whole chain stay reliable when every downstream step depends on upstream output quality?”</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-7" aria-label="iteration pain points">
+            <div class="slide-content">
+                <div class="stack">
+                    <div class="stack reveal">
+                        <span class="eyebrow">finding 2</span>
+                        <h2>Much of the time goes to slow trial-and-error</h2>
+                        <p class="lede">Because the sample leans industry-facing, participants repeatedly emphasized consistency, stability, and edge-case handling rather than novelty alone.</p>
+                    </div>
+                    <div class="pain-grid">
+                        <article class="card reveal">
+                            <h3>edge cases keep appearing late</h3>
+                            <p>Developers rerun agents or entire workflows many times to expose rare but costly failures.</p>
+                        </article>
+                        <article class="card reveal">
+                            <h3>consistency matters as much as quality</h3>
+                            <p>Acceptable outputs are not enough if the workflow is unstable across repeated runs or nearby inputs.</p>
+                        </article>
+                        <article class="card reveal">
+                            <h3>prompts grow with project complexity</h3>
+                            <p>Prompts accumulate instructions, company rules, edge-case patches, and collaborator edits over time.</p>
+                        </article>
+                        <article class="card reveal">
+                            <h3>starting from zero is hard</h3>
+                            <p>Some developers feel prompt writing itself is not their expertise, so the first version already feels underspecified.</p>
+                        </article>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-8" aria-label="debugging differences">
+            <div class="slide-content">
+                <div class="layout-two">
+                    <div class="stack reveal">
+                        <span class="eyebrow">finding 3</span>
+                        <h2>MAS debugging differs from traditional programming</h2>
+                        <p class="lede">Since these systems are stochastic and chained, failure is often diffuse: one weak output can silently degrade the rest of the workflow, and the source is rarely obvious.</p>
+                        <div class="panel">
+                            <p>Compared with traditional software, developers do not get a stable fault taxonomy or a clean stack trace. They often end up reading long logs and manually tracing where the breakdown first entered the chain.</p>
+                        </div>
+                    </div>
+                    <div class="panel reveal">
+                        <div class="chain-visual">
+                            <div class="chain-card">
+                                <h3>agent A</h3>
+                                <p>collects context</p>
+                            </div>
+                            <div class="chain-arrow">→</div>
+                            <div class="chain-card bad">
+                                <h3>agent B</h3>
+                                <p>produces a weak or hallucinated intermediate result</p>
+                            </div>
+                            <div class="chain-arrow">→</div>
+                            <div class="chain-card">
+                                <h3>agent C</h3>
+                                <p>inherits the damage and amplifies it downstream</p>
+                            </div>
+                            <div class="chain-arrow">→</div>
+                            <div class="chain-card">
+                                <h3>workflow result</h3>
+                                <p>looks wrong, but root cause is buried upstream</p>
+                            </div>
+                        </div>
+                        <div class="tag-row">
+                            <span class="tag">interconnected outputs</span>
+                            <span class="tag">stochastic behavior</span>
+                            <span class="tag">tedious log inspection</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-9" aria-label="component analysis motivation">
+            <div class="slide-content">
+                <div class="layout-two">
+                    <div class="panel reveal">
+                        <span class="eyebrow">bridge</span>
+                        <h2>From interviews to artifact analysis</h2>
+                        <p>If developers struggle with complex, growing prompts, then it becomes useful to look directly at prompts from existing projects and ask whether there are recurring roles and recurring internal structures.</p>
+                        <p class="muted">This is the motivation for the component analysis stage.</p>
+                    </div>
+                    <div class="stack reveal">
+                        <div class="card">
+                            <h3>If common role families exist...</h3>
+                            <p>we could build better kickstart templates instead of forcing everyone to write a long system prompt from scratch.</p>
+                        </div>
+                        <div class="card">
+                            <h3>If common prompt sections exist...</h3>
+                            <p>we could frame prompts as components or sections, giving developers a clearer mental model than one large block of text.</p>
+                        </div>
+                        <div class="panel">
+                            <p><span class="highlight">working idea:</span> recurring structure could support more organized authoring, comparison, and debugging interfaces for MAS development.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-10" aria-label="dataset and selection">
+            <div class="slide-content">
+                <div class="stack">
+                    <div class="stack reveal">
+                        <span class="eyebrow">component analysis</span>
+                        <h2>Dataset: open-source MAS prompts with explicit roles</h2>
+                        <p class="lede">I selected public repositories that clearly expose multi-agent prompt text, then filtered for relatively active and visible projects.</p>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat reveal">
+                            <strong>27</strong>
+                            <p>repositories in the final set</p>
+                        </div>
+                        <div class="stat reveal">
+                            <strong>268</strong>
+                            <p>prompt units extracted for analysis</p>
+                        </div>
+                        <div class="stat reveal">
+                            <strong>3+</strong>
+                            <p>agents required to count as MAS in the selection criteria</p>
+                        </div>
+                    </div>
+                    <div class="criteria-list">
+                        <div class="mini-card reveal">
+                            <h3>scope + visibility</h3>
+                            <p>LLM-based MAS with at least three separate agents or clearly differentiated roles.</p>
+                            <p>Repository must be open-source and prompt text must be explicitly visible.</p>
+                        </div>
+                        <div class="mini-card reveal">
+                            <h3>system definition</h3>
+                            <p>Built on a common MAS framework or a custom orchestration with clearly described multi-agent roles.</p>
+                            <p>This keeps the dataset focused on actual agent workflows rather than single-prompt apps.</p>
+                        </div>
+                        <div class="mini-card reveal">
+                            <h3>activity + traction</h3>
+                            <p>Recent commit within roughly the last 12-18 months.</p>
+                            <p>More than 100 stars or more than 10 forks as a rough visibility threshold.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-11" aria-label="analysis pipeline">
+            <div class="slide-content">
+                <div class="stack">
+                    <div class="stack reveal">
+                        <span class="eyebrow">analysis pipeline</span>
+                        <h2>How the prompt analysis works</h2>
+                        <p class="lede">The pipeline combines component coding, embeddings, clustering, and LLM-assisted summarization to surface recurring prompt roles and their characteristic sections.</p>
+                    </div>
+                    <div class="pipeline">
+                        <div class="step reveal">
+                            <span class="step-index">1</span>
+                            <h3>component coding</h3>
+                            <p>Use a codebook and LLM support to mark whether prompts contain identifiable components or sections.</p>
+                        </div>
+                        <div class="step reveal">
+                            <span class="step-index">2</span>
+                            <h3>embedding + clustering</h3>
+                            <p>Embed each prompt and group similar prompts to identify recurring role families.</p>
+                        </div>
+                        <div class="step reveal">
+                            <span class="step-index">3</span>
+                            <h3>cluster labeling</h3>
+                            <p>Generate a short human-readable summary for each cluster.</p>
+                        </div>
+                        <div class="step reveal">
+                            <span class="step-index">4</span>
+                            <h3>distribution comparison</h3>
+                            <p>Compare which components are characteristic of each cluster or role family.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide" id="slide-12" aria-label="contributions and close">
+            <div class="slide-content">
+                <div class="closing">
+                    <div class="stack reveal">
+                        <span class="eyebrow">takeaway</span>
+                        <h2>The larger goal is practical support for MAS builders</h2>
+                        <div class="contrib-grid">
+                            <div class="card">
+                                <h3>empirical grounding</h3>
+                                <p>Use interviews to characterize how MAS development actually unfolds and where the friction concentrates.</p>
+                            </div>
+                            <div class="card">
+                                <h3>role-aware templates</h3>
+                                <p>If role families recur, provide stronger starting points than blank prompt editors.</p>
+                            </div>
+                            <div class="card">
+                                <h3>componentized prompt views</h3>
+                                <p>If prompt structure recurs, support editing and comparison by sections instead of one long monolith.</p>
+                            </div>
+                            <div class="card">
+                                <h3>better debugging surfaces</h3>
+                                <p>Design interfaces around cross-agent dependencies, intermediate outputs, and failure tracing.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <aside class="quote-box reveal">
+                        <span class="eyebrow">current working hypothesis</span>
+                        <p class="quote-text">MAS development is difficult not only because prompts are hard to write, but because developers are coordinating stochastic components without the debugging affordances they are used to in traditional software.</p>
+                        <div>
+                            <p class="footer-note">feedback welcome</p>
+                            <p class="muted">Especially on framing, scope, and what support intervention would be most compelling.</p>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        class PresentationController {
+            constructor() {
+                this.slides = Array.from(document.querySelectorAll('.slide'));
+                this.dotsRoot = document.getElementById('nav-dots');
+                this.currentEl = document.getElementById('slide-current');
+                this.totalEl = document.getElementById('slide-total');
+                this.currentIndex = 0;
+                this.touchStartY = 0;
+                this.wheelLocked = false;
+                this.prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+                this.totalEl.textContent = String(this.slides.length).padStart(2, '0');
+                this.buildDots();
+                this.bindEvents();
+                this.observeSlides();
+                this.observeReveal();
+                this.updateUI(0);
+            }
+
+            buildDots() {
+                this.slides.forEach((slide, index) => {
+                    const dot = document.createElement('button');
+                    dot.type = 'button';
+                    dot.className = 'nav-dot';
+                    dot.setAttribute('aria-label', `go to slide ${index + 1}`);
+                    dot.setAttribute('aria-current', 'false');
+                    dot.addEventListener('click', () => this.goTo(index));
+                    this.dotsRoot.appendChild(dot);
+                });
+            }
+
+            isInteractiveTarget(target) {
+                return Boolean(target.closest('button, a, input, select, textarea, summary, [contenteditable="true"]'));
+            }
+
+            bindEvents() {
+                window.addEventListener('keydown', (event) => {
+                    if (this.isInteractiveTarget(event.target)) {
+                        return;
+                    }
+
+                    if (['ArrowDown', 'PageDown', ' ', 'ArrowRight'].includes(event.key)) {
+                        event.preventDefault();
+                        this.goTo(this.currentIndex + 1);
+                    }
+
+                    if (['ArrowUp', 'PageUp', 'ArrowLeft'].includes(event.key)) {
+                        event.preventDefault();
+                        this.goTo(this.currentIndex - 1);
+                    }
+
+                    if (event.key === 'Home') {
+                        event.preventDefault();
+                        this.goTo(0);
+                    }
+
+                    if (event.key === 'End') {
+                        event.preventDefault();
+                        this.goTo(this.slides.length - 1);
+                    }
+                });
+
+                window.addEventListener('wheel', (event) => {
+                    if (this.wheelLocked || Math.abs(event.deltaY) < 26) {
+                        return;
+                    }
+
+                    this.wheelLocked = true;
+                    window.setTimeout(() => {
+                        this.wheelLocked = false;
+                    }, 500);
+
+                    if (event.deltaY > 0) {
+                        this.goTo(this.currentIndex + 1);
+                    } else {
+                        this.goTo(this.currentIndex - 1);
+                    }
+                }, { passive: true });
+
+                window.addEventListener('touchstart', (event) => {
+                    this.touchStartY = event.touches[0].clientY;
+                }, { passive: true });
+
+                window.addEventListener('touchend', (event) => {
+                    const deltaY = this.touchStartY - event.changedTouches[0].clientY;
+
+                    if (Math.abs(deltaY) < 60) {
+                        return;
+                    }
+
+                    if (deltaY > 0) {
+                        this.goTo(this.currentIndex + 1);
+                    } else {
+                        this.goTo(this.currentIndex - 1);
+                    }
+                }, { passive: true });
+            }
+
+            observeSlides() {
+                const observer = new IntersectionObserver((entries) => {
+                    const visibleEntries = entries
+                        .filter((entry) => entry.isIntersecting)
+                        .sort((left, right) => right.intersectionRatio - left.intersectionRatio);
+
+                    if (!visibleEntries.length) {
+                        return;
+                    }
+
+                    const index = this.slides.indexOf(visibleEntries[0].target);
+                    if (index >= 0) {
+                        this.updateUI(index);
+                    }
+                }, { threshold: 0.62 });
+
+                this.slides.forEach((slide) => observer.observe(slide));
+            }
+
+            observeReveal() {
+                const revealItems = document.querySelectorAll('.reveal');
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach((entry) => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('visible');
+                        }
+                    });
+                }, { threshold: 0.2 });
+
+                revealItems.forEach((item) => observer.observe(item));
+            }
+
+            updateUI(index) {
+                this.currentIndex = Math.max(0, Math.min(index, this.slides.length - 1));
+                this.currentEl.textContent = String(this.currentIndex + 1).padStart(2, '0');
+                const dots = Array.from(this.dotsRoot.children);
+                dots.forEach((dot, dotIndex) => {
+                    dot.classList.toggle('active', dotIndex === this.currentIndex);
+                    dot.setAttribute('aria-current', dotIndex === this.currentIndex ? 'true' : 'false');
+                });
+            }
+
+            goTo(index) {
+                const clamped = Math.max(0, Math.min(index, this.slides.length - 1));
+                this.slides[clamped].scrollIntoView({
+                    behavior: this.prefersReducedMotion ? 'auto' : 'smooth',
+                    block: 'start'
+                });
+                this.updateUI(clamped);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            new PresentationController();
+        });
+    </script>
+</body>
+</html>

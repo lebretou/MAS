@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { PlaygroundRun } from '../../../types/playground';
+import type { PlaygroundAnalysisGroup, PlaygroundRun } from '../../../types/playground';
 import { useRunAnalysis } from '../../../hooks/useRunAnalysis';
 import type { AnchorPoint } from '../../../hooks/useRunAnalysis';
 import PromptForm from './PromptForm';
@@ -9,9 +9,8 @@ import RunDetailView from './RunDetailView';
 const PLAYGROUND_RESULTS_CACHE_KEY = 'tracee:playground:last-results';
 
 interface CachedPlaygroundResults {
-  version: 1;
-  results: Array<PlaygroundRun | null>;
-  runErrors: Array<string | null>;
+  version: 2;
+  groups: PlaygroundAnalysisGroup[];
   anchor: AnchorPoint | null;
 }
 
@@ -27,18 +26,36 @@ function readCachedPlaygroundResults(): CachedPlaygroundResults | null {
       return null;
     }
 
-    const parsed = JSON.parse(rawValue) as CachedPlaygroundResults;
+    const parsed = JSON.parse(rawValue) as CachedPlaygroundResults & {
+      results?: Array<PlaygroundRun | null>;
+      runErrors?: Array<string | null>;
+    };
 
-    if (parsed?.version !== 1 || !Array.isArray(parsed.results) || !Array.isArray(parsed.runErrors)) {
-      return null;
+    if (parsed?.version === 2 && Array.isArray(parsed.groups)) {
+      return {
+        version: 2,
+        groups: parsed.groups,
+        anchor: parsed.anchor ?? null,
+      };
     }
 
-    return {
-      version: 1,
-      results: parsed.results,
-      runErrors: parsed.runErrors,
-      anchor: parsed.anchor ?? null,
-    };
+    if (Array.isArray(parsed.results) && Array.isArray(parsed.runErrors)) {
+      return {
+        version: 2,
+        groups: [{
+          id: 'primary',
+          label: 'Current prompt',
+          tone: 'primary',
+          promptId: null,
+          versionId: null,
+          results: parsed.results,
+          runErrors: parsed.runErrors,
+        }],
+        anchor: parsed.anchor ?? null,
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -47,23 +64,29 @@ function readCachedPlaygroundResults(): CachedPlaygroundResults | null {
 const CreateRun: React.FC = () => {
   const [cachedResults] = useState<CachedPlaygroundResults | null>(() => readCachedPlaygroundResults());
   const [workspaceMode, setWorkspaceMode] = useState<'author' | 'analysis'>('author');
-  const [results, setResults] = useState<Array<PlaygroundRun | null>>(cachedResults?.results ?? []);
-  const [runErrors, setRunErrors] = useState<Array<string | null>>(cachedResults?.runErrors ?? []);
-  const [selectedRun, setSelectedRun] = useState<number | null>(null);
+  const [analysisGroups, setAnalysisGroups] = useState<PlaygroundAnalysisGroup[]>(cachedResults?.groups ?? []);
+  const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<AnchorPoint | null>(cachedResults?.anchor ?? null);
 
-  const analysis = useRunAnalysis(results, runErrors, anchor);
+  const analysis = useRunAnalysis(analysisGroups, anchor);
 
   const handleRunComplete = useCallback((
-    newResults: Array<PlaygroundRun | null>,
-    newErrors: Array<string | null>,
+    groups: PlaygroundAnalysisGroup[],
   ) => {
-    setResults(newResults);
-    setRunErrors(newErrors);
-    setSelectedRun(null);
+    setAnalysisGroups(groups);
+    setSelectedRun((currentSelectedRun) => {
+      if (!currentSelectedRun) {
+        return null;
+      }
+
+      const nextSelectionIds = new Set(groups.flatMap((group) => (
+        group.results.map((_, index) => `${group.id}:${index}`)
+      )));
+      return nextSelectionIds.has(currentSelectedRun) ? currentSelectedRun : null;
+    });
     setWorkspaceMode('analysis');
     setAnchor((currentAnchor) => {
-      if (currentAnchor?.source !== 'run') {
+      if (groups.length !== 1 || currentAnchor?.source !== 'run') {
         return currentAnchor;
       }
 
@@ -76,12 +99,8 @@ const CreateRun: React.FC = () => {
     });
   }, []);
 
-  const handleSelectRun = useCallback((index: number) => {
+  const handleSelectRun = useCallback((index: string | null) => {
     setSelectedRun(index);
-  }, []);
-
-  const handleBack = useCallback(() => {
-    setSelectedRun(null);
   }, []);
 
   const handleBackToEdit = useCallback(() => {
@@ -113,7 +132,8 @@ const CreateRun: React.FC = () => {
   }, []);
 
   const handlePromoteRunToAnchor = useCallback((index: number) => {
-    const run = results[index];
+    const primaryGroup = analysisGroups.find((group) => group.tone === 'primary') ?? analysisGroups[0];
+    const run = primaryGroup?.results[index];
     if (!run) {
       return;
     }
@@ -124,10 +144,15 @@ const CreateRun: React.FC = () => {
       source: 'run',
       runIndex: index,
     });
-  }, [results]);
+  }, [analysisGroups]);
 
-  const hasResults = results.some((result) => result !== null) || runErrors.some((error) => Boolean(error));
-  const resultCount = Math.max(results.length, runErrors.length);
+  const hasResults = analysisGroups.some((group) => (
+    group.results.some((result) => result !== null) || group.runErrors.some((error) => Boolean(error))
+  ));
+  const resultCount = analysisGroups.reduce(
+    (count, group) => count + Math.max(group.results.length, group.runErrors.length),
+    0,
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -143,16 +168,15 @@ const CreateRun: React.FC = () => {
       window.sessionStorage.setItem(
         PLAYGROUND_RESULTS_CACHE_KEY,
         JSON.stringify({
-          version: 1,
-          results,
-          runErrors,
+          version: 2,
+          groups: analysisGroups,
           anchor,
         } satisfies CachedPlaygroundResults),
       );
     } catch {
       window.sessionStorage.removeItem(PLAYGROUND_RESULTS_CACHE_KEY);
     }
-  }, [anchor, hasResults, results, runErrors]);
+  }, [analysisGroups, anchor, hasResults]);
 
   return (
     <PromptForm
@@ -166,28 +190,20 @@ const CreateRun: React.FC = () => {
           <ResultsComparison
             analyzed={analysis.analyzed}
             reference={analysis.reference}
-            referenceSchema={analysis.referenceSchema}
-            referenceSchemaKind={analysis.referenceSchemaKind}
-            scatterPoints={analysis.scatterPoints}
-            counts={analysis.counts}
+            projectionItems={analysis.projectionItems}
+            fieldOptions={analysis.fieldOptions}
+            failureCount={analysis.failureCount}
             selectedRun={selectedRun}
             onSelectRun={handleSelectRun}
-            onPromoteRun={handlePromoteRunToAnchor}
+            detailContent={(
+              <RunDetailView
+                analyzed={analysis.analyzed}
+                selectedRun={selectedRun}
+                reference={analysis.reference}
+                onPromoteRun={handlePromoteRunToAnchor}
+              />
+            )}
           />
-          {selectedRun !== null && (
-            <div className="playground-analysis__detail">
-              <span className="section-label">Run Detail</span>
-              <div className="playground-analysis__detail-body">
-                <RunDetailView
-                  analyzed={analysis.analyzed}
-                  selectedRun={selectedRun}
-                  reference={analysis.reference}
-                  onBack={handleBack}
-                  onPromoteRun={handlePromoteRunToAnchor}
-                />
-              </div>
-            </div>
-          )}
         </div>
       )}
       onRunComplete={handleRunComplete}

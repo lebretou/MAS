@@ -1,0 +1,145 @@
+cluster_id,cluster_name,cluster_display_name,component,cluster_rate,global_rate,lift,component_label
+0,Query Optimization,0: Query Optimization,role_description,1.0,0.7761194029850746,1.2884615384615383,role description
+0,Query Optimization,0: Query Optimization,placeholder,1.0,0.7798507462686567,1.2822966507177034,placeholder
+0,Query Optimization,0: Query Optimization,output,1.0,0.8208955223880597,1.218181818181818,output
+0,Query Optimization,0: Query Optimization,input,1.0,0.832089552238806,1.201793721973094,input
+0,Query Optimization,0: Query Optimization,task_description_workflow,1.0,0.917910447761194,1.089430894308943,task description workflow
+0,Query Optimization,0: Query Optimization,constraints_restrictions,0.8571428571428571,0.8208955223880597,1.044155844155844,constraints restrictions
+0,Query Optimization,0: Query Optimization,actions,0.7142857142857143,0.8171641791044776,0.8741030658838879,actions
+0,Query Optimization,0: Query Optimization,in_context_examples,0.5714285714285714,0.19776119402985073,2.8894878706199463,in context examples
+0,Query Optimization,0: Query Optimization,external_information,0.14285714285714285,0.15671641791044777,0.91156462585034,external information
+0,Query Optimization,0: Query Optimization,context,0.0,0.3805970149253731,0.0,context
+0,Query Optimization,0: Query Optimization,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+0,Query Optimization,0: Query Optimization,tool_definitions,0.0,0.26865671641791045,0.0,tool definitions
+1,Trading Decision Agents,1: Trading Decision Agents,task_description_workflow,0.9423076923076923,0.917910447761194,1.0265791119449656,task description workflow
+1,Trading Decision Agents,1: Trading Decision Agents,role_description,0.8269230769230769,0.7761194029850746,1.0654585798816567,role description
+1,Trading Decision Agents,1: Trading Decision Agents,actions,0.8269230769230769,0.8171641791044776,1.0119423955040394,actions
+1,Trading Decision Agents,1: Trading Decision Agents,input,0.7884615384615384,0.832089552238806,0.9475681269403242,input
+1,Trading Decision Agents,1: Trading Decision Agents,placeholder,0.7692307692307693,0.7798507462686567,0.9863820390136181,placeholder
+1,Trading Decision Agents,1: Trading Decision Agents,constraints_restrictions,0.7307692307692307,0.8208955223880597,0.8902097902097901,constraints restrictions
+1,Trading Decision Agents,1: Trading Decision Agents,output,0.7307692307692307,0.8208955223880597,0.8902097902097901,output
+1,Trading Decision Agents,1: Trading Decision Agents,context,0.34615384615384615,0.3805970149253731,0.9095022624434389,context
+1,Trading Decision Agents,1: Trading Decision Agents,external_information,0.19230769230769232,0.15671641791044777,1.2271062271062272,external information
+1,Trading Decision Agents,1: Trading Decision Agents,tool_definitions,0.1346153846153846,0.26865671641791045,0.5010683760683761,tool definitions
+1,Trading Decision Agents,1: Trading Decision Agents,in_context_examples,0.11538461538461539,0.19776119402985073,0.5834542815674891,in context examples
+1,Trading Decision Agents,1: Trading Decision Agents,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+2,Task Orchestration,2: Task Orchestration,constraints_restrictions,1.0,0.8208955223880597,1.218181818181818,constraints restrictions
+2,Task Orchestration,2: Task Orchestration,task_description_workflow,1.0,0.917910447761194,1.089430894308943,task description workflow
+2,Task Orchestration,2: Task Orchestration,role_description,0.9523809523809523,0.7761194029850746,1.227106227106227,role description
+2,Task Orchestration,2: Task Orchestration,output,0.9166666666666666,0.8208955223880597,1.1166666666666665,output
+2,Task Orchestration,2: Task Orchestration,actions,0.8809523809523809,0.8171641791044776,1.0780604479234617,actions
+2,Task Orchestration,2: Task Orchestration,input,0.8809523809523809,0.832089552238806,1.058723040785821,input
+2,Task Orchestration,2: Task Orchestration,placeholder,0.7976190476190477,0.7798507462686567,1.0227842333105492,placeholder
+2,Task Orchestration,2: Task Orchestration,context,0.4166666666666667,0.3805970149253731,1.0947712418300655,context
+2,Task Orchestration,2: Task Orchestration,tool_definitions,0.40476190476190477,0.26865671641791045,1.5066137566137567,tool definitions
+2,Task Orchestration,2: Task Orchestration,external_information,0.2261904761904762,0.15671641791044777,1.443310657596372,external information
+2,Task Orchestration,2: Task Orchestration,in_context_examples,0.2261904761904762,0.19776119402985073,1.1437556154537287,in context examples
+2,Task Orchestration,2: Task Orchestration,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+3,Product Search Supervisor,3: Product Search Supervisor,role_description,1.0,0.7761194029850746,1.2884615384615383,role description
+3,Product Search Supervisor,3: Product Search Supervisor,actions,0.6666666666666666,0.8171641791044776,0.8158295281582952,actions
+3,Product Search Supervisor,3: Product Search Supervisor,tool_definitions,0.4444444444444444,0.26865671641791045,1.654320987654321,tool definitions
+3,Product Search Supervisor,3: Product Search Supervisor,placeholder,0.4444444444444444,0.7798507462686567,0.5699096225412015,placeholder
+3,Product Search Supervisor,3: Product Search Supervisor,constraints_restrictions,0.4444444444444444,0.8208955223880597,0.5414141414141413,constraints restrictions
+3,Product Search Supervisor,3: Product Search Supervisor,output,0.4444444444444444,0.8208955223880597,0.5414141414141413,output
+3,Product Search Supervisor,3: Product Search Supervisor,task_description_workflow,0.4444444444444444,0.917910447761194,0.48419150858175247,task description workflow
+3,Product Search Supervisor,3: Product Search Supervisor,input,0.3333333333333333,0.832089552238806,0.4005979073243647,input
+3,Product Search Supervisor,3: Product Search Supervisor,in_context_examples,0.1111111111111111,0.19776119402985073,0.5618448637316562,in context examples
+3,Product Search Supervisor,3: Product Search Supervisor,context,0.1111111111111111,0.3805970149253731,0.29193899782135074,context
+3,Product Search Supervisor,3: Product Search Supervisor,external_information,0.0,0.15671641791044777,0.0,external information
+3,Product Search Supervisor,3: Product Search Supervisor,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+4,Phase-Based Workflow,4: Phase-Based Workflow,input,0.8409090909090909,0.832089552238806,1.0105992662046475,input
+4,Phase-Based Workflow,4: Phase-Based Workflow,task_description_workflow,0.8181818181818182,0.917910447761194,0.8913525498891354,task description workflow
+4,Phase-Based Workflow,4: Phase-Based Workflow,output,0.75,0.8208955223880597,0.9136363636363636,output
+4,Phase-Based Workflow,4: Phase-Based Workflow,placeholder,0.6818181818181818,0.7798507462686567,0.8742931709438886,placeholder
+4,Phase-Based Workflow,4: Phase-Based Workflow,actions,0.6136363636363636,0.8171641791044776,0.75093399750934,actions
+4,Phase-Based Workflow,4: Phase-Based Workflow,constraints_restrictions,0.5454545454545454,0.8208955223880597,0.6644628099173553,constraints restrictions
+4,Phase-Based Workflow,4: Phase-Based Workflow,context,0.4318181818181818,0.3805970149253731,1.1345811051693404,context
+4,Phase-Based Workflow,4: Phase-Based Workflow,role_description,0.13636363636363635,0.7761194029850746,0.17569930069930068,role description
+4,Phase-Based Workflow,4: Phase-Based Workflow,in_context_examples,0.11363636363636363,0.19776119402985073,0.5746140651801029,in context examples
+4,Phase-Based Workflow,4: Phase-Based Workflow,tool_definitions,0.09090909090909091,0.26865671641791045,0.3383838383838384,tool definitions
+4,Phase-Based Workflow,4: Phase-Based Workflow,external_information,0.0,0.15671641791044777,0.0,external information
+4,Phase-Based Workflow,4: Phase-Based Workflow,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+5,Hardware Compatibility,5: Hardware Compatibility,placeholder,1.0,0.7798507462686567,1.2822966507177034,placeholder
+5,Hardware Compatibility,5: Hardware Compatibility,output,1.0,0.8208955223880597,1.218181818181818,output
+5,Hardware Compatibility,5: Hardware Compatibility,input,1.0,0.832089552238806,1.201793721973094,input
+5,Hardware Compatibility,5: Hardware Compatibility,task_description_workflow,1.0,0.917910447761194,1.089430894308943,task description workflow
+5,Hardware Compatibility,5: Hardware Compatibility,context,0.5,0.3805970149253731,1.3137254901960784,context
+5,Hardware Compatibility,5: Hardware Compatibility,constraints_restrictions,0.5,0.8208955223880597,0.609090909090909,constraints restrictions
+5,Hardware Compatibility,5: Hardware Compatibility,actions,0.0,0.8171641791044776,0.0,actions
+5,Hardware Compatibility,5: Hardware Compatibility,external_information,0.0,0.15671641791044777,0.0,external information
+5,Hardware Compatibility,5: Hardware Compatibility,in_context_examples,0.0,0.19776119402985073,0.0,in context examples
+5,Hardware Compatibility,5: Hardware Compatibility,role_description,0.0,0.7761194029850746,0.0,role description
+5,Hardware Compatibility,5: Hardware Compatibility,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+5,Hardware Compatibility,5: Hardware Compatibility,tool_definitions,0.0,0.26865671641791045,0.0,tool definitions
+6,Specialized AI Assistants,6: Specialized AI Assistants,actions,0.5555555555555556,0.8171641791044776,0.6798579401319128,actions
+6,Specialized AI Assistants,6: Specialized AI Assistants,constraints_restrictions,0.5555555555555556,0.8208955223880597,0.6767676767676768,constraints restrictions
+6,Specialized AI Assistants,6: Specialized AI Assistants,output,0.5555555555555556,0.8208955223880597,0.6767676767676768,output
+6,Specialized AI Assistants,6: Specialized AI Assistants,task_description_workflow,0.5555555555555556,0.917910447761194,0.6052393857271906,task description workflow
+6,Specialized AI Assistants,6: Specialized AI Assistants,role_description,0.4444444444444444,0.7761194029850746,0.5726495726495726,role description
+6,Specialized AI Assistants,6: Specialized AI Assistants,placeholder,0.4444444444444444,0.7798507462686567,0.5699096225412015,placeholder
+6,Specialized AI Assistants,6: Specialized AI Assistants,input,0.4444444444444444,0.832089552238806,0.534130543099153,input
+6,Specialized AI Assistants,6: Specialized AI Assistants,security_disclaimer,0.1111111111111111,0.022388059701492536,4.962962962962963,security disclaimer
+6,Specialized AI Assistants,6: Specialized AI Assistants,in_context_examples,0.1111111111111111,0.19776119402985073,0.5618448637316562,in context examples
+6,Specialized AI Assistants,6: Specialized AI Assistants,tool_definitions,0.1111111111111111,0.26865671641791045,0.41358024691358025,tool definitions
+6,Specialized AI Assistants,6: Specialized AI Assistants,context,0.0,0.3805970149253731,0.0,context
+6,Specialized AI Assistants,6: Specialized AI Assistants,external_information,0.0,0.15671641791044777,0.0,external information
+7,Value Extraction,7: Value Extraction,in_context_examples,1.0,0.19776119402985073,5.056603773584906,in context examples
+7,Value Extraction,7: Value Extraction,actions,1.0,0.8171641791044776,1.2237442922374429,actions
+7,Value Extraction,7: Value Extraction,constraints_restrictions,1.0,0.8208955223880597,1.218181818181818,constraints restrictions
+7,Value Extraction,7: Value Extraction,output,1.0,0.8208955223880597,1.218181818181818,output
+7,Value Extraction,7: Value Extraction,input,1.0,0.832089552238806,1.201793721973094,input
+7,Value Extraction,7: Value Extraction,task_description_workflow,1.0,0.917910447761194,1.089430894308943,task description workflow
+7,Value Extraction,7: Value Extraction,context,0.0,0.3805970149253731,0.0,context
+7,Value Extraction,7: Value Extraction,external_information,0.0,0.15671641791044777,0.0,external information
+7,Value Extraction,7: Value Extraction,placeholder,0.0,0.7798507462686567,0.0,placeholder
+7,Value Extraction,7: Value Extraction,role_description,0.0,0.7761194029850746,0.0,role description
+7,Value Extraction,7: Value Extraction,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+7,Value Extraction,7: Value Extraction,tool_definitions,0.0,0.26865671641791045,0.0,tool definitions
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,role_description,1.0,0.7761194029850746,1.2884615384615383,role description
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,placeholder,1.0,0.7798507462686567,1.2822966507177034,placeholder
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,input,1.0,0.832089552238806,1.201793721973094,input
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,task_description_workflow,1.0,0.917910447761194,1.089430894308943,task description workflow
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,actions,0.8888888888888888,0.8171641791044776,1.0877727042110603,actions
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,constraints_restrictions,0.8888888888888888,0.8208955223880597,1.0828282828282827,constraints restrictions
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,output,0.7777777777777778,0.8208955223880597,0.9474747474747475,output
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,tool_definitions,0.6666666666666666,0.26865671641791045,2.4814814814814814,tool definitions
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,in_context_examples,0.5555555555555556,0.19776119402985073,2.809224318658281,in context examples
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,context,0.1111111111111111,0.3805970149253731,0.29193899782135074,context
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,external_information,0.0,0.15671641791044777,0.0,external information
+8,Multi-Agent Dev Roles,8: Multi-Agent Dev Roles,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+9,Data Science Agent,9: Data Science Agent,role_description,1.0,0.7761194029850746,1.2884615384615383,role description
+9,Data Science Agent,9: Data Science Agent,actions,0.9736842105263158,0.8171641791044776,1.1915404950732997,actions
+9,Data Science Agent,9: Data Science Agent,input,0.9736842105263158,0.832089552238806,1.170167571394855,input
+9,Data Science Agent,9: Data Science Agent,constraints_restrictions,0.9473684210526315,0.8208955223880597,1.154066985645933,constraints restrictions
+9,Data Science Agent,9: Data Science Agent,task_description_workflow,0.9473684210526315,0.917910447761194,1.0320924261874198,task description workflow
+9,Data Science Agent,9: Data Science Agent,placeholder,0.9210526315789473,0.7798507462686567,1.181062704608411,placeholder
+9,Data Science Agent,9: Data Science Agent,output,0.868421052631579,0.8208955223880597,1.0578947368421052,output
+9,Data Science Agent,9: Data Science Agent,context,0.39473684210526316,0.3805970149253731,1.0371517027863777,context
+9,Data Science Agent,9: Data Science Agent,tool_definitions,0.2631578947368421,0.26865671641791045,0.97953216374269,tool definitions
+9,Data Science Agent,9: Data Science Agent,external_information,0.07894736842105263,0.15671641791044777,0.5037593984962405,external information
+9,Data Science Agent,9: Data Science Agent,in_context_examples,0.02631578947368421,0.19776119402985073,0.13306852035749753,in context examples
+9,Data Science Agent,9: Data Science Agent,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer
+10,Expert Agent Guidance,10: Expert Agent Guidance,external_information,1.0,0.15671641791044777,6.3809523809523805,external information
+10,Expert Agent Guidance,10: Expert Agent Guidance,in_context_examples,1.0,0.19776119402985073,5.056603773584906,in context examples
+10,Expert Agent Guidance,10: Expert Agent Guidance,context,1.0,0.3805970149253731,2.627450980392157,context
+10,Expert Agent Guidance,10: Expert Agent Guidance,role_description,1.0,0.7761194029850746,1.2884615384615383,role description
+10,Expert Agent Guidance,10: Expert Agent Guidance,actions,1.0,0.8171641791044776,1.2237442922374429,actions
+10,Expert Agent Guidance,10: Expert Agent Guidance,constraints_restrictions,1.0,0.8208955223880597,1.218181818181818,constraints restrictions
+10,Expert Agent Guidance,10: Expert Agent Guidance,output,1.0,0.8208955223880597,1.218181818181818,output
+10,Expert Agent Guidance,10: Expert Agent Guidance,task_description_workflow,1.0,0.917910447761194,1.089430894308943,task description workflow
+10,Expert Agent Guidance,10: Expert Agent Guidance,placeholder,0.8888888888888888,0.7798507462686567,1.139819245082403,placeholder
+10,Expert Agent Guidance,10: Expert Agent Guidance,security_disclaimer,0.5555555555555556,0.022388059701492536,24.814814814814817,security disclaimer
+10,Expert Agent Guidance,10: Expert Agent Guidance,tool_definitions,0.5555555555555556,0.26865671641791045,2.0679012345679015,tool definitions
+10,Expert Agent Guidance,10: Expert Agent Guidance,input,0.4444444444444444,0.832089552238806,0.534130543099153,input
+11,Docstring Generation,11: Docstring Generation,context,1.0,0.3805970149253731,2.627450980392157,context
+11,Docstring Generation,11: Docstring Generation,role_description,1.0,0.7761194029850746,1.2884615384615383,role description
+11,Docstring Generation,11: Docstring Generation,placeholder,1.0,0.7798507462686567,1.2822966507177034,placeholder
+11,Docstring Generation,11: Docstring Generation,actions,1.0,0.8171641791044776,1.2237442922374429,actions
+11,Docstring Generation,11: Docstring Generation,constraints_restrictions,1.0,0.8208955223880597,1.218181818181818,constraints restrictions
+11,Docstring Generation,11: Docstring Generation,output,1.0,0.8208955223880597,1.218181818181818,output
+11,Docstring Generation,11: Docstring Generation,input,1.0,0.832089552238806,1.201793721973094,input
+11,Docstring Generation,11: Docstring Generation,task_description_workflow,1.0,0.917910447761194,1.089430894308943,task description workflow
+11,Docstring Generation,11: Docstring Generation,tool_definitions,0.3333333333333333,0.26865671641791045,1.2407407407407407,tool definitions
+11,Docstring Generation,11: Docstring Generation,external_information,0.0,0.15671641791044777,0.0,external information
+11,Docstring Generation,11: Docstring Generation,in_context_examples,0.0,0.19776119402985073,0.0,in context examples
+11,Docstring Generation,11: Docstring Generation,security_disclaimer,0.0,0.022388059701492536,0.0,security disclaimer

@@ -1,169 +1,216 @@
 import React from 'react';
-import {
-  ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  LabelList,
-} from 'recharts';
-import type { RunClassification } from '../../../utils/schemaAggregation';
-
-interface RunPoint {
-  x: number;
-  y: number;
-  index: number | null;
-  classification: RunClassification;
-  similarity: number;
-  isAnchor: boolean;
-  label: string;
-}
+import * as d3 from 'd3';
+import type { ScatterPoint } from '../../../hooks/useRunAnalysis';
+import VisualizationLegend, { type VisualizationLegendEntry } from './VisualizationLegend';
+import { formatVisualizationGroupLabel, spreadScatterLayoutPoints } from './visualizationUtils';
 
 interface Props {
-  points: RunPoint[];
-  selectedIndex: number | null;
-  onSelectRun: (index: number) => void;
+  points: ScatterPoint[];
+  selectedIndex: string | null;
+  onSelectRun: (index: string | null) => void;
+  title?: string;
+  hint?: string;
+  summary?: string;
 }
 
-function computeSimilarityTiers(points: RunPoint[]): { blueThreshold: number; cyanThreshold: number } {
-  const sims = points
-    .filter(p => p.classification !== 'failure')
-    .map(p => p.similarity)
-    .sort((a, b) => a - b);
-
-  if (sims.length === 0) return { blueThreshold: 0.85, cyanThreshold: 0.6 };
-
-  const minSim = sims[0];
-  const median = sims[Math.floor(sims.length / 2)];
-  const mean = sims.reduce((a, b) => a + b, 0) / sims.length;
-  const variance = sims.reduce((sum, s) => sum + (s - mean) ** 2, 0) / sims.length;
-  const stddev = Math.sqrt(variance);
-
-  if (stddev < 0.05) {
-    return {
-      blueThreshold: minSim,
-      cyanThreshold: minSim - 0.01,
-    };
-  }
-
-  return {
-    blueThreshold: median,
-    cyanThreshold: median - 1.5 * stddev,
-  };
+interface HoveredPoint {
+  point: ScatterPoint;
+  left: number;
+  top: number;
 }
 
-function getSimilarityColor(
-  similarity: number,
-  classification: RunClassification,
-  isAnchor: boolean,
-  blueThreshold: number,
-  cyanThreshold: number,
-): string {
-  if (isAnchor) return '#7c3aed';
-  if (classification === 'failure') return '#dc2626';
-  if (similarity >= blueThreshold) return '#1d4ed8';
-  if (similarity >= cyanThreshold) return '#06b6d4';
-  return '#dc2626';
-}
+const CHART_HEIGHT = 420;
+const CHART_PADDING = 32;
 
-const SimilarityScatterplot: React.FC<Props> = ({ points, selectedIndex, onSelectRun }) => {
-  if (points.length === 0) return null;
+const SimilarityScatterplot: React.FC<Props> = ({
+  points,
+  selectedIndex,
+  onSelectRun,
+  title = 'Output map',
+  hint = 'embedding-based projection',
+  summary,
+}) => {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = React.useState(720);
+  const [hoveredPoint, setHoveredPoint] = React.useState<HoveredPoint | null>(null);
+  const legendItems = React.useMemo<VisualizationLegendEntry[]>(() => {
+    const toneEntries = new Map<string, VisualizationLegendEntry>();
+    points.forEach((point) => {
+      if (point.isAnchor) {
+        return;
+      }
+      if (!toneEntries.has(point.groupId)) {
+        toneEntries.set(point.groupId, {
+          id: point.groupId,
+          tone: point.groupTone,
+          label: formatVisualizationGroupLabel(point.groupLabel, point.groupVersionId),
+        });
+      }
+    });
 
-  const { blueThreshold, cyanThreshold } = computeSimilarityTiers(points);
+    const entries = Array.from(toneEntries.values()).sort((left, right) => {
+      if (left.tone === right.tone) {
+        return left.label.localeCompare(right.label);
+      }
+      return left.tone === 'primary' ? -1 : 1;
+    });
 
-  const data = points.map(p => ({
-    ...p,
-    fill: getSimilarityColor(
-      p.similarity,
-      p.classification,
-      p.isAnchor,
-      blueThreshold,
-      cyanThreshold,
+    if (points.some((point) => point.isAnchor)) {
+      entries.push({
+        id: 'anchor',
+        tone: 'anchor',
+        label: 'Anchor',
+      });
+    }
+
+    return entries;
+  }, [points]);
+
+  React.useEffect(() => {
+    const node = containerRef.current;
+    if (!node) {
+      return undefined;
+    }
+
+    const nextWidth = node.getBoundingClientRect().width;
+    if (nextWidth) {
+      setWidth(nextWidth);
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const observedWidth = entries[0]?.contentRect.width;
+      if (!observedWidth) {
+        return;
+      }
+
+      setWidth(observedWidth);
+    });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const xScale = React.useMemo(
+    () => d3.scaleLinear().domain([0, 1]).range([CHART_PADDING, Math.max(CHART_PADDING + 1, width - CHART_PADDING)]),
+    [width],
+  );
+  const yScale = React.useMemo(
+    () => d3.scaleLinear().domain([0, 1]).range([CHART_HEIGHT - CHART_PADDING, CHART_PADDING]),
+    [],
+  );
+  const plottedPoints = React.useMemo(
+    () => spreadScatterLayoutPoints(
+      points.map((point) => ({
+        ...point,
+        cx: xScale(point.x),
+        cy: yScale(point.y),
+      })),
+      {
+        minimumDistance: 14,
+        maxOffset: 20,
+      },
     ),
-  }));
+    [points, xScale, yScale],
+  );
+
+  React.useEffect(() => {
+    setHoveredPoint(null);
+  }, [points]);
+
+  if (points.length === 0) {
+    return null;
+  }
 
   return (
     <div className="card">
       <div className="card__header">
-        <h3 className="card__title scatter__title">Similarity Scatterplot</h3>
-        <span className="field__hint scatter__hint">Clustered = similar, distant = outlier</span>
+        <h3 className="card__title scatter__title">{title}</h3>
+        <span className="field__hint scatter__hint">{hint}</span>
       </div>
       <div className="card__body scatter__chart-body">
-        <ResponsiveContainer width="100%" height={360}>
-          <ScatterChart margin={{ top: 20, right: 30, bottom: 10, left: 10 }}>
-            <XAxis
-              type="number"
-              dataKey="x"
-              domain={[0, 1]}
-              tick={false}
-              axisLine={false}
-              tickLine={false}
+        {summary && <div className="field__hint scatter__summary">{summary}</div>}
+        <div
+          ref={containerRef}
+          className="scatter__surface"
+          role="group"
+          aria-label="Projected output positions"
+        >
+          <VisualizationLegend
+            items={legendItems}
+            className="scatter__legend scatter__legend--overlay"
+          />
+          <svg
+            className="scatter__svg"
+            viewBox={`0 0 ${width} ${CHART_HEIGHT}`}
+          >
+            <rect
+              x={CHART_PADDING / 2}
+              y={CHART_PADDING / 2}
+              width={Math.max(0, width - CHART_PADDING)}
+              height={CHART_HEIGHT - CHART_PADDING}
+              rx={20}
+              className="scatter__frame"
+              aria-hidden="true"
             />
-            <YAxis
-              type="number"
-              dataKey="y"
-              domain={[0, 1]}
-              tick={false}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              content={(props) => {
-                const payload = props.payload as unknown as ReadonlyArray<{ payload: RunPoint & { label: string } }> | undefined;
-                if (!payload || payload.length === 0) return null;
-                const point = payload[0].payload as RunPoint & { label: string };
-                return (
-                  <div className="scatter__tooltip">
-                    <div className="scatter__tooltip-title">
-                      {point.isAnchor ? 'Anchor' : `Run ${point.label}`}
-                    </div>
-                    <div className="scatter__tooltip-detail">
-                      Avg similarity: {(point.similarity * 100).toFixed(0)}%
-                    </div>
-                    <div className="scatter__tooltip-classification">
-                      {point.classification.replace(/_/g, ' ')}
-                    </div>
-                  </div>
-                );
-              }}
-            />
-            <Scatter
-              data={data}
-              onClick={(entry) => {
-                const point = entry as { index?: number } | undefined;
-                if (typeof point?.index === 'number') {
-                  onSelectRun(point.index);
-                }
+            {plottedPoints.map((point) => {
+              const { cx, cy } = point;
+              const isSelected = point.selectionId === selectedIndex;
+              const radius = point.isAnchor ? 9 : isSelected ? 7.5 : 6;
+
+              return (
+                <circle
+                  key={point.id}
+                  cx={cx}
+                  cy={cy}
+                  r={radius}
+                  className={`scatter__point scatter__point--${point.groupTone}${point.isAnchor ? ' scatter__point--anchor' : ''}${isSelected ? ' scatter__point--selected' : ''}`}
+                  role={point.selectionId ? 'button' : undefined}
+                  tabIndex={point.selectionId ? 0 : undefined}
+                  aria-label={point.isAnchor ? 'Anchor point' : `Select run ${point.label}`}
+                  onMouseEnter={() => setHoveredPoint({
+                    point,
+                    left: cx,
+                    top: cy,
+                  })}
+                  onMouseLeave={() => setHoveredPoint((current) => (
+                    current?.point.id === point.id ? null : current
+                  ))}
+                  onClick={() => {
+                    if (point.selectionId) {
+                      onSelectRun(point.selectionId === selectedIndex ? null : point.selectionId);
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if ((event.key === 'Enter' || event.key === ' ') && point.selectionId) {
+                      event.preventDefault();
+                      onSelectRun(point.selectionId === selectedIndex ? null : point.selectionId);
+                    }
+                  }}
+                />
+              );
+            })}
+          </svg>
+          {hoveredPoint && (
+            <div
+              className="scatter__tooltip"
+              style={{
+                left: hoveredPoint.left,
+                top: hoveredPoint.top,
               }}
             >
-              {data.map((point) => {
-                const isSelected = point.index === selectedIndex;
-                return (
-                  <Cell
-                    key={point.isAnchor ? 'anchor' : point.index}
-                    fill={point.fill}
-                    stroke={point.isAnchor ? '#4c1d95' : isSelected ? '#1a1a2e' : '#fff'}
-                    strokeWidth={point.isAnchor ? 3 : isSelected ? 2.5 : 1}
-                    r={point.isAnchor ? 10 : isSelected ? 8 : 6}
-                    style={{ cursor: point.isAnchor ? 'default' : 'pointer' }}
-                  />
-                );
-              })}
-              <LabelList
-                dataKey="label"
-                position="top"
-                offset={8}
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  fill: '#6b7280',
-                  fontFamily: '"JetBrains Mono", monospace',
-                }}
-              />
-            </Scatter>
-          </ScatterChart>
-        </ResponsiveContainer>
-        <div className="scatter__legend">
-          <span><span className="scatter__legend-dot--anchor">●</span> Anchor</span>
-          <span><span className="scatter__legend-dot--blue">●</span> Similar (cluster)</span>
-          <span><span className="scatter__legend-dot--cyan">●</span> Moderate</span>
-          <span><span className="scatter__legend-dot--red">●</span> Outlier</span>
+              <div className="scatter__tooltip-title">
+                {hoveredPoint.point.isAnchor ? 'Anchor' : hoveredPoint.point.label}
+              </div>
+              {!hoveredPoint.point.isAnchor && (
+                <div className="scatter__tooltip-detail">
+                  {formatVisualizationGroupLabel(hoveredPoint.point.groupLabel, hoveredPoint.point.groupVersionId)}
+                </div>
+              )}
+              {hoveredPoint.point.isFailed && (
+                <div className="scatter__tooltip-detail">failed run</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

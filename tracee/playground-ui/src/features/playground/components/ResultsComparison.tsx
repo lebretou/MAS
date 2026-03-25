@@ -1,36 +1,79 @@
 import React from 'react';
-import type { AnalyzedRun, ComparisonReference, ScatterPoint } from '../../../hooks/useRunAnalysis';
-import {
-  getClassificationBg,
-  getClassificationColor,
-} from '../../../utils/schemaAggregation';
-import type { ConsensusSchema, RunClassification } from '../../../utils/schemaAggregation';
+import type { AnalyzedRun, ComparisonReference, FieldOption, ProjectionItem } from '../../../hooks/useRunAnalysis';
 import SimilarityScatterplot from './SimilarityScatterplot';
-import DeviationHeatmap from './DeviationHeatmap';
+import FieldDistributionView from './FieldDistributionView';
+import { collectFieldValues } from '../../../hooks/useRunAnalysis';
+import { useEmbeddingProjection } from '../../../hooks/useEmbeddingProjection';
 
 interface Props {
   analyzed: AnalyzedRun[];
   reference: ComparisonReference | null;
-  referenceSchema: ConsensusSchema | null;
-  referenceSchemaKind: 'anchor' | 'consensus' | null;
-  scatterPoints: ScatterPoint[];
-  counts: Record<RunClassification, number>;
-  selectedRun: number | null;
-  onSelectRun: (index: number) => void;
-  onPromoteRun: (index: number) => void;
+  projectionItems: ProjectionItem[];
+  fieldOptions: FieldOption[];
+  failureCount: number;
+  selectedRun: string | null;
+  onSelectRun: (index: string | null) => void;
+  detailContent: React.ReactNode;
 }
 
 const ResultsComparison: React.FC<Props> = ({
   analyzed,
   reference,
-  referenceSchema,
-  referenceSchemaKind,
-  scatterPoints,
-  counts,
+  projectionItems,
+  fieldOptions,
+  failureCount,
   selectedRun,
   onSelectRun,
-  onPromoteRun,
+  detailContent,
 }) => {
+  const [selectedFieldPath, setSelectedFieldPath] = React.useState('');
+  const [stringMode, setStringMode] = React.useState<'semantic' | 'exact'>('semantic');
+  const formatLatency = (latencyMs: number | null | undefined) => (
+    typeof latencyMs === 'number' ? `${latencyMs.toFixed(1)}ms` : null
+  );
+  const getRunVersionLabel = React.useCallback((versionId: string | null | undefined, fallbackLabel: string) => (
+    versionId || fallbackLabel
+  ), []);
+  const selectedField = React.useMemo(
+    () => fieldOptions.find((field) => field.path === selectedFieldPath) ?? null,
+    [fieldOptions, selectedFieldPath],
+  );
+  React.useEffect(() => {
+    if (selectedFieldPath && !fieldOptions.some((field) => field.path === selectedFieldPath)) {
+      setSelectedFieldPath('');
+    }
+  }, [fieldOptions, selectedFieldPath]);
+  const fieldValues = React.useMemo(
+    () => selectedField ? collectFieldValues(analyzed, selectedField.path) : [],
+    [analyzed, selectedField],
+  );
+  const projectionSourceItems = React.useMemo(() => {
+    if (!selectedField || selectedField.type !== 'string' || stringMode !== 'semantic') {
+      return projectionItems;
+    }
+
+    return fieldValues
+      .filter((entry): entry is typeof entry & { value: string } => typeof entry.value === 'string' && entry.value.trim().length > 0)
+      .map((entry) => ({
+        id: `field:${selectedField.path}:${entry.selectionId}`,
+        kind: 'run' as const,
+        output: entry.value,
+        selectionId: entry.selectionId,
+        groupId: entry.groupId,
+        groupLabel: entry.groupLabel,
+        groupVersionId: entry.groupVersionId,
+        groupTone: entry.groupTone,
+        label: entry.label,
+        isFailed: false,
+      }));
+  }, [fieldValues, projectionItems, selectedField, stringMode]);
+  const projection = useEmbeddingProjection(projectionSourceItems);
+  const isScatterMode = !selectedField || (selectedField.type === 'string' && stringMode === 'semantic');
+  const plottedRunCount = React.useMemo(
+    () => projectionSourceItems.filter((item) => item.kind === 'run').length,
+    [projectionSourceItems],
+  );
+
   if (analyzed.length === 0) {
     return (
       <div className="card create-run__empty-card">
@@ -51,152 +94,181 @@ const ResultsComparison: React.FC<Props> = ({
   }
 
   return (
-    <div className="flex-col results__container">
-      <div className="summary-bar">
-        {counts.conforming > 0 && (
-          <div className="summary-stat">
-            <span className="summary-stat__dot" style={{ background: '#065f46' }} />
-            {counts.conforming} conforming
+    <div className="results__layout">
+      <div className="results__visual">
+        <div className="results__analysis-toolbar">
+          <div className="field">
+            <label className="field__label" htmlFor="playground-analysis-field">
+              View
+            </label>
+            <select
+              id="playground-analysis-field"
+              className="select"
+              value={selectedFieldPath}
+              onChange={(event) => setSelectedFieldPath(event.target.value)}
+            >
+              <option value="">All outputs</option>
+              {fieldOptions.map((field) => (
+                <option key={field.path} value={field.path}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
-        {counts.minor_deviation > 0 && (
-          <div className="summary-stat">
-            <span className="summary-stat__dot" style={{ background: '#92400e' }} />
-            {counts.minor_deviation} minor deviation
-          </div>
-        )}
-        {counts.major_deviation > 0 && (
-          <div className="summary-stat">
-            <span className="summary-stat__dot" style={{ background: '#991b1b' }} />
-            {counts.major_deviation} major deviation
-          </div>
-        )}
-        {counts.failure > 0 && (
-          <div className="summary-stat">
-            <span className="summary-stat__dot" style={{ background: '#991b1b' }} />
-            {counts.failure} failed
-          </div>
-        )}
-      </div>
-
-      {counts.failure > 0 && (
-        <div className="alert alert--danger">
-          <span className="alert__icon">!</span>
-          {counts.failure} run{counts.failure > 1 ? 's' : ''} failed to produce output.
+          {selectedField?.type === 'string' && (
+            <div className="field">
+              <label className="field__label" htmlFor="playground-analysis-string-mode">
+                String mode
+              </label>
+              <select
+                id="playground-analysis-string-mode"
+                className="select"
+                value={stringMode}
+                onChange={(event) => setStringMode(event.target.value as 'semantic' | 'exact')}
+              >
+                <option value="semantic">Semantic map</option>
+                <option value="exact">Exact match</option>
+              </select>
+            </div>
+          )}
         </div>
-      )}
 
-      {reference?.kind === 'anchor' && (
-        <div className="card results__anchor-card">
-          <div className="card__body results__anchor-body">
-            <div>
-              <div className="results__anchor-title">Anchor active</div>
-              <div className="field__hint">
-                {reference.label}
-                {referenceSchemaKind === 'anchor'
-                  ? ' is driving deviations and diffs.'
-                  : ' is shown in the scatterplot and diff view.'}
+        {failureCount > 0 && (
+          <div className="alert alert--danger">
+            <span className="alert__icon">!</span>
+            {failureCount} run{failureCount > 1 ? 's' : ''} failed to produce output.
+          </div>
+        )}
+
+        {reference?.kind === 'anchor' && !selectedField && (
+          <div className="card results__anchor-card">
+            <div className="card__body results__anchor-body">
+              <div>
+                <div className="results__anchor-title">Anchor active</div>
+                <div className="field__hint">
+                  {reference.label} is available in the scatterplot and diff view.
+                </div>
+              </div>
+              <span className="badge badge--primary">anchor</span>
+            </div>
+          </div>
+        )}
+
+        {isScatterMode && projection.points.length >= 2 ? (
+          <SimilarityScatterplot
+            title={selectedField ? `${selectedField.label} semantic map` : 'Output map'}
+            hint={selectedField ? 'embedding-based field projection' : 'embedding-based projection with cosine similarity and pca'}
+            summary={`${plottedRunCount} plotted run${plottedRunCount === 1 ? '' : 's'}${failureCount > 0 ? `, ${failureCount} failed` : ''}.`}
+            points={projection.points}
+            selectedIndex={selectedRun}
+            onSelectRun={onSelectRun}
+          />
+        ) : isScatterMode && projection.loading ? (
+          <div className="card">
+            <div className="empty-state create-run__empty-body">
+              <div className="empty-state__title">Projecting outputs...</div>
+              <div className="empty-state__desc">
+                Embeddings are being generated for the current analysis selection.
               </div>
             </div>
-            <span className="badge badge--primary">anchor</span>
+          </div>
+        ) : isScatterMode && projection.error ? (
+          <div className="card">
+            <div className="empty-state create-run__empty-body">
+              <div className="empty-state__title">Projection unavailable</div>
+              <div className="empty-state__desc">
+                Embedding analysis failed for this selection. Try running the projection again.
+              </div>
+            </div>
+          </div>
+        ) : !isScatterMode && selectedField ? (
+          <FieldDistributionView
+            field={selectedField}
+            values={fieldValues}
+          />
+        ) : (
+          <div className="card">
+            <div className="empty-state create-run__empty-body">
+              <div className="empty-state__title">Not enough runs to plot</div>
+              <div className="empty-state__desc">
+                Render at least two plotted entries by running more prompts or selecting a field with data.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <aside className="results__sidebar">
+        <div className="results__sidebar-section">
+          <div className="results__sidebar-head">
+            <span className="section-label">Runs</span>
+            <span className="field__hint">select one to inspect its output</span>
+          </div>
+          <div className="results__run-list">
+            {analyzed.map((run) => {
+              const isSelected = run.selectionId === selectedRun;
+              const isFailed = run.state === 'failed';
+              const isReady = run.state === 'ready';
+              const needsAttention = run.state === 'non_json' || run.state === 'schema_invalid';
+              const latencyLabel = formatLatency(run.run?.latency_ms);
+              const runVersionLabel = getRunVersionLabel(run.groupVersionId ?? run.run?.version_id, run.groupLabel);
+
+              let cardClass = 'run-card results__run-card';
+              if (isSelected) cardClass += ' run-card--selected';
+              if (run.groupTone === 'compare') cardClass += ' results__run-card--compare-target';
+              if (isFailed) cardClass += ' run-card--failure';
+              else if (needsAttention) cardClass += ' run-card--deviation';
+
+              return (
+                <div
+                  key={run.selectionId}
+                  className={cardClass}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectRun(isSelected ? null : run.selectionId)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectRun(isSelected ? null : run.selectionId);
+                    }
+                  }}
+                >
+                  <div className="run-card__header">
+                    <span className="run-card__title">{runVersionLabel} · Run {run.index + 1}</span>
+                    <div className="results__badge-group">
+                      {isReady && <span className="badge badge--success">success</span>}
+                      {isFailed && <span className="badge badge--danger">fail</span>}
+                      {reference?.kind === 'anchor' && reference.runIndex === run.index && run.groupTone === 'primary' && (
+                        <span className="badge badge--primary">anchor</span>
+                      )}
+                      {run.state === 'non_json' && <span className="badge badge--warning">non-json</span>}
+                      {run.state === 'schema_invalid' && <span className="badge badge--warning">schema</span>}
+                    </div>
+                  </div>
+                  {run.error && (
+                    <div className="results__error-text">{run.error}</div>
+                  )}
+                  <div className="run-card__meta">
+                    {latencyLabel && <span>{latencyLabel}</span>}
+                    {run.run?.total_tokens && <span>{run.run.total_tokens} tokens</span>}
+                    {run.run?.tool_calls?.length ? <span>{run.run.tool_calls.length} tool call{run.run.tool_calls.length > 1 ? 's' : ''}</span> : null}
+                    {reference?.kind === 'anchor' && run.anchorSimilarity !== null && (
+                      <span>{Math.round(run.anchorSimilarity * 100)}% to anchor</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-      )}
 
-      {scatterPoints.length >= 2 && (
-        <SimilarityScatterplot
-          points={scatterPoints}
-          selectedIndex={selectedRun}
-          onSelectRun={onSelectRun}
-        />
-      )}
-
-      {referenceSchema && (
-        <DeviationHeatmap
-          consensus={referenceSchema}
-            title={referenceSchemaKind === 'anchor' ? 'Anchor Deviation Heatmap' : 'Deviation Heatmap'}
-            hint={referenceSchemaKind === 'anchor' ? 'Fields vs. anchor output' : 'Fields vs. runs'}
-          runDeviations={analyzed.map(r => r.deviations)}
-          onCellClick={(runIndex) => onSelectRun(runIndex)}
-        />
-      )}
-
-      <div>
-        <span className="section-label">All Runs</span>
-        <div className="run-grid results__run-grid">
-          {analyzed.map((run) => {
-            const isSelected = run.index === selectedRun;
-
-            let cardClass = 'run-card';
-            if (isSelected) cardClass += ' run-card--selected';
-            if (run.classification === 'failure') cardClass += ' run-card--failure';
-            else if (run.classification !== 'conforming') cardClass += ' run-card--deviation';
-
-            return (
-              <div
-                key={run.index}
-                className={cardClass}
-                role="button"
-                tabIndex={0}
-                onClick={() => onSelectRun(run.index)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onSelectRun(run.index);
-                  }
-                }}
-              >
-                <div className="run-card__header">
-                  <span className="run-card__title">Run {run.index + 1}</span>
-                  <div className="results__badge-group">
-                    {reference?.kind === 'anchor' && reference.runIndex === run.index && (
-                      <span className="badge badge--primary">anchor</span>
-                    )}
-                    <span
-                      className="badge"
-                      style={{
-                        background: getClassificationBg(run.classification),
-                        color: getClassificationColor(run.classification),
-                      }}
-                    >
-                      {run.classification === 'failure' ? 'failed' : run.classification.replace('_', ' ')}
-                    </span>
-                  </div>
-                </div>
-                {run.error && (
-                  <div className="results__error-text">{run.error}</div>
-                )}
-                <div className="run-card__meta">
-                  {run.run?.latency_ms && <span>{run.run.latency_ms}ms</span>}
-                  {run.run?.total_tokens && <span>{run.run.total_tokens} tokens</span>}
-                  {run.run?.tool_calls?.length ? <span>{run.run.tool_calls.length} tool call{run.run.tool_calls.length > 1 ? 's' : ''}</span> : null}
-                  {reference?.kind === 'anchor' && run.anchorSimilarity !== null && (
-                    <span>{Math.round(run.anchorSimilarity * 100)}% to anchor</span>
-                  )}
-                  {run.deviations.length > 0 && (
-                    <span>{run.deviations.length} deviation{run.deviations.length > 1 ? 's' : ''}</span>
-                  )}
-                </div>
-                {run.run && (
-                  <div className="results__card-actions">
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPromoteRun(run.index);
-                      }}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      promote as anchor
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="results__sidebar-section results__sidebar-section--detail">
+          <div className="results__sidebar-head">
+            <span className="section-label">Output detail</span>
+          </div>
+          {detailContent}
         </div>
-      </div>
+      </aside>
     </div>
   );
 };

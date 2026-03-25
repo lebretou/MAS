@@ -2,6 +2,9 @@ import React from 'react';
 import type { PromptComponent, PromptTool, PromptVersion } from '../../../types/prompt';
 import iconLoad from '../../../assets/icon-load.svg';
 import iconCompare from '../../../assets/icon-compare.svg';
+import iconOutputSchema from '../../../assets/icon-outputschema.svg';
+import iconTool from '../../../assets/icon-tool.svg';
+import iconVariable from '../../../assets/icon-variable.svg';
 import { componentColors } from '../../graph-viewer/constants';
 import { getPromptComponentDisplayName } from '../promptEditor';
 import { getPromptVersionDiffSummary } from '../promptVersionDiff';
@@ -212,6 +215,23 @@ function getBranchPath(startX: number, startY: number, endX: number, endY: numbe
   return `M ${startX} ${startY} C ${startX} ${entryCurveY}, ${endX} ${exitCurveY}, ${endX} ${endY}`;
 }
 
+function renderMetaChangeTag(
+  key: string,
+  label: string,
+  icon: string,
+) {
+  return (
+    <span key={key} className="version-tree__edge-tag version-tree__edge-tag--changed">
+      <span
+        className="version-tree__edge-tag-icon"
+        style={getMaskIconStyle(icon)}
+        aria-hidden
+      />
+      <span>~ {label}</span>
+    </span>
+  );
+}
+
 const PromptVersionTree: React.FC<Props> = ({
   promptId,
   versions,
@@ -298,15 +318,9 @@ const PromptVersionTree: React.FC<Props> = ({
                 ~ {label}
               </span>
             ))}
-            {diffSummary.toolChanged && (
-              <span className="version-tree__edge-tag version-tree__edge-tag--changed">~ tools</span>
-            )}
-            {diffSummary.schemaChanged && (
-              <span className="version-tree__edge-tag version-tree__edge-tag--changed">~ schema</span>
-            )}
-            {diffSummary.variableChanged && (
-              <span className="version-tree__edge-tag version-tree__edge-tag--changed">~ variables</span>
-            )}
+            {diffSummary.toolChanged && renderMetaChangeTag(`${entry.versionId}-tools`, 'tools', iconTool)}
+            {diffSummary.schemaChanged && renderMetaChangeTag(`${entry.versionId}-schema`, 'schema', iconOutputSchema)}
+            {diffSummary.variableChanged && renderMetaChangeTag(`${entry.versionId}-variables`, 'variables', iconVariable)}
           </>
         )}
       </div>
@@ -393,7 +407,7 @@ const PromptVersionTree: React.FC<Props> = ({
           )}
         </svg>
         <span
-          className={`version-tree__graph-node${row.entry.kind === 'draft' ? ' is-draft' : ''}${effectiveActiveVersionId === row.entry.versionId ? ' is-active' : ''}`}
+          className={`version-tree__graph-node${row.entry.kind === 'draft' ? ' is-draft' : ''}${effectiveActiveVersionId === row.entry.versionId ? ' is-active' : ''}${compareTargets.some((target) => target.promptId === promptId && target.versionId === row.entry.versionId) ? ' is-compare-target' : ''}`}
           style={
             {
               left: nodeLeft,
@@ -430,7 +444,7 @@ const PromptVersionTree: React.FC<Props> = ({
               <div className="version-tree__graph" style={{ width: graphWidth }}>
                 {renderGraph(row)}
               </div>
-              <div className={`version-tree__node${isActive ? ' is-active' : ''}${onLoadVersion && isSavedVersion ? ' is-clickable' : ''}${entry.kind === 'draft' ? ' version-tree__node--draft' : ''}`}>
+              <div className={`version-tree__node${isActive ? ' is-active' : ''}${compareIndex >= 0 ? ' is-compare-target' : ''}${onLoadVersion && isSavedVersion ? ' is-clickable' : ''}${entry.kind === 'draft' ? ' version-tree__node--draft' : ''}`}>
                 <div className="version-tree__node-top">
                   <div
                     className="version-tree__node-main"
@@ -447,6 +461,12 @@ const PromptVersionTree: React.FC<Props> = ({
                   >
                     <div className="version-tree__node-head">
                       <span className="version-tree__version-id">{entry.versionId}</span>
+                      {isActive && (
+                        <span className="version-tree__current-chip">current</span>
+                      )}
+                      {compareIndex >= 0 && (
+                        <span className="version-tree__compare-chip">comparing</span>
+                      )}
                       {entry.kind === 'draft' && (
                         <span className="badge badge--warning">draft</span>
                       )}

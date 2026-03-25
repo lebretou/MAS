@@ -44,11 +44,10 @@ const JsonNode: React.FC<JsonNodeProps> = ({
   }
 
   if (typeof value === 'string') {
-    const display = value.length > 120 ? value.slice(0, 120) + '...' : value;
     return (
       <Row path={path} isDeviation={isDeviation} deviation={deviation}>
         {keyName !== undefined && <><span className="json-tree__key">"{keyName}"</span><span className="json-tree__colon">:</span></>}
-        <span className="json-tree__string">"{display}"</span>{comma}
+        <span className="json-tree__string">"{value}"</span>{comma}
       </Row>
     );
   }

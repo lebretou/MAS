@@ -1,0 +1,79 @@
+{
+  "fingerprint": "fd85cc8dd92add3a2911dae13cd147c69eabddabc9489b416253242b4abca1cb",
+  "cluster_count": 12,
+  "label_model": "gpt-4.1-mini",
+  "labels": {
+    "0": {
+      "cluster_name": "Query Optimization",
+      "centroid_summary": "Agents designed to analyze user queries and generate optimized search tags, questions, or filtering decisions to improve information retrieval and relevance.",
+      "guided_start_description": "Help users refine their queries by generating targeted search tags, relevant questions, or filtering criteria to enhance discovery and accuracy.",
+      "cluster_id": 0
+    },
+    "1": {
+      "cluster_name": "Trading Decision Agents",
+      "centroid_summary": "Agents focused on analyzing market data and indicators to collaboratively generate buy, sell, or hold trading decisions with varying risk perspectives.",
+      "guided_start_description": "Start by selecting your trading role and risk preference, then input market data to receive data-driven trade recommendations and strategic insights.",
+      "cluster_id": 1
+    },
+    "2": {
+      "cluster_name": "Task Orchestration",
+      "centroid_summary": "Agents coordinating complex workflows by delegating subtasks, managing specialized subagents, and synthesizing outputs to achieve comprehensive task completion.",
+      "guided_start_description": "Introduce this role as a central coordinator that breaks down tasks, assigns work to expert subagents, and integrates their results to deliver complete solutions.",
+      "cluster_id": 2
+    },
+    "3": {
+      "cluster_name": "Product Search Supervisor",
+      "centroid_summary": "Agents in this cluster coordinate and assist with product search tasks by delegating subtasks, evaluating document relevance, and generating user-friendly responses when no exact matches are found.",
+      "guided_start_description": "Introduce a supervisory assistant that manages product search workflows by analyzing queries, assigning tasks to specialized subagents, and providing clear, polite feedback on search results.",
+      "cluster_id": 3
+    },
+    "4": {
+      "cluster_name": "Phase-Based Workflow",
+      "centroid_summary": "Prompts guiding multi-phase workflows by defining context, tasks, constraints, and summarization to support structured progress and evaluation across project phases.",
+      "guided_start_description": "Introduce the current project phase, outline key tasks and constraints, and provide targeted questions or summaries to guide users through each step of the workflow.",
+      "cluster_id": 4
+    },
+    "5": {
+      "cluster_name": "Hardware Compatibility",
+      "centroid_summary": "Agents in this cluster analyze hardware constraints and compatibility to determine if software can run on specified hardware configurations.",
+      "guided_start_description": "Help users identify hardware requirements and check if their software dependencies are compatible with their target devices.",
+      "cluster_id": 5
+    },
+    "6": {
+      "cluster_name": "Specialized AI Assistants",
+      "centroid_summary": "This cluster comprises AI agents designed to perform focused tasks such as compliance checking, concise user assistance, content summarization, focus evaluation, and knowledge-based question answering within specific domains.",
+      "guided_start_description": "Introduce the AI assistant by highlighting its specialized role\u2014whether it's ensuring compliance, providing brief and engaging responses, generating content intros, assessing focus levels, or delivering detailed answers from a knowledge base.",
+      "cluster_id": 6
+    },
+    "7": {
+      "cluster_name": "Value Extraction",
+      "centroid_summary": "Prompts designed to extract specific numerical values from structured input strings based on given keys.",
+      "guided_start_description": "Enter a structured text input and specify the key whose numeric value you want to extract.",
+      "cluster_id": 7
+    },
+    "8": {
+      "cluster_name": "Multi-Agent Dev Roles",
+      "centroid_summary": "This cluster defines specialized system prompts for autonomous agents collaboratively managing software development tasks such as issue reproduction, fault localization, code editing, testing, and team coordination.",
+      "guided_start_description": "Introduce users to a multi-agent software development workflow where distinct AI roles handle bug reproduction, debugging, code editing, verification, and project management to streamline issue resolution.",
+      "cluster_id": 8
+    },
+    "9": {
+      "cluster_name": "Data Science Agent",
+      "centroid_summary": "Agents that generate code, recommend steps, or orchestrate processes for data preprocessing, feature engineering, model training, and visualization in data science workflows.",
+      "guided_start_description": "Select this role to assist with automated data preparation, feature engineering, model building, and visualization by generating code and instructions tailored to your dataset and objectives.",
+      "cluster_id": 9
+    },
+    "10": {
+      "cluster_name": "Expert Agent Guidance",
+      "centroid_summary": "This cluster defines expert system prompts that guide AI agents to perform specialized, methodical tasks such as software development, testing, front-end design, and research synthesis with a focus on precision, reliability, and incremental progress.",
+      "guided_start_description": "Introduce the AI agent as a domain expert who follows a structured, step-by-step workflow to deliver accurate, reliable, and context-aware assistance tailored to the user's specific project or research needs.",
+      "cluster_id": 10
+    },
+    "11": {
+      "cluster_name": "Docstring Generation",
+      "centroid_summary": "Agents collaboratively generate, assess context for, and verify high-quality, clear, and actionable docstrings to improve code documentation.",
+      "guided_start_description": "Guide users through writing, reviewing context needs, and validating docstrings to ensure comprehensive and helpful code documentation.",
+      "cluster_id": 11
+    }
+  }
+}

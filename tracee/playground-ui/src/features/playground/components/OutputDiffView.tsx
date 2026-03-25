@@ -5,7 +5,6 @@ interface Props {
   diff: DiffLine[];
   referenceLabel: string;
   selectedRunLabel: string;
-  referenceKind: 'anchor' | 'consensus';
   onClose: () => void;
 }
 
@@ -19,11 +18,10 @@ const OutputDiffView: React.FC<Props> = ({
   diff,
   referenceLabel,
   selectedRunLabel,
-  referenceKind,
   onClose,
 }) => {
   const hasChanges = diff.some(l => l.type !== 'same');
-  const referenceName = referenceKind === 'anchor' ? 'anchor' : 'consensus';
+  const referenceName = 'anchor';
 
   return (
     <div className="card diff__card">

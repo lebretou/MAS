@@ -22,7 +22,7 @@ import PromptStructureOutline from './PromptStructureOutline';
 import PromptResolvedView from './PromptResolvedView';
 import PromptDiffWorkspace from './PromptDiffWorkspace';
 import { useRunExecution } from '../../../hooks/useRunExecution';
-import type { PlaygroundRun } from '../../../types/playground';
+import type { PlaygroundAnalysisGroup } from '../../../types/playground';
 import iconModelConfig from '../../../assets/icon-modelconfig.svg';
 import iconGuidedStart from '../../../assets/icon-guidedstart.svg';
 import iconTool from '../../../assets/icon-tool.svg';
@@ -33,6 +33,7 @@ import iconAnchor from '../../../assets/icon-anchor.svg';
 import iconExecuteRun from '../../../assets/icon-executerun.svg';
 import iconCreateNewPrompt from '../../../assets/icon-createnewprompt.svg';
 import iconLoadFromExisting from '../../../assets/icon-loadfromexisting.svg';
+import iconTrash from '../../../assets/icon-trash.svg';
 import { promptAPI } from '../../../services/api';
 import { generateUniquePromptId, slugifyPromptName } from '../../../utils/promptNaming';
 import { resizeTextarea } from '../../../utils/resizeTextarea';
@@ -57,7 +58,7 @@ interface Props {
   analysisContent: React.ReactNode;
   onBackToEdit: () => void;
   onViewResults: () => void;
-  onRunComplete: (results: Array<PlaygroundRun | null>, errors: Array<string | null>) => void;
+  onRunComplete: (groups: PlaygroundAnalysisGroup[]) => void;
   anchorOutput: string;
   anchorLabel: string | null;
   onAnchorChange: (value: string) => void;
@@ -120,6 +121,10 @@ interface LoadedPromptContext {
   version: PromptVersion;
   executeSignature: string;
   saveSignature: string;
+}
+
+interface LoadVersionIntoEditorOptions {
+  preserveCompareTarget?: boolean;
 }
 
 interface CompareTarget {
@@ -441,7 +446,7 @@ const PromptForm: React.FC<Props> = ({
 
   const {
     loading, setupError, execute,
-  } = useRunExecution(onRunComplete);
+  } = useRunExecution();
 
   React.useEffect(() => {
     setActivePanel(null);
@@ -453,6 +458,14 @@ const PromptForm: React.FC<Props> = ({
     }
     setEditorView(view);
   }, [mode, onBackToEdit]);
+  const handleAnalysisNavClick = React.useCallback(() => {
+    if (mode === 'analysis') {
+      setAnalysisPanel('results');
+      return;
+    }
+
+    onViewResults();
+  }, [mode, onViewResults]);
 
   const isEditorActive = (view: EditorView) => mode === 'author' && editorView === view;
 
@@ -488,9 +501,9 @@ const PromptForm: React.FC<Props> = ({
       <button
         type="button"
         className={`seg-control__btn${mode === 'analysis' ? ' is-active' : ''}`}
-        onClick={onViewResults}
+        onClick={handleAnalysisNavClick}
         aria-pressed={mode === 'analysis'}
-        aria-describedby={!hasResults ? workspaceModeHintId : undefined}
+        aria-describedby={mode === 'author' && !hasResults ? workspaceModeHintId : undefined}
         disabled={!hasResults}
       >
         <span>Analysis</span>
@@ -649,10 +662,13 @@ const PromptForm: React.FC<Props> = ({
   const normalizedTools = React.useMemo(() => {
     return normalizePromptTools(tools);
   }, [tools]);
+  const schemaSuppressedByTools = normalizedTools.length > 0;
+  const activeSchemaError = schemaSuppressedByTools ? null : schemaError;
   const currentOutputSchema = React.useMemo(
     () => (schemaEnabled && !schemaError ? toJsonSchema(schemaProperties) : null),
     [schemaEnabled, schemaError, schemaProperties]
   );
+  const runtimeOutputSchema = schemaSuppressedByTools ? null : currentOutputSchema;
   const currentResolvedPrompt = React.useMemo(
     () => serializePromptMessages(resolvePromptMessages(normalizedPromptComponents, inputVars)),
     [normalizedPromptComponents, inputVars]
@@ -748,7 +764,7 @@ const PromptForm: React.FC<Props> = ({
         return [`${normalizedTools.length} tool${normalizedTools.length === 1 ? '' : 's'}`];
       case 'schema':
         return [
-          schemaEnabled ? 'enabled' : 'disabled',
+          schemaSuppressedByTools ? 'paused by tools' : schemaEnabled ? 'enabled' : 'disabled',
           `${schemaEnabled ? schemaProperties.length : 0} field${schemaProperties.length === 1 ? '' : 's'}`,
         ];
       case 'anchor':
@@ -764,6 +780,7 @@ const PromptForm: React.FC<Props> = ({
     normalizedTools.length,
     numRuns,
     provider,
+    schemaSuppressedByTools,
     schemaEnabled,
     schemaProperties.length,
   ]);
@@ -779,6 +796,27 @@ const PromptForm: React.FC<Props> = ({
   const currentEditorVersionId = draftLeaf?.versionId
     ?? loadedPromptContext?.version.version_id
     ?? null;
+  const canSavePrompt = React.useMemo(() => {
+    if (promptWorkflow === 'existing') {
+      return Boolean(
+        (loadedPromptContext && loadedPromptContext.saveSignature !== currentSaveSignature)
+        || revisionNote.trim()
+      );
+    }
+
+    return Boolean(
+      promptNameInput.trim()
+      || revisionNote.trim()
+      || currentSaveSignature !== defaultEditorSaveSignature
+    );
+  }, [
+    currentSaveSignature,
+    defaultEditorSaveSignature,
+    loadedPromptContext,
+    promptNameInput,
+    promptWorkflow,
+    revisionNote,
+  ]);
   const editorCompareTargetResolvedPrompt = React.useMemo(() => {
     if (!editorCompareTarget) {
       return '';
@@ -790,16 +828,23 @@ const PromptForm: React.FC<Props> = ({
     ));
   }, [editorCompareTarget]);
   const versionTreeCompareTargets = React.useMemo(() => {
-    if (mode === 'author') {
-      return editorCompareTarget
-        ? [{ promptId: editorCompareTarget.promptId, versionId: editorCompareTarget.version.version_id }]
-        : [];
-    }
-
-    return comparisonTargets.map((target) => ({
+    const mappedTargets = comparisonTargets.map((target) => ({
       promptId: target.promptId,
       versionId: target.version.version_id,
     }));
+    const editorTarget = editorCompareTarget
+      ? [{ promptId: editorCompareTarget.promptId, versionId: editorCompareTarget.version.version_id }]
+      : [];
+
+    if (mode === 'author') {
+      return editorTarget;
+    }
+
+    return [...mappedTargets, ...editorTarget].filter((target, index, allTargets) => (
+      allTargets.findIndex((candidate) => (
+        candidate.promptId === target.promptId && candidate.versionId === target.versionId
+      )) === index
+    ));
   }, [comparisonTargets, editorCompareTarget, mode]);
   const resetEditorState = React.useCallback((nextPromptName = '') => {
     setPromptComponents(preparePromptComponentsForEditor(DEFAULT_PROMPT_COMPONENTS));
@@ -818,7 +863,11 @@ const PromptForm: React.FC<Props> = ({
     setEditorView('components');
   }, []);
 
-  const loadVersionIntoEditor = React.useCallback((prompt: Prompt, version: PromptVersion) => {
+  const loadVersionIntoEditor = React.useCallback((
+    prompt: Prompt,
+    version: PromptVersion,
+    options: LoadVersionIntoEditorOptions = {},
+  ) => {
     const editorComponents = preparePromptComponentsForEditor(version.components);
     const parsedSchemaProperties = schemaPropertiesFromOutputSchema(
       (version.output_schema as Record<string, unknown> | null) ?? null
@@ -840,8 +889,10 @@ const PromptForm: React.FC<Props> = ({
     setSaveError(null);
     setCollapsedSections({});
     setPendingScrollSectionKey(null);
-    setEditorCompareTarget(null);
-    setEditorView('components');
+    if (!options.preserveCompareTarget) {
+      setEditorCompareTarget(null);
+      setEditorView('components');
+    }
     setLoadedPromptContext({
       prompt,
       version,
@@ -1072,7 +1123,7 @@ const PromptForm: React.FC<Props> = ({
     e.preventDefault();
     setToolError(null);
 
-    if (schemaError) {
+    if (activeSchemaError) {
       return;
     }
 
@@ -1108,13 +1159,13 @@ const PromptForm: React.FC<Props> = ({
       provider,
       temperature,
       numRuns,
-      outputSchema: currentOutputSchema,
+      outputSchema: runtimeOutputSchema,
       promptContext: {
         promptId: promptWorkflow === 'existing'
           ? loadedPromptContext?.prompt.prompt_id ?? selectedPromptData?.prompt.prompt_id ?? null
           : null,
         promptName: executionPromptName,
-        versionId: promptWorkflow === 'existing' ? loadedPromptContext?.version.version_id ?? null : null,
+        versionId: promptWorkflow === 'existing' ? currentEditorVersionId : null,
         branchName: promptWorkflow === 'existing' ? loadedPromptContext?.version.branch_name ?? null : null,
         loadedSignature: loadedPromptContext?.executeSignature ?? null,
         revisionNote: revisionNote.trim() || null,
@@ -1124,6 +1175,87 @@ const PromptForm: React.FC<Props> = ({
 
     if (!executionResult) {
       return;
+    }
+
+    if (editorCompareTarget) {
+      const compareInputVariables = {
+        ...(editorCompareTarget.version.variables ?? {}),
+        ...submittedInputVariables,
+      };
+      const comparisonResult = await execute({
+        components: normalizePromptComponents(editorCompareTarget.version.components),
+        tools: normalizePromptTools(editorCompareTarget.version.tools ?? []),
+        inputVariables: compareInputVariables,
+        model,
+        provider,
+        temperature,
+        numRuns,
+        outputSchema: editorCompareTarget.version.tools?.length
+          ? null
+          : editorCompareTarget.version.output_schema as Record<string, unknown> | null,
+        promptContext: {
+          promptId: editorCompareTarget.promptId,
+          promptName: editorCompareTarget.promptName,
+          versionId: editorCompareTarget.version.version_id,
+          branchName: editorCompareTarget.version.branch_name ?? null,
+          useExistingVersion: true,
+        },
+      });
+
+      if (!comparisonResult) {
+        onRunComplete([
+          {
+            id: 'primary',
+            label: executionPromptName,
+            tone: 'primary',
+            promptId: executionResult.promptId,
+            versionId: executionResult.versionId,
+            results: executionResult.results,
+            runErrors: executionResult.errors,
+          },
+          {
+            id: 'compare',
+            label: editorCompareTarget.version.name || editorCompareTarget.promptName,
+            tone: 'compare',
+            promptId: editorCompareTarget.promptId,
+            versionId: editorCompareTarget.version.version_id,
+            results: Array.from({ length: numRuns }, () => null),
+            runErrors: Array.from({ length: numRuns }, () => 'comparison run failed'),
+          },
+        ]);
+        return;
+      }
+
+      onRunComplete([
+        {
+          id: 'primary',
+          label: executionPromptName,
+          tone: 'primary',
+          promptId: executionResult.promptId,
+          versionId: executionResult.versionId,
+          results: executionResult.results,
+          runErrors: executionResult.errors,
+        },
+        {
+          id: 'compare',
+          label: editorCompareTarget.version.name || editorCompareTarget.promptName,
+          tone: 'compare',
+          promptId: comparisonResult.promptId,
+          versionId: comparisonResult.versionId,
+          results: comparisonResult.results,
+          runErrors: comparisonResult.errors,
+        },
+      ]);
+    } else {
+      onRunComplete([{
+        id: 'primary',
+        label: executionPromptName,
+        tone: 'primary',
+        promptId: executionResult.promptId,
+        versionId: executionResult.versionId,
+        results: executionResult.results,
+        runErrors: executionResult.errors,
+      }]);
     }
 
     await refreshPromptList().catch(() => setSavedPromptsError('Run completed, but prompt list refresh failed.'));
@@ -1150,7 +1282,9 @@ const PromptForm: React.FC<Props> = ({
       setSelectedPromptData(promptData);
       const executedVersion = promptData.versions.find((version) => version.version_id === executionResult.versionId);
       if (executedVersion) {
-        loadVersionIntoEditor(promptData.prompt, executedVersion);
+        loadVersionIntoEditor(promptData.prompt, executedVersion, {
+          preserveCompareTarget: Boolean(editorCompareTarget),
+        });
       }
     }
   };
@@ -1534,6 +1668,11 @@ const PromptForm: React.FC<Props> = ({
                                 setEditorView('components');
                               }}
                             >
+                              <span
+                                className="create-run__action-icon"
+                                style={getMaskIconStyle(iconTrash)}
+                                aria-hidden
+                              />
                               clear compare
                             </button>
                           )}
@@ -1541,6 +1680,7 @@ const PromptForm: React.FC<Props> = ({
                             type="button"
                             className="btn btn--secondary create-run__action-btn"
                             onClick={() => openSaveDialog('current')}
+                            disabled={!canSavePrompt}
                           >
                             <span
                               className="create-run__action-icon"
@@ -1570,15 +1710,19 @@ const PromptForm: React.FC<Props> = ({
                           <button
                             type="submit"
                             className="btn btn--primary create-run__action-btn"
-                            disabled={loading || !!schemaError || (promptWorkflow === 'existing' && !loadedPromptContext)}
+                            disabled={loading || !!activeSchemaError || (promptWorkflow === 'existing' && !loadedPromptContext)}
                           >
                             <span
                               className="create-run__action-icon"
                               style={getMaskIconStyle(iconExecuteRun)}
                               aria-hidden
                             />
-                            <span>{loading ? 'Executing...' : 'Execute Run'}</span>
-                            {loading && <span className="spinner create-run__spinner" />}
+                            <span>
+                              {loading
+                                ? (editorCompareTarget ? 'Running comparison...' : 'Executing...')
+                                : (editorCompareTarget ? 'Run comparison' : 'Execute Run')}
+                            </span>
+                            {loading && <span className="spinner create-run__spinner" aria-hidden />}
                           </button>
                         </div>
                         {!hasResults && (
@@ -1588,10 +1732,10 @@ const PromptForm: React.FC<Props> = ({
                         )}
                       </div>
 
-                      {schemaError && activePanel !== 'schema' && (
+                      {activeSchemaError && activePanel !== 'schema' && (
                         <div className="alert alert--warning create-run__config-alert">
                           <span className="alert__icon">!</span>
-                          Output schema needs attention: {schemaError}
+                          Output schema needs attention: {activeSchemaError}
                         </div>
                       )}
                     </div>
@@ -1629,6 +1773,9 @@ const PromptForm: React.FC<Props> = ({
                             versionId: currentEditorVersionId,
                             revisionNote: revisionNote.trim() || loadedPromptContext?.version.revision_note || null,
                             components: normalizedPromptComponents,
+                            variables: snapshotPromptVariables(normalizedPromptComponents, inputVars),
+                            tools: normalizedTools,
+                            outputSchema: currentOutputSchema,
                             resolvedPrompt: currentResolvedPrompt,
                           }}
                           target={editorCompareTarget}
@@ -1644,76 +1791,87 @@ const PromptForm: React.FC<Props> = ({
 
                   </div>
                 ) : (
-                  <div className="playground-analysis-shell">
-                    <div className="card">
-                      <div className="card__body playground-analysis-shell__summary">
-                        <div className="playground-analysis-shell__copy">
+                  <div className="create-run__workspace">
+                    <div className="create-run__toolbar-stack">
+                      <div className="create-run__workspace-header">
+                        <div className="create-run__workspace-copy">
                           <label className="field__label">Analysis mode</label>
                           <span className="field__hint">
-                            keep the history rail visible while you inspect results or compare selected versions.
+                            inspect results in the same workspace frame and switch to version compare only when you need it.
                           </span>
                         </div>
-                        <div className="playground-analysis-shell__actions">
+                      </div>
+                      <div className="create-run__workspace-subheader">
+                        <div className="create-run__workspace-subheader-main">
                           {workspaceNav}
-                          <button type="button" className="btn btn--secondary" onClick={() => openSaveDialog('current')}>
-                            Save prompt
-                          </button>
+                        </div>
+                        <div className="create-run__workspace-subheader-actions">
                           <button
                             type="button"
-                            className={`btn btn--secondary${analysisPanel === 'results' ? ' is-active' : ''}`}
-                            onClick={() => setAnalysisPanel('results')}
+                            className="btn btn--secondary create-run__action-btn"
+                            onClick={() => openSaveDialog('current')}
+                            disabled={!canSavePrompt}
                           >
-                            Results
-                          </button>
-                          <button
-                            type="button"
-                            className={`btn btn--secondary${analysisPanel === 'compare' ? ' is-active' : ''}`}
-                            onClick={() => setAnalysisPanel('compare')}
-                            disabled={comparisonTargets.length < 2}
-                          >
-                            Compare selected
+                            <span
+                              className="create-run__action-icon"
+                              style={getMaskIconStyle(iconSave)}
+                              aria-hidden
+                            />
+                            <span>Save prompt</span>
                           </button>
                           <button
                             type="button"
                             ref={(element) => {
                               triggerRefs.current.anchor = element;
                             }}
-                            className={`btn btn--secondary${activePanel === 'anchor' ? ' is-active' : ''}`}
+                            className={`btn btn--secondary create-run__action-btn${activePanel === 'anchor' ? ' is-active' : ''}`}
                             onClick={() => setActivePanel((current) => (current === 'anchor' ? null : 'anchor'))}
                             aria-pressed={activePanel === 'anchor'}
                             aria-expanded={activePanel === 'anchor'}
                             aria-controls={activePanel === 'anchor' ? activePanelId : undefined}
                           >
-                            Anchor output {anchorOutput.trim() ? '(set)' : ''}
+                            <span
+                              className="create-run__action-icon"
+                              style={getMaskIconStyle(iconAnchor)}
+                              aria-hidden
+                            />
+                            <span>Anchor output{anchorOutput.trim() ? ' (set)' : ''}</span>
                           </button>
                           <button
                             type="submit"
-                            className="btn btn--primary"
-                            disabled={loading || !!schemaError || (promptWorkflow === 'existing' && !loadedPromptContext)}
+                            className="btn btn--primary create-run__action-btn"
+                            disabled={loading || !!activeSchemaError || (promptWorkflow === 'existing' && !loadedPromptContext)}
                           >
-                            {loading && <span className="spinner create-run__spinner" />}
-                            {loading ? 'Executing...' : 'Run again'}
+                            <span
+                              className="create-run__action-icon"
+                              style={getMaskIconStyle(iconExecuteRun)}
+                              aria-hidden
+                            />
+                            <span>{loading ? 'Executing...' : 'Run again'}</span>
+                            {loading && <span className="spinner create-run__spinner" aria-hidden />}
                           </button>
                         </div>
                       </div>
                     </div>
 
-                    {analysisPanel === 'compare' && comparisonTargets.length === 2 ? (
-                      <VersionComparisonWorkspace
-                        targets={[comparisonTargets[0], comparisonTargets[1]]}
-                      />
-                    ) : hasResults ? (
-                      analysisContent
-                    ) : (
-                      <div className="card">
-                        <div className="empty-state create-run__empty-body">
-                          <div className="empty-state__title">No analysis yet</div>
-                          <div className="empty-state__desc">
-                            run the prompt once to switch into the analysis workspace.
+                    <div className="create-run__workspace-body">
+                      {analysisPanel === 'compare' && comparisonTargets.length === 2 ? (
+                        <VersionComparisonWorkspace
+                          targets={[comparisonTargets[0], comparisonTargets[1]]}
+                        />
+                      ) : hasResults ? (
+                        analysisContent
+                      ) : (
+                        <div className="card">
+                          <div className="empty-state create-run__empty-body">
+                            <div className="empty-state__title">No analysis yet</div>
+                            <div className="empty-state__desc">
+                              run the prompt once to switch into the analysis workspace.
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1982,7 +2140,11 @@ const PromptForm: React.FC<Props> = ({
                         <div className="create-run__panel-surface-head">
                           <div className="create-run__panel-surface-copy">
                             <span className="field__label">Schema fields</span>
-                            <span className="field__hint">Use schema enforcement when you want structured output checks and comparison-ready fields.</span>
+                            <span className="field__hint">
+                              {schemaSuppressedByTools
+                                ? 'Schema enforcement pauses while tools are enabled. The fields stay here for later reuse.'
+                                : 'Use schema enforcement when you want structured output checks and comparison-ready fields.'}
+                            </span>
                           </div>
                           <label className="check-label create-run__panel-check">
                             <input
@@ -1996,6 +2158,11 @@ const PromptForm: React.FC<Props> = ({
 
                         {schemaEnabled ? (
                           <>
+                            {schemaSuppressedByTools && (
+                              <div className="create-run__panel-note">
+                                tool-enabled runs skip schema enforcement and schema-based result validation.
+                              </div>
+                            )}
                             <SchemaBuilder
                               properties={schemaProperties}
                               onChange={setSchemaProperties}
@@ -2217,6 +2384,6 @@ const PromptForm: React.FC<Props> = ({
 
     </div>
   );
-};
+  };
 
 export default PromptForm;

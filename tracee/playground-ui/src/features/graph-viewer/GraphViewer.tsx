@@ -17,9 +17,10 @@ import { GraphInfoPanel } from "./controls/GraphInfoPanel";
 import { GraphSelector } from "./controls/GraphSelector";
 import { FrameScrubber } from "./controls/FrameScrubber";
 import { TraceSelector } from "./controls/TraceSelector";
+import { GraphSetupGuide } from "./GraphSetupGuide";
 import { useSidebar } from "../../context/SidebarContext";
 import { useLayer } from "../../context/LayerContext";
-import { useGraph } from "../../hooks/useGraph";
+import { NO_GRAPHS_REGISTERED_ERROR, useGraph } from "../../hooks/useGraph";
 import { useTracePlayback } from "../../hooks/useTracePlayback";
 
 const nodeTypes: NodeTypes = {
@@ -33,7 +34,7 @@ export function GraphViewer() {
   const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
   const [activeFrameIndex, setActiveFrameIndex] = useState<number | null>(null);
 
-  const { nodes: baseNodes, edges: baseEdges, stateSchema, graphId, graphInfo, graphIds, loading, error } =
+  const { nodes: baseNodes, edges: baseEdges, stateSchema, graphId, graphInfo, graphIds, loading, error, refetch } =
     useGraph(selectedGraphId);
 
   const { nodes: displayNodes, frames, activeFrame, error: playbackError } =
@@ -96,6 +97,10 @@ export function GraphViewer() {
   }
 
   if (error) {
+    if (error === NO_GRAPHS_REGISTERED_ERROR) {
+      return <GraphSetupGuide onRefresh={() => void refetch()} />;
+    }
+
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
         <p style={{ color: "#ef4444" }}>{error}</p>

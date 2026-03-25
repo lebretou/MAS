@@ -1,18 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { AnalyzedRun, ComparisonReference } from '../../../hooks/useRunAnalysis';
-import {
-  getClassificationBg,
-  getClassificationColor,
-} from '../../../utils/schemaAggregation';
 import { computeDiff } from '../../../utils/jsonDiff';
 import OutputDiffView from './OutputDiffView';
 import JsonTreeView from './JsonTreeView';
 
 interface Props {
   analyzed: AnalyzedRun[];
-  selectedRun: number | null;
+  selectedRun: string | null;
   reference: ComparisonReference | null;
-  onBack: () => void;
   onPromoteRun: (index: number) => void;
 }
 
@@ -20,23 +15,33 @@ const RunDetailView: React.FC<Props> = ({
   analyzed,
   selectedRun,
   reference,
-  onBack,
   onPromoteRun,
 }) => {
   const [detailMode, setDetailMode] = useState<'tree' | 'raw'>('tree');
   const [diffDismissed, setDiffDismissed] = useState(false);
+  const formatLatency = (latencyMs: number | null | undefined) => (
+    typeof latencyMs === 'number' ? `${latencyMs.toFixed(1)}ms` : '-'
+  );
+  const getRunVersionLabel = (versionId: string | null | undefined, fallbackLabel: string) => (
+    versionId || fallbackLabel
+  );
 
   useEffect(() => {
     setDiffDismissed(false);
   }, [selectedRun, reference?.kind, reference?.output, reference?.runIndex]);
 
-  const selected = selectedRun !== null ? analyzed[selectedRun] : null;
+  const selected = selectedRun !== null
+    ? analyzed.find((run) => run.selectionId === selectedRun) ?? null
+    : null;
+  const selectedRunLabel = selected
+    ? `${getRunVersionLabel(selected.groupVersionId ?? selected.run?.version_id, selected.groupLabel)} · Run ${selected.index + 1}`
+    : '';
 
   const selectedDiff = useMemo(() => {
-    if (selectedRun === null || !reference) return null;
-    if (reference.runIndex === selectedRun) return null;
+    if (!selected || !reference) return null;
+    if (reference.runIndex === selected.index && selected.groupTone === 'primary') return null;
 
-    const selectedOutput = analyzed[selectedRun]?.run?.output;
+    const selectedOutput = selected.run?.output;
     if (!selectedOutput || !reference.output) return null;
 
     const format = (s: string): string => {
@@ -46,16 +51,14 @@ const RunDetailView: React.FC<Props> = ({
     };
 
     return computeDiff(format(reference.output), format(selectedOutput));
-  }, [selectedRun, reference, analyzed]);
+  }, [selected, reference]);
 
   if (!selected) {
     return (
-      <div className="card create-run__empty-card">
-        <div className="empty-state create-run__empty-body">
-          <div className="empty-state__title">No run selected</div>
-          <div className="empty-state__desc">
-            Click a run card or dot in the scatterplot to view details.
-          </div>
+      <div className="empty-state create-run__empty-body detail-view__empty-state">
+        <div className="empty-state__title">No run selected</div>
+        <div className="empty-state__desc">
+          Click a run card or dot in the scatterplot to view details.
         </div>
       </div>
     );
@@ -64,45 +67,34 @@ const RunDetailView: React.FC<Props> = ({
   return (
     <div className="detail-view__content">
       <div className="flex-col results__container">
-        <button className="btn btn--ghost btn--sm" onClick={onBack}>
-          Close detail
-        </button>
-
         <div className="detail-view__header">
-          <span className="detail-view__title">
-            Run {selected.index + 1}
-            <span
-              className="badge results__badge-ml"
-              style={{
-                background: getClassificationBg(selected.classification),
-                color: getClassificationColor(selected.classification),
-              }}
-            >
-              {selected.classification.replace('_', ' ')}
+          <div className="detail-view__title-wrap">
+            <span className="detail-view__title">
+              {selectedRunLabel}
+              {selected.state === 'ready' && (
+                <span className="badge badge--success results__badge-ml">success</span>
+              )}
+              {selected.state === 'failed' && (
+                <span className="badge badge--danger results__badge-ml">fail</span>
+              )}
+              {selected.state === 'non_json' && (
+                <span className="badge badge--warning results__badge-ml-sm">non-json</span>
+              )}
+              {selected.state === 'schema_invalid' && (
+                <span className="badge badge--warning results__badge-ml-sm">schema issues</span>
+              )}
+              {reference?.runIndex === selected.index && selected.groupTone === 'primary' && (
+                <span className="badge badge--primary results__badge-ml-sm">anchor</span>
+              )}
             </span>
-            {selected.parseFailed && (
-              <span className="badge badge--warning results__badge-ml-sm">non-JSON</span>
-            )}
-            {reference?.kind === 'anchor' && reference.runIndex === selected.index && (
-              <span className="badge badge--primary results__badge-ml-sm">anchor</span>
-            )}
-          </span>
-          {selected.run && (
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={() => onPromoteRun(selected.index)}
-            >
-              promote as anchor
-            </button>
-          )}
+          </div>
         </div>
 
         {selected.run && (
           <div className="results__meta-grid">
             <div className="meta-card">
               <div className="meta-card__key">Latency</div>
-              <div className="meta-card__value">{selected.run.latency_ms ?? '-'}ms</div>
+              <div className="meta-card__value">{formatLatency(selected.run.latency_ms)}</div>
             </div>
             <div className="meta-card">
               <div className="meta-card__key">Tokens</div>
@@ -132,23 +124,6 @@ const RunDetailView: React.FC<Props> = ({
           </div>
         )}
 
-        {selected.deviations.length > 0 && (
-          <div className="alert alert--info results__alert-spaced">
-            <span className="alert__icon">i</span>
-            <div className="results__deviation-detail">
-              {selected.deviations.filter(d => d.type === 'missing').length > 0 && (
-                <div>Missing: {selected.deviations.filter(d => d.type === 'missing').map(d => d.path).join(', ')}</div>
-              )}
-              {selected.deviations.filter(d => d.type === 'type_mismatch').length > 0 && (
-                <div>Type mismatch: {selected.deviations.filter(d => d.type === 'type_mismatch').map(d => `${d.path} (${d.expected} -> ${d.actual})`).join(', ')}</div>
-              )}
-              {selected.deviations.filter(d => d.type === 'extra').length > 0 && (
-                <div>Extra: {selected.deviations.filter(d => d.type === 'extra').map(d => d.path).join(', ')}</div>
-              )}
-            </div>
-          </div>
-        )}
-
         {selected.run?.tool_calls?.length ? (
           <div className="card">
             <div className="card__header">
@@ -170,29 +145,44 @@ const RunDetailView: React.FC<Props> = ({
           </div>
         ) : null}
 
-        {selectedDiff && selectedRun !== null && !diffDismissed && (
+        {selectedDiff && !diffDismissed && (
           <OutputDiffView
             diff={selectedDiff}
             referenceLabel={reference?.label ?? 'reference'}
-            selectedRunLabel={`Run ${selectedRun + 1}`}
-            referenceKind={reference?.kind ?? 'consensus'}
+            selectedRunLabel={selectedRunLabel}
             onClose={() => setDiffDismissed(true)}
           />
         )}
 
-        <div className="seg-control results__seg-control">
-          <button
-            className={`seg-control__btn ${detailMode === 'tree' ? 'is-active' : ''}`}
-            onClick={() => setDetailMode('tree')}
-          >
-            Tree View
-          </button>
-          <button
-            className={`seg-control__btn ${detailMode === 'raw' ? 'is-active' : ''}`}
-            onClick={() => setDetailMode('raw')}
-          >
-            Raw
-          </button>
+        <div className="detail-view__toolbar">
+          <div className="seg-control results__seg-control">
+            <button
+              type="button"
+              className={`seg-control__btn ${detailMode === 'tree' ? 'is-active' : ''}`}
+              onClick={() => setDetailMode('tree')}
+            >
+              Tree View
+            </button>
+            <button
+              type="button"
+              className={`seg-control__btn ${detailMode === 'raw' ? 'is-active' : ''}`}
+              onClick={() => setDetailMode('raw')}
+            >
+              Raw
+            </button>
+          </div>
+          <div className="detail-view__toolbar-actions">
+            {selected.run && (
+              <button
+                type="button"
+                className="btn btn--secondary create-run__action-btn"
+                onClick={() => onPromoteRun(selected.index)}
+                disabled={selected.groupTone !== 'primary'}
+              >
+                promote as anchor
+              </button>
+            )}
+          </div>
         </div>
 
         {selected.error ? (
@@ -202,7 +192,7 @@ const RunDetailView: React.FC<Props> = ({
           </div>
         ) : selected.run && (
           detailMode === 'tree' && selected.parsed !== null ? (
-            <JsonTreeView data={selected.parsed} deviations={selected.deviations} />
+            <JsonTreeView data={selected.parsed} />
           ) : (
             <pre className="results__raw-output">
               {selected.run.output}

@@ -20,6 +20,8 @@ interface UseGraphResult {
   refetch: () => void;
 }
 
+export const NO_GRAPHS_REGISTERED_ERROR = "no graphs registered";
+
 export function useGraph(requestedGraphId?: string | null): UseGraphResult {
   const [nodes, setNodes] = useState<Node<GraphNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge<GraphEdgeData>[]>([]);
@@ -44,9 +46,13 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
       targetId = ids[0];
     }
     if (!targetId) {
+      setNodes([]);
+      setEdges([]);
+      setStateSchema(null);
+      setGraphId(null);
       setGraphInfo(null);
       setLoading(false);
-      setError("no graphs registered");
+      setError(NO_GRAPHS_REGISTERED_ERROR);
       return;
     }
     setGraphId(targetId);

@@ -137,6 +137,44 @@ async def call_openai_messages(
         )
 
 
+async def embed_openai_texts(
+    *,
+    texts: list[str],
+    model: str = "text-embedding-3-small",
+) -> list[list[float]]:
+    """embed text values with openai."""
+    if not texts:
+        return []
+
+    client = get_openai_client()
+
+    try:
+        response = await client.embeddings.create(
+            model=model,
+            input=texts,
+        )
+        embeddings = [list(item.embedding) for item in response.data]
+        if len(embeddings) != len(texts):
+            raise HTTPException(
+                status_code=502,
+                detail="Embedding provider returned an unexpected number of vectors.",
+            )
+        if embeddings and any(len(vector) != len(embeddings[0]) for vector in embeddings):
+            raise HTTPException(
+                status_code=502,
+                detail="Embedding provider returned mismatched vector dimensions.",
+            )
+        return embeddings
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("OpenAI embeddings call failed (model=%s)", model)
+        raise HTTPException(
+            status_code=500,
+            detail="OpenAI embeddings error. See server logs for details.",
+        )
+
+
 async def call_llm_messages(
     *,
     messages: list[LlmMessage],

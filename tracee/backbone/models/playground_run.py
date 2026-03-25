@@ -6,7 +6,7 @@ For MAS traces, see the trace events stored in JSONL files.
 
 from pydantic import BaseModel
 
-from backbone.models.prompt_artifact import PromptTool
+from backbone.models.prompt_artifact import PromptComponent, PromptTool
 
 
 class PlaygroundToolCall(BaseModel):
@@ -76,7 +76,10 @@ class PlaygroundRunCreate(BaseModel):
     prompt_id: str
     version_id: str = "latest"
     input_variables: dict[str, str] = {}
+    components: list[PromptComponent] | None = None
     output_schema: dict | None = None
+    disable_output_schema: bool = False
+    tools: list[PromptTool] | None = None
 
     # either reference a saved config or provide inline
     model_config_id: str | None = None  # Use saved config

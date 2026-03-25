@@ -5,7 +5,13 @@ import type {
   GuidedStartLlmRequest,
   GuidedStartLlmResponse,
 } from "../types/guidedStart";
-import type { PlaygroundRun, PlaygroundRunCreate, PlaygroundRunResponse } from "../types/playground";
+import type {
+  PlaygroundAnalysisRequest,
+  PlaygroundAnalysisResponse,
+  PlaygroundRun,
+  PlaygroundRunCreate,
+  PlaygroundRunResponse,
+} from "../types/playground";
 import type {
   Prompt,
   PromptListItem,
@@ -37,6 +43,11 @@ export const playgroundAPI = {
       params: { prompt_id: promptId },
     });
     return data;
+  },
+
+  async analyzeOutputs(data: PlaygroundAnalysisRequest): Promise<PlaygroundAnalysisResponse> {
+    const { data: response } = await client.post<PlaygroundAnalysisResponse>("/playground/analyze", data);
+    return response;
   },
 };
 

@@ -241,6 +241,10 @@ class TestOutputSchema:
         req = PlaygroundRunCreate(prompt_id="p1", output_schema=schema)
         assert req.output_schema == schema
 
+    def test_playground_run_create_accepts_schema_disable_flag(self):
+        req = PlaygroundRunCreate(prompt_id="p1", disable_output_schema=True)
+        assert req.disable_output_schema is True
+
     def test_playground_run_accepts_tool_calls(self):
         """PlaygroundRun accepts persisted tool call metadata."""
         run = PlaygroundRun(
