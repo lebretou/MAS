@@ -9,3 +9,5 @@ tracee/server/data/tracee.db
 
 # local sandbox for prototyping
 tracee/sandbox/
+
+research_docs/
