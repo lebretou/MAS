@@ -7,14 +7,9 @@ from backbone.analysis.trace_summary import (
     trace_summary,
 )
 from backbone.analysis.agent_analyzer import (
-    AgentAnalysis,
-    AgentDecision,
-    AgentMessage,
-    TraceAnalysis,
-    analyze_agent,
-    analyze_trace,
+    extract_all_segments,
+    extract_node_segment,
     group_events_by_agent,
-    infer_agent_messages,
 )
 
 __all__ = [
@@ -23,13 +18,8 @@ __all__ = [
     "ToolUsage",
     "TraceSummary",
     "trace_summary",
-    # agent_analyzer exports (LLM-powered, placeholder)
-    "AgentAnalysis",
-    "AgentDecision",
-    "AgentMessage",
-    "TraceAnalysis",
-    "analyze_agent",
-    "analyze_trace",
+    # agent_analyzer exports (segment extraction for cognition)
+    "extract_all_segments",
+    "extract_node_segment",
     "group_events_by_agent",
-    "infer_agent_messages",
 ]

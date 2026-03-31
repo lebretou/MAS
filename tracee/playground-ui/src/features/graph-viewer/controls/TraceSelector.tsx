@@ -2,10 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import { fetchTraceSummary, fetchTraces } from "../../../api/traces";
 import { useLayer } from "../../../context/LayerContext";
+import type { Layer } from "../../../context/LayerContext";
 import type { GraphEdgeData, GraphNodeData } from "../../../types/node-data";
 import type { TraceMetadata, TraceSummary } from "../../../types/trace";
 import iconTraces from "../../../assets/icon-traces.svg";
 import { TraceMinimapPreview } from "./TraceMinimapPreview";
+
+function isTraceLayer(layer: Layer): boolean {
+  return layer === "execution" || layer === "cognition";
+}
 
 interface TraceSelectorProps {
   nodes: Node<GraphNodeData>[];
@@ -42,7 +47,7 @@ export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
   const cardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (layer !== "execution") {
+    if (!isTraceLayer(layer)) {
       setTraces([]);
       return;
     }
@@ -65,7 +70,7 @@ export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
   }, [layer]);
 
   useEffect(() => {
-    if (layer !== "execution") {
+    if (!isTraceLayer(layer)) {
       setSummaries({});
       return;
     }
@@ -91,7 +96,7 @@ export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
   }, [layer, traces]);
 
   useEffect(() => {
-    if (layer !== "execution") return;
+    if (!isTraceLayer(layer)) return;
     if (traces.length === 0) {
       if (selectedTraceId !== null) setSelectedTraceId(null);
       return;
@@ -102,7 +107,7 @@ export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
   }, [layer, traces, selectedTraceId, setSelectedTraceId]);
 
   useEffect(() => {
-    if (layer !== "execution") {
+    if (!isTraceLayer(layer)) {
       setMaxHeight(null);
       return;
     }
@@ -130,7 +135,7 @@ export function TraceSelector({ nodes, edges }: TraceSelectorProps) {
     };
   }, [layer, traces.length]);
 
-  if (layer !== "execution") return null;
+  if (!isTraceLayer(layer)) return null;
 
   return (
     <section

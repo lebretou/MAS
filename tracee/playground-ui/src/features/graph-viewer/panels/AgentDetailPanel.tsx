@@ -4,6 +4,7 @@ import { useSidebar } from "../../../context/SidebarContext";
 import { useLayer } from "../../../context/LayerContext";
 import { IntentDetails } from "./IntentDetails";
 import { ExecutionDetails } from "./ExecutionDetails";
+import { CognitionDetails } from "./CognitionDetails";
 
 interface Props {
   onRequestClose: () => void;
@@ -35,7 +36,7 @@ export function AgentDetailPanel({ onRequestClose }: Props) {
             <div className="side-panel__header-text">
               <h2 className="side-panel__title">{selectedNode.label}</h2>
               <p className="side-panel__subtitle">
-                {layer === "intent" ? "agent details" : "execution details"}
+                {layer === "intent" ? "agent details" : layer === "cognition" ? "cognition details" : "execution details"}
               </p>
             </div>
           </div>
@@ -44,11 +45,9 @@ export function AgentDetailPanel({ onRequestClose }: Props) {
           </button>
         </div>
         <div className="side-panel__content">
-          {layer === "intent" ? (
-            <IntentDetails node={selectedNode} />
-          ) : (
-            <ExecutionDetails node={selectedNode} />
-          )}
+          {layer === "intent" && <IntentDetails node={selectedNode} />}
+          {layer === "execution" && <ExecutionDetails node={selectedNode} />}
+          {layer === "cognition" && <CognitionDetails node={selectedNode} />}
         </div>
       </div>
     </>

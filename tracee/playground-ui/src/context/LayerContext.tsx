@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback } from "react";
 import type { ReactNode } from "react";
 
-type Layer = "intent" | "execution";
+export type Layer = "intent" | "execution" | "cognition";
 
 interface LayerContextType {
   layer: Layer;

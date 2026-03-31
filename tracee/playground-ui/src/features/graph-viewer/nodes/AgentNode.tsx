@@ -14,6 +14,7 @@ export function AgentNode({ id, data, sourcePosition, targetPosition }: NodeProp
   const { layer } = useLayer();
   const { label, metadata, execution, playback } = data;
 
+  // in cognition layer, never dim nodes — cognition data is always shown
   const dimmed = layer === "execution" && (playback ? (playback.frameState === "upcoming" || playback.frameState === "idle") : (!execution || !execution.invoked));
   const activeFrame = layer === "execution" && playback?.frameState === "active";
 

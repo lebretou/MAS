@@ -3,25 +3,24 @@ import {
   ReactFlow,
   Background,
   ConnectionLineType,
-  useNodesState,
-  useEdgesState,
   type NodeTypes,
   Panel,
 } from "@xyflow/react";
 import { AgentNode } from "./nodes/AgentNode";
 import { TerminalNode } from "./nodes/TerminalNode";
 import { AgentDetailPanel } from "./panels/AgentDetailPanel";
-import { StateSchemaPanel } from "./panels/StateSchemaPanel";
+import { ExecutionInspector } from "./panels/ExecutionInspector";
+import { CognitionInspector } from "./panels/CognitionInspector";
 import { LayerToggle } from "./controls/LayerToggle";
 import { GraphInfoPanel } from "./controls/GraphInfoPanel";
 import { GraphSelector } from "./controls/GraphSelector";
-import { FrameScrubber } from "./controls/FrameScrubber";
 import { TraceSelector } from "./controls/TraceSelector";
 import { GraphSetupGuide } from "./GraphSetupGuide";
 import { useSidebar } from "../../context/SidebarContext";
 import { useLayer } from "../../context/LayerContext";
 import { NO_GRAPHS_REGISTERED_ERROR, useGraph } from "../../hooks/useGraph";
 import { useTracePlayback } from "../../hooks/useTracePlayback";
+import { useCognitionOverlay } from "../../hooks/useCognitionOverlay";
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
@@ -30,7 +29,7 @@ const nodeTypes: NodeTypes = {
 
 export function GraphViewer() {
   const { selectedNode, selectedNodeId, syncSelectedNode, closeSidebar } = useSidebar();
-  const { selectedTraceId } = useLayer();
+  const { layer, selectedTraceId } = useLayer();
   const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
   const [activeFrameIndex, setActiveFrameIndex] = useState<number | null>(null);
 
@@ -40,14 +39,24 @@ export function GraphViewer() {
   const { nodes: displayNodes, frames, activeFrame, error: playbackError } =
     useTracePlayback(selectedTraceId, baseNodes, activeFrameIndex);
 
-  // when scrubber is on a specific frame, clear node selection so only the active-frame highlight shows
-  const flowNodes = useMemo(() => {
-    if (activeFrameIndex == null) return displayNodes;
-    return displayNodes.map((n) => ({ ...n, selected: false }));
-  }, [displayNodes, activeFrameIndex]);
+  const isCognitionLayer = layer === "cognition";
+  const {
+    nodes: cognitionNodes,
+    edges: cognitionEdges,
+    cognition,
+    loading: cognitionLoading,
+    analyzing: cognitionAnalyzing,
+    analyze: runAnalysis,
+  } = useCognitionOverlay(selectedTraceId, displayNodes, baseEdges, isCognitionLayer);
 
-  const [, , onNodesChange] = useNodesState(flowNodes);
-  const [, , onEdgesChange] = useEdgesState(baseEdges);
+  // when scrubber is on a specific frame, clear node selection so only the active-frame highlight shows
+  const mergedNodes = isCognitionLayer ? cognitionNodes : displayNodes;
+  const mergedEdges = isCognitionLayer ? cognitionEdges : baseEdges;
+
+  const flowNodes = useMemo(() => {
+    if (activeFrameIndex == null) return mergedNodes;
+    return mergedNodes.map((n) => ({ ...n, selected: false }));
+  }, [mergedNodes, activeFrameIndex]);
 
   const reactFlowRef = useRef<{
     fitView: (options?: { duration?: number; padding?: number }) => void;
@@ -80,13 +89,13 @@ export function GraphViewer() {
 
   useEffect(() => {
     if (!selectedNodeId) return;
-    const liveNode = displayNodes.find((node) => node.id === selectedNodeId);
+    const liveNode = mergedNodes.find((node) => node.id === selectedNodeId);
     if (liveNode) {
       syncSelectedNode(liveNode.data);
       return;
     }
     closeSidebar();
-  }, [displayNodes, selectedNodeId, syncSelectedNode, closeSidebar]);
+  }, [mergedNodes, selectedNodeId, syncSelectedNode, closeSidebar]);
 
   if (loading) {
     return (
@@ -113,9 +122,7 @@ export function GraphViewer() {
       <ReactFlow
         key={graphId ?? "no-graph"}
         nodes={flowNodes}
-        edges={baseEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        edges={mergedEdges}
         nodeTypes={nodeTypes}
         connectionLineType={ConnectionLineType.SmoothStep}
         defaultEdgeOptions={{ type: "default" }}
@@ -139,15 +146,22 @@ export function GraphViewer() {
             failed to load trace playback
           </Panel>
         )}
-        {!selectedNode && stateSchema && <StateSchemaPanel schema={stateSchema} activeFrame={activeFrame} />}
-        {!selectedNode && selectedTraceId && frames.length > 0 && (
-          <Panel position="bottom-center">
-            <FrameScrubber
-              frames={frames}
-              activeFrameIndex={activeFrameIndex}
-              onChange={setActiveFrameIndex}
-            />
-          </Panel>
+        {!selectedNode && !isCognitionLayer && stateSchema && selectedTraceId && frames.length > 0 && (
+          <ExecutionInspector
+            frames={frames}
+            activeFrameIndex={activeFrameIndex}
+            onFrameChange={setActiveFrameIndex}
+            schema={stateSchema}
+            activeFrame={activeFrame}
+          />
+        )}
+        {!selectedNode && isCognitionLayer && selectedTraceId && (
+          <CognitionInspector
+            cognition={cognition}
+            loading={cognitionLoading}
+            analyzing={cognitionAnalyzing}
+            onAnalyze={runAnalysis}
+          />
         )}
       </ReactFlow>
       {selectedNode && <AgentDetailPanel onRequestClose={handlePanelDismiss} />}

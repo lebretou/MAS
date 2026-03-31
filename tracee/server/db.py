@@ -1,6 +1,7 @@
 """database initialization helpers."""
 
 from server.agent_db import init_db as init_agent_db
+from server.cognition_db import init_db as init_cognition_db
 from server.graph_db import init_db as init_graph_db
 from server.playground_db import init_db as init_playground_db
 from server.prompt_db import init_db as init_prompt_db
@@ -14,3 +15,4 @@ def init_all() -> None:
     init_playground_db()
     init_agent_db()
     init_graph_db()
+    init_cognition_db()

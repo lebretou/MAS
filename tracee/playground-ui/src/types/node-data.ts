@@ -1,3 +1,4 @@
+import type { NodeCognition } from "./cognition";
 import type { PromptComponent } from "./prompt";
 import type { JsonSchema } from "./schema";
 import type { TraceEvent } from "./trace";
@@ -68,6 +69,7 @@ export interface GraphNodeData extends Record<string, unknown> {
     hasRetry?: boolean;
   };
   execution?: ExecutionData;
+  cognition?: NodeCognition;
   playback?: {
     frameState: NodeFrameState;
   };
