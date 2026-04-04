@@ -1370,7 +1370,7 @@ html, body, #root {
   border-radius: 14px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   padding: 0;
-  margin: 0;
+  margin: 0 0 12px 0;
   pointer-events: auto;
 }
 
@@ -1906,6 +1906,50 @@ html, body, #root {
   flex-direction: column;
   gap: 16px;
   align-items: stretch;
+}
+
+/* ── layer toggle row (toggle + contextual buttons) ──── */
+.layer-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cognition-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  height: 44px;
+}
+
+.cognition-run-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #d1d5db;
+  color: #1a1a2e;
+}
+
+.cognition-run-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cognition-run-btn__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.8;
 }
 
 /* ── layer toggle ────────────────────────────────────── */
@@ -2645,55 +2689,49 @@ html, body, #root {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
   min-height: 80px;
   max-height: 160px;
+  width: min(720px, calc(100vw - 64px));
   overflow: hidden;
 }
 
 .cognition-inspector__narrative {
   flex: 1;
-  padding: 14px 18px;
+  min-width: 0;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.cognition-inspector__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cognition-inspector__title-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.cognition-inspector__title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.cognition-inspector__body {
+  flex: 1;
+  min-height: 0;
   font-size: 13px;
   line-height: 1.65;
   color: #374151;
   overflow-y: auto;
-}
-
-.cognition-inspector__divider {
-  width: 1px;
-  background: #f0f0f0;
-  flex-shrink: 0;
-}
-
-.cognition-inspector__nodes {
-  width: 180px;
-  flex-shrink: 0;
-  padding: 10px 12px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.cognition-inspector__node-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background 0.15s ease;
-}
-
-.cognition-inspector__node-row:hover {
-  background: #f9fafb;
-}
-
-.cognition-inspector__node-name {
-  font-weight: 500;
-  color: #374151;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .cognition-inspector__empty {
@@ -2708,7 +2746,7 @@ html, body, #root {
 
 .cognition-inspector__analyze-btn {
   padding: 6px 14px;
-  background: #7c3aed;
+  background: #219ebc;
   color: #ffffff;
   border: none;
   border-radius: 6px;
@@ -2720,35 +2758,11 @@ html, body, #root {
 }
 
 .cognition-inspector__analyze-btn:hover {
-  background: #6d28d9;
+  background: #1b8aa5;
 }
 
 .cognition-inspector__analyze-btn:disabled {
-  background: #c4b5fd;
-  cursor: not-allowed;
-}
-
-.cognition-inspector__rerun-btn {
-  margin-top: 8px;
-  padding: 4px 10px;
-  background: transparent;
-  color: #7c3aed;
-  border: 1px solid #ddd6fe;
-  border-radius: 5px;
-  font-size: 11.5px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  width: 100%;
-}
-
-.cognition-inspector__rerun-btn:hover {
-  background: #f5f3ff;
-}
-
-.cognition-inspector__rerun-btn:disabled {
-  color: #c4b5fd;
-  border-color: #ede9fe;
+  background: #93d1e0;
   cursor: not-allowed;
 }
 

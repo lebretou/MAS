@@ -86,7 +86,7 @@ const CreateRun: React.FC = () => {
     });
     setWorkspaceMode('analysis');
     setAnchor((currentAnchor) => {
-      if (groups.length !== 1 || currentAnchor?.source !== 'run') {
+      if (currentAnchor?.source !== 'run') {
         return currentAnchor;
       }
 
@@ -95,6 +95,7 @@ const CreateRun: React.FC = () => {
         label: 'Promoted anchor',
         source: 'example',
         runIndex: null,
+        selectionId: null,
       };
     });
   }, []);
@@ -124,6 +125,7 @@ const CreateRun: React.FC = () => {
       label: 'Example anchor',
       source: 'example',
       runIndex: null,
+      selectionId: null,
     });
   }, []);
 
@@ -131,20 +133,21 @@ const CreateRun: React.FC = () => {
     setAnchor(null);
   }, []);
 
-  const handlePromoteRunToAnchor = useCallback((index: number) => {
-    const primaryGroup = analysisGroups.find((group) => group.tone === 'primary') ?? analysisGroups[0];
-    const run = primaryGroup?.results[index];
-    if (!run) {
+  const handlePromoteRunToAnchor = useCallback((selectionId: string) => {
+    const analyzed = analysis.analyzed.find((run) => run.selectionId === selectionId);
+    if (!analyzed?.run) {
       return;
     }
 
+    const label = analyzed.groupVersionId ?? analyzed.groupLabel;
     setAnchor({
-      output: run.output,
-      label: `Anchor from run ${index + 1}`,
+      output: analyzed.run.output,
+      label: `Anchor from ${label} · Run ${analyzed.index + 1}`,
       source: 'run',
-      runIndex: index,
+      runIndex: analyzed.index,
+      selectionId,
     });
-  }, [analysisGroups]);
+  }, [analysis.analyzed]);
 
   const hasResults = analysisGroups.some((group) => (
     group.results.some((result) => result !== null) || group.runErrors.some((error) => Boolean(error))
@@ -201,6 +204,7 @@ const CreateRun: React.FC = () => {
                 selectedRun={selectedRun}
                 reference={analysis.reference}
                 onPromoteRun={handlePromoteRunToAnchor}
+                onRemoveAnchor={handleClearAnchor}
               />
             )}
           />

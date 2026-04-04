@@ -21,6 +21,7 @@ import { useLayer } from "../../context/LayerContext";
 import { NO_GRAPHS_REGISTERED_ERROR, useGraph } from "../../hooks/useGraph";
 import { useTracePlayback } from "../../hooks/useTracePlayback";
 import { useCognitionOverlay } from "../../hooks/useCognitionOverlay";
+import cognitionIcon from "../../assets/cognition.svg";
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
@@ -134,7 +135,21 @@ export function GraphViewer() {
       >
         <Background gap={24} size={1} />
         <Panel position="top-left" className="left-controls-panel">
-          <LayerToggle />
+          <div className="layer-toggle-row">
+            <LayerToggle />
+            {isCognitionLayer && selectedTraceId && (
+              <button
+                type="button"
+                className="cognition-run-btn"
+                onClick={runAnalysis}
+                disabled={cognitionAnalyzing}
+                aria-label="Run cognition analysis"
+              >
+                <img src={cognitionIcon} alt="" className="cognition-run-btn__icon" />
+                {cognitionAnalyzing ? "analyzing..." : "analyze"}
+              </button>
+            )}
+          </div>
           <GraphInfoPanel graph={graphInfo} />
           <TraceSelector nodes={baseNodes} edges={baseEdges} />
         </Panel>

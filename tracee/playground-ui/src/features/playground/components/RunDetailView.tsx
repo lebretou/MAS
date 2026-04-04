@@ -3,12 +3,22 @@ import type { AnalyzedRun, ComparisonReference } from '../../../hooks/useRunAnal
 import { computeDiff } from '../../../utils/jsonDiff';
 import OutputDiffView from './OutputDiffView';
 import JsonTreeView from './JsonTreeView';
+import iconAnchor from '../../../assets/icon-anchor.svg';
+import iconCopy from '../../../assets/icon-copy.svg';
+
+function getMaskIconStyle(icon: string): React.CSSProperties {
+  return {
+    WebkitMaskImage: `url("${icon}")`,
+    maskImage: `url("${icon}")`,
+  };
+}
 
 interface Props {
   analyzed: AnalyzedRun[];
   selectedRun: string | null;
   reference: ComparisonReference | null;
-  onPromoteRun: (index: number) => void;
+  onPromoteRun: (selectionId: string) => void;
+  onRemoveAnchor?: () => void;
 }
 
 const RunDetailView: React.FC<Props> = ({
@@ -16,6 +26,7 @@ const RunDetailView: React.FC<Props> = ({
   selectedRun,
   reference,
   onPromoteRun,
+  onRemoveAnchor,
 }) => {
   const [detailMode, setDetailMode] = useState<'tree' | 'raw'>('tree');
   const [diffDismissed, setDiffDismissed] = useState(false);
@@ -28,7 +39,7 @@ const RunDetailView: React.FC<Props> = ({
 
   useEffect(() => {
     setDiffDismissed(false);
-  }, [selectedRun, reference?.kind, reference?.output, reference?.runIndex]);
+  }, [selectedRun, reference?.kind, reference?.output, reference?.anchorSelectionId]);
 
   const selected = selectedRun !== null
     ? analyzed.find((run) => run.selectionId === selectedRun) ?? null
@@ -39,7 +50,7 @@ const RunDetailView: React.FC<Props> = ({
 
   const selectedDiff = useMemo(() => {
     if (!selected || !reference) return null;
-    if (reference.runIndex === selected.index && selected.groupTone === 'primary') return null;
+    if (reference.anchorSelectionId === selected.selectionId) return null;
 
     const selectedOutput = selected.run?.output;
     if (!selectedOutput || !reference.output) return null;
@@ -83,7 +94,7 @@ const RunDetailView: React.FC<Props> = ({
               {selected.state === 'schema_invalid' && (
                 <span className="badge badge--warning results__badge-ml-sm">schema issues</span>
               )}
-              {reference?.runIndex === selected.index && selected.groupTone === 'primary' && (
+              {reference?.anchorSelectionId === selected.selectionId && (
                 <span className="badge badge--primary results__badge-ml-sm">anchor</span>
               )}
             </span>
@@ -176,12 +187,50 @@ const RunDetailView: React.FC<Props> = ({
               <button
                 type="button"
                 className="btn btn--secondary create-run__action-btn"
-                onClick={() => onPromoteRun(selected.index)}
-                disabled={selected.groupTone !== 'primary'}
+                onClick={() => {
+                  if (selected.run?.output && globalThis.navigator?.clipboard?.writeText) {
+                    void globalThis.navigator.clipboard.writeText(selected.run.output);
+                  }
+                }}
               >
-                promote as anchor
+                <span
+                  className="create-run__action-icon"
+                  style={getMaskIconStyle(iconCopy)}
+                  aria-hidden
+                />
+                copy output
               </button>
             )}
+            {selected.run && (() => {
+              const isAnchor = reference?.anchorSelectionId === selected.selectionId;
+              return isAnchor ? (
+                <button
+                  type="button"
+                  className="btn btn--secondary create-run__action-btn create-run__action-btn--danger"
+                  onClick={() => onRemoveAnchor?.()}
+                >
+                  <span
+                    className="create-run__action-icon"
+                    style={getMaskIconStyle(iconAnchor)}
+                    aria-hidden
+                  />
+                  remove anchor
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--secondary create-run__action-btn"
+                  onClick={() => onPromoteRun(selected.selectionId)}
+                >
+                  <span
+                    className="create-run__action-icon"
+                    style={getMaskIconStyle(iconAnchor)}
+                    aria-hidden
+                  />
+                  promote as anchor
+                </button>
+              );
+            })()}
           </div>
         </div>
 

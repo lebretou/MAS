@@ -9,6 +9,7 @@ export interface AnchorPoint {
   label: string;
   source: 'example' | 'run';
   runIndex: number | null;
+  selectionId: string | null;
 }
 
 export interface ComparisonReference {
@@ -16,6 +17,7 @@ export interface ComparisonReference {
   label: string;
   output: string;
   runIndex: number | null;
+  anchorSelectionId: string | null;
 }
 
 export type RunState = 'ready' | 'failed' | 'non_json' | 'schema_invalid';
@@ -258,11 +260,14 @@ export function buildVisualizationEntries(
       isFailed: run.state === 'failed',
     }));
 
-  const shouldReuseRunPoint = anchor?.source === 'run'
-    && anchor.runIndex !== null
-    && analyzed.find((run) => run.index === anchor.runIndex)?.run?.output === anchor.output;
+  const anchoredRun = anchor?.selectionId
+    ? analyzed.find((run) => run.selectionId === anchor.selectionId)
+    : anchor?.source === 'run' && anchor.runIndex !== null
+      ? analyzed.find((run) => run.index === anchor.runIndex && run.groupTone === 'primary')
+      : null;
+  const shouldReuseRunPoint = anchoredRun?.run?.output === anchor?.output;
 
-  if (anchor?.output.trim() && !shouldReuseRunPoint && new Set(analyzed.map((run) => run.groupId)).size === 1) {
+  if (anchor?.output.trim() && !shouldReuseRunPoint) {
     entries.push({
       id: 'anchor',
       kind: 'anchor',
@@ -300,6 +305,10 @@ export function buildAnchorSimilarityMap(
 ): Map<string, number> {
   const anchorIndex = similarity?.entries.findIndex((entry) => {
     if (entry.kind === 'anchor') {
+      return true;
+    }
+
+    if (anchor?.selectionId && entry.selectionId === anchor.selectionId) {
       return true;
     }
 
@@ -423,13 +432,13 @@ export function useRunAnalysis(
   );
 
   const visualizationSimilarity = useMemo(
-    () => buildVisualizationSimilarity(baseAnalyzed, groups.length === 1 ? anchor : null),
-    [baseAnalyzed, anchor, groups.length],
+    () => buildVisualizationSimilarity(baseAnalyzed, anchor),
+    [baseAnalyzed, anchor],
   );
 
   const anchorSimilarityMap = useMemo(
-    () => buildAnchorSimilarityMap(visualizationSimilarity, groups.length === 1 ? anchor : null),
-    [visualizationSimilarity, anchor, groups.length],
+    () => buildAnchorSimilarityMap(visualizationSimilarity, anchor),
+    [visualizationSimilarity, anchor],
   );
 
   const analyzed = useMemo(
@@ -441,12 +450,12 @@ export function useRunAnalysis(
   );
 
   const projectionItems = useMemo(
-    () => buildVisualizationEntries(baseAnalyzed, groups.length === 1 ? anchor : null),
-    [baseAnalyzed, anchor, groups.length],
+    () => buildVisualizationEntries(baseAnalyzed, anchor),
+    [baseAnalyzed, anchor],
   );
 
   const reference = useMemo(() => {
-    if (!anchor?.output.trim() || groups.length !== 1) {
+    if (!anchor?.output.trim()) {
       return null;
     }
 
@@ -455,8 +464,9 @@ export function useRunAnalysis(
       label: anchor.label,
       output: anchor.output,
       runIndex: anchor.runIndex,
+      anchorSelectionId: anchor.selectionId ?? null,
     };
-  }, [anchor, groups.length]);
+  }, [anchor]);
 
   const fieldOptions = useMemo(
     () => collectFieldOptions(baseAnalyzed),

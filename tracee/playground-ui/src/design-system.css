@@ -32,7 +32,7 @@ html, body {
   font-size: 10px; padding: 2px 8px; border-radius: 12px;
   font-weight: 500; display: inline-block;
 }
-.badge--primary  { background: #eef2ff; color: #219ebc; }
+.badge--primary  { background: #f3e8ff; color: #5b21b6; }
 .badge--success  { background: #ecfdf5; color: #065f46; }
 .badge--danger   { background: #fef2f2; color: #991b1b; }
 .badge--warning  { background: #fffbeb; color: #92400e; }

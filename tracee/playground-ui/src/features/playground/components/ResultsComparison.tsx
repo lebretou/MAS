@@ -140,20 +140,6 @@ const ResultsComparison: React.FC<Props> = ({
           </div>
         )}
 
-        {reference?.kind === 'anchor' && !selectedField && (
-          <div className="card results__anchor-card">
-            <div className="card__body results__anchor-body">
-              <div>
-                <div className="results__anchor-title">Anchor active</div>
-                <div className="field__hint">
-                  {reference.label} is available in the scatterplot and diff view.
-                </div>
-              </div>
-              <span className="badge badge--primary">anchor</span>
-            </div>
-          </div>
-        )}
-
         {isScatterMode && projection.points.length >= 2 ? (
           <SimilarityScatterplot
             title={selectedField ? `${selectedField.label} semantic map` : 'Output map'}
@@ -162,6 +148,7 @@ const ResultsComparison: React.FC<Props> = ({
             points={projection.points}
             selectedIndex={selectedRun}
             onSelectRun={onSelectRun}
+            anchorLabel={reference?.kind === 'anchor' && !selectedField ? reference.label : null}
           />
         ) : isScatterMode && projection.loading ? (
           <div className="card">
@@ -238,7 +225,7 @@ const ResultsComparison: React.FC<Props> = ({
                     <div className="results__badge-group">
                       {isReady && <span className="badge badge--success">success</span>}
                       {isFailed && <span className="badge badge--danger">fail</span>}
-                      {reference?.kind === 'anchor' && reference.runIndex === run.index && run.groupTone === 'primary' && (
+                      {reference?.kind === 'anchor' && reference.anchorSelectionId === run.selectionId && (
                         <span className="badge badge--primary">anchor</span>
                       )}
                       {run.state === 'non_json' && <span className="badge badge--warning">non-json</span>}

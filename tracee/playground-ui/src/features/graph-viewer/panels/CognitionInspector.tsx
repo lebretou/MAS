@@ -2,6 +2,7 @@ import { Panel } from "@xyflow/react";
 import type { TraceCognition } from "../../../types/cognition";
 import { CognitionText } from "../../../components/CognitionText";
 import { useSidebar } from "../../../context/SidebarContext";
+import iconSummary from "../../../assets/icon-summarypanel.svg";
 
 interface Props {
   cognition: TraceCognition | null;
@@ -54,31 +55,16 @@ export function CognitionInspector({ cognition, loading, analyzing, onAnalyze }:
     );
   }
 
-  const nodeEntries = Object.values(cognition.node_cognitions);
-
   return (
     <Panel position="bottom-center" className="cognition-inspector">
       <div className="cognition-inspector__narrative">
-        <CognitionText text={cognition.narrative} onAgentClick={handleAgentClick} />
-      </div>
-      <div className="cognition-inspector__divider" />
-      <div className="cognition-inspector__nodes">
-        {nodeEntries.map((cog) => (
-          <div
-            key={cog.agent_id}
-            className="cognition-inspector__node-row"
-            onClick={() => handleAgentClick(cog.agent_id)}
-          >
-            <span className="cognition-inspector__node-name">{cog.agent_id}</span>
-          </div>
-        ))}
-        <button
-          className="cognition-inspector__rerun-btn"
-          onClick={onAnalyze}
-          disabled={analyzing}
-        >
-          {analyzing ? "analyzing..." : "re-run"}
-        </button>
+        <div className="cognition-inspector__header">
+          <img src={iconSummary} alt="" className="cognition-inspector__title-icon" />
+          <span className="cognition-inspector__title">Trace Summary</span>
+        </div>
+        <div className="cognition-inspector__body">
+          <CognitionText text={cognition.narrative} onAgentClick={handleAgentClick} />
+        </div>
       </div>
     </Panel>
   );

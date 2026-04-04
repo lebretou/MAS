@@ -149,7 +149,7 @@ const PANEL_SUMMARIES: Record<WorkspacePanel, { eyebrow: string; description: st
   },
   model: {
     eyebrow: 'Execution settings',
-    description: 'Tune provider, model, and run count in one compact layout without leaving the editor.',
+    description: 'Tune provider, model, and temperature in one compact layout without leaving the editor.',
   },
   variables: {
     eyebrow: 'Prompt inputs',
@@ -434,6 +434,8 @@ const PromptForm: React.FC<Props> = ({
   const [saveLoading, setSaveLoading] = React.useState(false);
   const [promptNameInput, setPromptNameInput] = React.useState('');
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [isRunCountOpen, setIsRunCountOpen] = React.useState(false);
+  const runCountRef = React.useRef<HTMLDivElement>(null);
 
   const [schemaEnabled, setSchemaEnabled] = React.useState(true);
   const [schemaProperties, setSchemaProperties] = React.useState<SchemaProperty[]>(() => createDefaultSchemaProperties());
@@ -597,6 +599,20 @@ const PromptForm: React.FC<Props> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activePanel, saveDialogOpen]);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (runCountRef.current && !runCountRef.current.contains(event.target as Node)) {
+        setIsRunCountOpen(false);
+      }
+    };
+    if (isRunCountOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isRunCountOpen]);
 
   React.useEffect(() => {
     const textareaElements = [
@@ -784,6 +800,56 @@ const PromptForm: React.FC<Props> = ({
     schemaEnabled,
     schemaProperties.length,
   ]);
+  const executeButtonDisabled = loading || !!activeSchemaError || (promptWorkflow === 'existing' && !loadedPromptContext);
+  const executeRunControl = (
+    <div className="create-run__execute-control" role="group" aria-label="Execute run controls" ref={runCountRef}>
+      <button
+        type="submit"
+        className="btn btn--primary create-run__action-btn create-run__execute-btn"
+        disabled={executeButtonDisabled}
+      >
+        <span
+          className="create-run__action-icon"
+          style={getMaskIconStyle(iconExecuteRun)}
+          aria-hidden
+        />
+        <span>{mode === 'analysis' ? (loading ? 'Executing...' : 'Run again') : (loading ? 'Executing...' : 'Start')}</span>
+        {loading && <span className="spinner create-run__spinner" aria-hidden />}
+      </button>
+      <button
+        type="button"
+        className="btn btn--primary create-run__execute-dropdown-btn"
+        onClick={() => setIsRunCountOpen(!isRunCountOpen)}
+        disabled={executeButtonDisabled}
+        aria-label="Configure number of runs"
+        aria-expanded={isRunCountOpen}
+      >
+        <span className="create-run__execute-dropdown-icon" aria-hidden />
+      </button>
+
+      {isRunCountOpen && (
+        <div className="create-run__run-count-popover">
+          <div className="create-run__run-count-row">
+            <div className="create-run__run-count-text">
+              <label htmlFor="playground-num-runs-popover" className="create-run__run-count-title">Repetitions</label>
+              <p className="create-run__run-count-desc">
+                Run the same prompt multiple times to reduce variability in results.
+              </p>
+            </div>
+            <input
+              id="playground-num-runs-popover"
+              type="number"
+              className="input create-run__run-count-input"
+              min="1"
+              max="10"
+              value={numRuns}
+              onChange={(e) => setNumRuns(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
   const currentEditorVersionLabel = React.useMemo(() => {
     if (loadedPromptContext) {
       return loadedPromptContext.prompt.name;
@@ -1122,6 +1188,7 @@ const PromptForm: React.FC<Props> = ({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setToolError(null);
+    setIsRunCountOpen(false);
 
     if (activeSchemaError) {
       return;
@@ -1707,23 +1774,7 @@ const PromptForm: React.FC<Props> = ({
                             />
                             <span>Anchor output{anchorOutput.trim() ? ' (set)' : ''}</span>
                           </button>
-                          <button
-                            type="submit"
-                            className="btn btn--primary create-run__action-btn"
-                            disabled={loading || !!activeSchemaError || (promptWorkflow === 'existing' && !loadedPromptContext)}
-                          >
-                            <span
-                              className="create-run__action-icon"
-                              style={getMaskIconStyle(iconExecuteRun)}
-                              aria-hidden
-                            />
-                            <span>
-                              {loading
-                                ? (editorCompareTarget ? 'Running comparison...' : 'Executing...')
-                                : (editorCompareTarget ? 'Run comparison' : 'Execute Run')}
-                            </span>
-                            {loading && <span className="spinner create-run__spinner" aria-hidden />}
-                          </button>
+                          {executeRunControl}
                         </div>
                         {!hasResults && (
                           <span id={workspaceModeHintId} className="field__hint create-run__workspace-mode-hint">
@@ -1837,19 +1888,7 @@ const PromptForm: React.FC<Props> = ({
                             />
                             <span>Anchor output{anchorOutput.trim() ? ' (set)' : ''}</span>
                           </button>
-                          <button
-                            type="submit"
-                            className="btn btn--primary create-run__action-btn"
-                            disabled={loading || !!activeSchemaError || (promptWorkflow === 'existing' && !loadedPromptContext)}
-                          >
-                            <span
-                              className="create-run__action-icon"
-                              style={getMaskIconStyle(iconExecuteRun)}
-                              aria-hidden
-                            />
-                            <span>{loading ? 'Executing...' : 'Run again'}</span>
-                            {loading && <span className="spinner create-run__spinner" aria-hidden />}
-                          </button>
+                          {executeRunControl}
                         </div>
                       </div>
                     </div>
@@ -1995,7 +2034,7 @@ const PromptForm: React.FC<Props> = ({
                         <div className="create-run__panel-surface-head">
                           <div className="create-run__panel-surface-copy">
                             <span className="field__label">Execution settings</span>
-                            <span className="field__hint">OpenAI model and run controls follow the same compact form layout as the rest of the panel system.</span>
+                            <span className="field__hint">OpenAI provider and model controls stay here, while run count now lives next to execute.</span>
                           </div>
                         </div>
                         <div className="form-grid">
@@ -2046,23 +2085,6 @@ const PromptForm: React.FC<Props> = ({
                               step="0.1"
                               value={temperature}
                               onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                            />
-                          </div>
-
-                          <div className="field">
-                            <label className="field__label" htmlFor="playground-num-runs">
-                              Number of Runs (max 10)
-                            </label>
-                            <input
-                              id="playground-num-runs"
-                              className="input"
-                              type="number"
-                              min="1"
-                              max="10"
-                              value={numRuns}
-                              onChange={(e) =>
-                                setNumRuns(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))
-                              }
                             />
                           </div>
                         </div>

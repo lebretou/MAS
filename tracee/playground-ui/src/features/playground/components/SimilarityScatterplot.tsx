@@ -11,6 +11,7 @@ interface Props {
   title?: string;
   hint?: string;
   summary?: string;
+  anchorLabel?: string | null;
 }
 
 interface HoveredPoint {
@@ -29,6 +30,7 @@ const SimilarityScatterplot: React.FC<Props> = ({
   title = 'Output map',
   hint = 'embedding-based projection',
   summary,
+  anchorLabel,
 }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = React.useState(720);
@@ -128,7 +130,15 @@ const SimilarityScatterplot: React.FC<Props> = ({
         <span className="field__hint scatter__hint">{hint}</span>
       </div>
       <div className="card__body scatter__chart-body">
-        {summary && <div className="field__hint scatter__summary">{summary}</div>}
+        <div className="scatter__summary-row">
+          {summary && <span className="field__hint scatter__summary">{summary}</span>}
+          {anchorLabel && (
+            <span className="scatter__anchor-chip">
+              <span className="scatter__anchor-chip-dot" />
+              {anchorLabel}
+            </span>
+          )}
+        </div>
         <div
           ref={containerRef}
           className="scatter__surface"
