@@ -193,6 +193,43 @@ class PlaygroundAnalysisResponse(BaseModel):
     points: list[PlaygroundAnalysisPoint]
 
 
+def _flatten_fields(obj: dict, prefix: str, lines: list[str]) -> None:
+    """recursively flatten a dict into typed field descriptions."""
+    for key, value in obj.items():
+        qualified = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
+        if isinstance(value, dict):
+            _flatten_fields(value, qualified, lines)
+        elif isinstance(value, list):
+            lines.append(f'Field "{qualified}" (array): {json.dumps(value, default=str)}')
+        elif isinstance(value, bool):
+            lines.append(f'Field "{qualified}" (boolean): {str(value).lower()}')
+        elif isinstance(value, (int, float)):
+            lines.append(f'Field "{qualified}" (number): {value}')
+        elif value is None:
+            lines.append(f'Field "{qualified}" (null): null')
+        else:
+            lines.append(f'Field "{qualified}" (string): {value}')
+
+
+def _format_for_embedding(raw_output: str) -> str:
+    """reformat JSON output into field-aware natural language for better embeddings."""
+    trimmed = raw_output.strip()
+    if trimmed.startswith("```"):
+        trimmed = re.sub(r"^```\w*\n?", "", trimmed)
+        trimmed = re.sub(r"\n?```$", "", trimmed).strip()
+    try:
+        parsed = json.loads(trimmed)
+    except (json.JSONDecodeError, ValueError):
+        return raw_output
+
+    if not isinstance(parsed, dict):
+        return raw_output
+
+    lines: list[str] = []
+    _flatten_fields(parsed, "", lines)
+    return "\n".join(lines) if lines else raw_output
+
+
 def _project_embeddings_2d(embeddings: list[list[float]]) -> tuple[list[tuple[float, float]], list[float]]:
     """project embeddings with pca and compute average cosine similarity."""
     if not embeddings:
@@ -395,7 +432,7 @@ async def analyze_playground_outputs(request: PlaygroundAnalysisRequest) -> Play
         raise HTTPException(status_code=413, detail="Analysis payload is too large.")
 
     embeddings = await embed_openai_texts(
-        texts=[item.output for item in items],
+        texts=[_format_for_embedding(item.output) for item in items],
         model=request.embedding_model,
     )
     projected_points, average_similarity = _project_embeddings_2d(embeddings)

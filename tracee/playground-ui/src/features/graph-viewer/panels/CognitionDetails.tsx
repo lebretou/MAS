@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AgentOperation, GraphNodeData } from "../../../types/node-data";
 import { CognitionText } from "../../../components/CognitionText";
+import { StateDiffView } from "../../../components/StateDiffView";
+import { useSidebar } from "../../../context/SidebarContext";
 import iconLlm from "../../../assets/icon-llm.svg";
 import iconTool from "../../../assets/icon-tool.svg";
 import iconRag from "../../../assets/icon-rag.svg";
@@ -23,16 +25,24 @@ const operationIconMap: Record<AgentOperation["type"], string> = {
   error: iconError,
 };
 
+function unescapeForDisplay(s: string): string {
+  return s
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\r/g, "\r")
+    .replace(/\\"/g, '"');
+}
+
 function formatValue(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-      try { return JSON.stringify(JSON.parse(trimmed), null, 2); } catch { /* fall through */ }
+      try { return unescapeForDisplay(JSON.stringify(JSON.parse(trimmed), null, 2)); } catch { /* fall through */ }
     }
-    return value.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+    return unescapeForDisplay(value);
   }
-  return JSON.stringify(value, null, 2);
+  return unescapeForDisplay(JSON.stringify(value, null, 2));
 }
 
 function findOperationByChip(
@@ -61,6 +71,19 @@ export function CognitionDetails({ node }: Props) {
   const exec = node.execution;
   const operations = exec?.operations ?? [];
   const [expandedOp, setExpandedOp] = useState<AgentOperation | null>(null);
+  const [unmatchedChip, setUnmatchedChip] = useState<string | null>(null);
+  const unmatchedTimer = useRef<ReturnType<typeof setTimeout>>();
+  const { chipExpansion, clearChipExpansion } = useSidebar();
+
+  // auto-expand when navigating from summary panel chip click
+  useEffect(() => {
+    if (!chipExpansion || operations.length === 0) return;
+    const op = findOperationByChip(chipExpansion.type, chipExpansion.value, operations);
+    if (op) {
+      setExpandedOp(op);
+      clearChipExpansion();
+    }
+  }, [chipExpansion, operations, clearChipExpansion]);
 
   if (!cog) {
     return (
@@ -78,9 +101,17 @@ export function CognitionDetails({ node }: Props) {
   const handleChipClick = (chipType: string, chipValue: string) => {
     const op = findOperationByChip(chipType, chipValue, operations);
     if (op) {
+      setUnmatchedChip(null);
       setExpandedOp((prev) => prev?.id === op.id ? null : op);
+    } else {
+      clearTimeout(unmatchedTimer.current);
+      setUnmatchedChip(chipValue);
+      unmatchedTimer.current = setTimeout(() => setUnmatchedChip(null), 2500);
     }
   };
+
+  const isStateUpdate = expandedOp?.type === "state_update";
+  const changedKeys = (expandedOp?.metadata?.changedKeys ?? []) as string[];
 
   return (
     <>
@@ -103,6 +134,11 @@ export function CognitionDetails({ node }: Props) {
               onStateClick={(value) => handleChipClick("state", value)}
             />
           </div>
+          {unmatchedChip && (
+            <div className="cognition-detail__unmatched">
+              no matching operation found for "{unmatchedChip}"
+            </div>
+          )}
         </div>
       </section>
 
@@ -120,16 +156,26 @@ export function CognitionDetails({ node }: Props) {
             </button>
           </h3>
           <div className="side-panel__card">
-            {expandedOp.input != null && (
+            {isStateUpdate && changedKeys.length > 0 ? (
+              <StateDiffView
+                input={expandedOp.input}
+                output={expandedOp.output}
+                changedKeys={changedKeys}
+              />
+            ) : (
               <>
-                <div className="side-panel__card-label">input</div>
-                <pre className="side-panel__pre">{formatValue(expandedOp.input)}</pre>
-              </>
-            )}
-            {expandedOp.output != null && (
-              <>
-                <div className="side-panel__card-label" style={{ marginTop: 8 }}>output</div>
-                <pre className="side-panel__pre">{formatValue(expandedOp.output)}</pre>
+                {expandedOp.input != null && (
+                  <>
+                    <div className="side-panel__card-label">input</div>
+                    <pre className="side-panel__pre">{formatValue(expandedOp.input)}</pre>
+                  </>
+                )}
+                {expandedOp.output != null && (
+                  <>
+                    <div className="side-panel__card-label" style={{ marginTop: 8 }}>output</div>
+                    <pre className="side-panel__pre">{formatValue(expandedOp.output)}</pre>
+                  </>
+                )}
               </>
             )}
             {expandedOp.errorMessage && (

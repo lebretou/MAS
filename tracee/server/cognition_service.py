@@ -99,7 +99,8 @@ TAG FORMATTING RULES — you MUST follow these precisely:
    These are the JSON keys like query, plan, code_result, etc.
 
 4. {error:description} — use for any runtime error or exception that
-   appeared in the operations (e.g. NameError, TypeError, timeout).
+   appeared in the operations (e.g. NameError, TypeError, timeout). 
+   Anything that you can identify as an error should be tagged with {error:description}.
 
 GOOD example:
 "{agent:interaction} received {state:query} from the user. It called

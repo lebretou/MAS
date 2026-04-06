@@ -2668,8 +2668,14 @@
 
 .prompt-components__add {
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 8px;
   margin-left: 14px;
+}
+
+.prompt-components__custom-btn {
+  white-space: nowrap;
 }
 
 .prompt-components .type-badge {
@@ -2770,6 +2776,9 @@
 .prompt-components__type-select {
   max-width: 200px;
   font-size: 12px;
+  padding: 5px 28px 5px 10px;
+  border-radius: 8px;
+  min-height: 0;
 }
 
 .prompt-components__role-select {

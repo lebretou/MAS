@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentOperation } from "../../../types/node-data";
 import type { GraphNodeData } from "../../../types/node-data";
+import { StateDiffView } from "../../../components/StateDiffView";
 import iconCode from "../../../assets/icon-code.svg";
 import iconError from "../../../assets/icon-error.svg";
 import iconLlm from "../../../assets/icon-llm.svg";
@@ -74,8 +75,12 @@ function sanitizeForDisplay(value: unknown, depth = 0): unknown {
 }
 
 // unescape literal \n, \t, \r in strings for display
-function unescapeNewlines(s: string): string {
-  return s.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\r/g, "\r");
+function unescapeForDisplay(s: string): string {
+  return s
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\r/g, "\r")
+    .replace(/\\"/g, '"');
 }
 
 function formatForLog(value: unknown, options?: { full?: boolean }): { empty: boolean; text: string } {
@@ -98,15 +103,17 @@ function formatForLog(value: unknown, options?: { full?: boolean }): { empty: bo
       try {
         parsed = JSON.parse(trimmed);
       } catch {
-        return { empty: false, text: unescapeNewlines(displayValue) };
+        return { empty: false, text: unescapeForDisplay(displayValue) };
       }
-      return { empty: false, text: JSON.stringify(parsed, null, 2) };
+      return { empty: false, text: unescapeForDisplay(JSON.stringify(parsed, null, 2)) };
     }
-    return { empty: false, text: unescapeNewlines(displayValue) };
+    return { empty: false, text: unescapeForDisplay(displayValue) };
   }
-  const text = isFull
-    ? JSON.stringify(value, null, 2)
-    : JSON.stringify(sanitizeForDisplay(value), null, 2);
+  const text = unescapeForDisplay(
+    isFull
+      ? JSON.stringify(value, null, 2)
+      : JSON.stringify(sanitizeForDisplay(value), null, 2),
+  );
   return { empty: false, text };
 }
 
@@ -364,6 +371,30 @@ export function ExecutionDetails({ node }: Props) {
 
             {/* operation detail — separate cards per section */}
             {activeItem && (() => {
+              const isStateUpdate = activeItem.type === "state_update";
+              const changedKeys = (activeItem.metadata?.changedKeys ?? []) as string[];
+
+              if (isStateUpdate && changedKeys.length > 0) {
+                return (
+                  <div className="side-panel__timeline-detail">
+                    {activeItem.errorMessage && (
+                      <div className="side-panel__card">
+                        <div className="side-panel__card-label side-panel__card-label--error">error</div>
+                        <pre className="side-panel__pre">{activeItem.errorMessage}</pre>
+                      </div>
+                    )}
+                    <div className="side-panel__card">
+                      <div className="side-panel__card-label">state changes</div>
+                      <StateDiffView
+                        input={activeItem.input}
+                        output={activeItem.output}
+                        changedKeys={changedKeys}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
               const inputLog = formatForLog(activeItem.input);
               const outputLog = formatForLog(activeItem.output);
               const metadataLog = formatForLog(activeItem.metadata);

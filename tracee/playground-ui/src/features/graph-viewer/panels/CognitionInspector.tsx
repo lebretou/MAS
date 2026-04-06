@@ -14,16 +14,34 @@ interface Props {
 export function CognitionInspector({ cognition, loading, analyzing, onAnalyze }: Props) {
   const { openSidebar } = useSidebar();
 
-  const handleAgentClick = (agentId: string) => {
+  const openAgentSidebar = (agentId: string, chipExpansion?: { type: string; value: string }) => {
     if (!cognition) return;
     const cog = cognition.node_cognitions[agentId];
     if (cog) {
-      openSidebar(agentId, {
-        label: agentId,
-        nodeType: "agent",
-        cognition: cog,
-      });
+      openSidebar(agentId, { label: agentId, nodeType: "agent", cognition: cog }, chipExpansion);
     }
+  };
+
+  // find the agent whose description contains a given chip tag
+  const findOwningAgent = (chipType: string, chipValue: string): string | null => {
+    if (!cognition) return null;
+    const pattern = `{${chipType}:${chipValue}}`;
+    for (const [agentId, cog] of Object.entries(cognition.node_cognitions)) {
+      if (cog.description.includes(pattern)) return agentId;
+    }
+    return null;
+  };
+
+  const handleAgentClick = (agentId: string) => openAgentSidebar(agentId);
+
+  const handleToolClick = (value: string) => {
+    const agentId = findOwningAgent("tool", value);
+    if (agentId) openAgentSidebar(agentId, { type: "tool", value });
+  };
+
+  const handleStateClick = (value: string) => {
+    const agentId = findOwningAgent("state", value);
+    if (agentId) openAgentSidebar(agentId, { type: "state", value });
   };
 
   if (loading) {
@@ -63,7 +81,12 @@ export function CognitionInspector({ cognition, loading, analyzing, onAnalyze }:
           <span className="cognition-inspector__title">Trace Summary</span>
         </div>
         <div className="cognition-inspector__body">
-          <CognitionText text={cognition.narrative} onAgentClick={handleAgentClick} />
+          <CognitionText
+            text={cognition.narrative}
+            onAgentClick={handleAgentClick}
+            onToolClick={handleToolClick}
+            onStateClick={handleStateClick}
+          />
         </div>
       </div>
     </Panel>

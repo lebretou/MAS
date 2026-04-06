@@ -323,25 +323,36 @@ const PromptComponentEditor: React.FC<Props> = ({
 
       {showAddControl && availableTypes.length > 0 && (
         <div className="prompt-components__add">
-          <select
-            className="select prompt-components__type-select"
-            defaultValue=""
-            onChange={e => {
-              if (e.target.value) {
-                addComponent(e.target.value as PromptComponentType);
-                e.target.value = '';
-              }
-            }}
-          >
-            <option value="" disabled>
-              + Add component...
-            </option>
-            {availableTypes.map(t => (
-              <option key={t} value={t}>
-                {COMPONENT_LABELS[t]}
+          {availableTypes.some(t => t !== 'custom') && (
+            <select
+              className="select prompt-components__type-select"
+              defaultValue=""
+              onChange={e => {
+                if (e.target.value) {
+                  addComponent(e.target.value as PromptComponentType);
+                  e.target.value = '';
+                }
+              }}
+            >
+              <option value="" disabled>
+                + Add component...
               </option>
-            ))}
-          </select>
+              {availableTypes.filter(t => t !== 'custom').map(t => (
+                <option key={t} value={t}>
+                  {COMPONENT_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          )}
+          {availableTypes.includes('custom') && (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm prompt-components__custom-btn"
+              onClick={() => addComponent('custom')}
+            >
+              + Custom section
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -2548,28 +2548,43 @@ html, body, #root {
 }
 
 .cognition-chip--tool {
-  background: #eff6ff;
-  color: #2563eb;
+  background: #ecfdf5;
+  color: #10b981;
+}
+.cognition-chip--tool .cognition-chip__icon {
+  filter: invert(56%) sepia(55%) saturate(570%) hue-rotate(112deg) brightness(92%) contrast(90%);
 }
 
 .cognition-chip--state {
-  background: #f0fdf4;
-  color: #16a34a;
+  background: #eff6ff;
+  color: #3b82f6;
+}
+.cognition-chip--state .cognition-chip__icon {
+  filter: invert(42%) sepia(72%) saturate(1596%) hue-rotate(204deg) brightness(94%) contrast(97%);
 }
 
 .cognition-chip--agent {
   background: #f5f3ff;
   color: #7c3aed;
 }
+.cognition-chip--agent .cognition-chip__icon {
+  filter: invert(40%) sepia(50%) saturate(2000%) hue-rotate(240deg) brightness(90%) contrast(90%);
+}
 
 .cognition-chip--error {
   background: #fef2f2;
-  color: #dc2626;
+  color: #ef4444;
+}
+.cognition-chip--error .cognition-chip__icon {
+  filter: invert(36%) sepia(89%) saturate(1637%) hue-rotate(334deg) brightness(97%) contrast(92%);
 }
 
 .cognition-chip--warning {
   background: #fffbeb;
   color: #d97706;
+}
+.cognition-chip--warning .cognition-chip__icon {
+  filter: invert(47%) sepia(89%) saturate(800%) hue-rotate(17deg) brightness(92%) contrast(95%);
 }
 
 .cognition-chip--clickable {
@@ -2675,6 +2690,91 @@ html, body, #root {
 
 .cognition-detail__close-op:hover {
   color: #374151;
+}
+
+.cognition-detail__unmatched {
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #9ca3af;
+  background: #f9fafb;
+  border-radius: 4px;
+  animation: unmatched-fade 2.5s ease-out forwards;
+}
+
+@keyframes unmatched-fade {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── state diff view ─────────────────────────────────── */
+
+.state-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.state-diff__entry {
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.state-diff__key {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  background: #f9fafb;
+  border-bottom: 1px solid #f0f0f0;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.state-diff__values {
+  display: flex;
+  flex-direction: column;
+}
+
+.state-diff__row {
+  padding: 6px 10px;
+}
+
+.state-diff__row + .state-diff__row {
+  border-top: 1px solid #f0f0f0;
+}
+
+.state-diff__label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+
+.state-diff__row--before .state-diff__label {
+  color: #dc2626;
+}
+
+.state-diff__row--after .state-diff__label {
+  color: #16a34a;
+}
+
+.state-diff__pre {
+  margin: 0;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.state-diff__empty {
+  font-size: 12px;
+  font-style: italic;
+  color: #9ca3af;
 }
 
 /* ── cognition inspector (bottom panel) ──────────────── */

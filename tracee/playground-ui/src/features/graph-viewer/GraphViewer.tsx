@@ -75,7 +75,7 @@ export function GraphViewer() {
 
   useEffect(() => {
     setActiveFrameIndex(null);
-  }, [selectedTraceId]);
+  }, [selectedTraceId, layer]);
 
   useEffect(() => {
     if (!selectedTraceId) {
