@@ -1,0 +1,148 @@
+{
+  "version": "2026-04-06",
+  "generated_at": "2026-04-06T21:35:22.481530+00:00",
+  "roles": [
+    {
+      "role_id": "research-coordinator",
+      "name": "Research Coordinator",
+      "summary": "Use this agent to run a structured research process that searches for information, identifies gaps, and produces a reliable final report or analysis.",
+      "sample_size": 109,
+      "components": [
+        {
+          "component_type": "task",
+          "prevalence": 1.0,
+          "placeholder": ""
+        },
+        {
+          "component_type": "constraints",
+          "prevalence": 0.99,
+          "placeholder": ""
+        },
+        {
+          "component_type": "role",
+          "prevalence": 0.97,
+          "placeholder": ""
+        },
+        {
+          "component_type": "outputs",
+          "prevalence": 0.93,
+          "placeholder": ""
+        },
+        {
+          "component_type": "inputs",
+          "prevalence": 0.92,
+          "placeholder": ""
+        },
+        {
+          "component_type": "goal",
+          "prevalence": 0.9,
+          "placeholder": ""
+        }
+      ]
+    },
+    {
+      "role_id": "trading-analysts",
+      "name": "Trading Analysts",
+      "summary": "Use this role when you want an AI trading specialist to evaluate financial or prediction market data and produce a clear trade recommendation or risk-based viewpoint.",
+      "sample_size": 52,
+      "components": [
+        {
+          "component_type": "task",
+          "prevalence": 0.94,
+          "placeholder": ""
+        },
+        {
+          "component_type": "role",
+          "prevalence": 0.83,
+          "placeholder": ""
+        },
+        {
+          "component_type": "goal",
+          "prevalence": 0.83,
+          "placeholder": ""
+        },
+        {
+          "component_type": "inputs",
+          "prevalence": 0.79,
+          "placeholder": ""
+        },
+        {
+          "component_type": "constraints",
+          "prevalence": 0.73,
+          "placeholder": ""
+        },
+        {
+          "component_type": "outputs",
+          "prevalence": 0.73,
+          "placeholder": ""
+        }
+      ]
+    },
+    {
+      "role_id": "data-science",
+      "name": "Data Science",
+      "summary": "Use this role when you want an AI teammate to help route, prepare, analyze, visualize, or model tabular data in an end-to-end data science workflow.",
+      "sample_size": 27,
+      "components": [
+        {
+          "component_type": "role",
+          "prevalence": 1.0,
+          "placeholder": ""
+        },
+        {
+          "component_type": "goal",
+          "prevalence": 1.0,
+          "placeholder": ""
+        },
+        {
+          "component_type": "inputs",
+          "prevalence": 1.0,
+          "placeholder": ""
+        },
+        {
+          "component_type": "constraints",
+          "prevalence": 0.96,
+          "placeholder": ""
+        },
+        {
+          "component_type": "task",
+          "prevalence": 0.96,
+          "placeholder": ""
+        },
+        {
+          "component_type": "outputs",
+          "prevalence": 0.85,
+          "placeholder": ""
+        }
+      ]
+    },
+    {
+      "role_id": "workflow-orchestrators",
+      "name": "Workflow Orchestrators",
+      "summary": "Use this role when you want an agent to operate as a step in a larger pipeline, with clear phase context, prescribed tasks, and standardized deliverables.",
+      "sample_size": 45,
+      "components": [
+        {
+          "component_type": "inputs",
+          "prevalence": 0.82,
+          "placeholder": ""
+        },
+        {
+          "component_type": "task",
+          "prevalence": 0.8,
+          "placeholder": ""
+        },
+        {
+          "component_type": "outputs",
+          "prevalence": 0.73,
+          "placeholder": ""
+        },
+        {
+          "component_type": "goal",
+          "prevalence": 0.6,
+          "placeholder": ""
+        }
+      ]
+    }
+  ]
+}

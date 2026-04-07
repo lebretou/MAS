@@ -9,10 +9,6 @@ import iconRag from "../../../assets/icon-rag.svg";
 import iconState from "../../../assets/icon-state.svg";
 import iconTool from "../../../assets/icon-tool.svg";
 import iconChain from "../../../assets/icon-chain.svg";
-import {
-  hasOutputSchemaProperties,
-  resolveOutputCandidateForSchema,
-} from "../../../utils/schema-validation";
 
 const operationIconMap: Record<AgentOperation["type"], string> = {
   llm_call: iconLlm,
@@ -117,21 +113,6 @@ function formatForLog(value: unknown, options?: { full?: boolean }): { empty: bo
   return { empty: false, text };
 }
 
-function resolveDisplayedOutputCandidate(node: GraphNodeData, exec: NonNullable<GraphNodeData["execution"]>) {
-  if (node.outputSchema && hasOutputSchemaProperties(node.outputSchema)) {
-    return resolveOutputCandidateForSchema(exec.events, node.outputSchema, exec.llmOutputValue);
-  }
-
-  const lastLlmOperation = [...(exec.operations ?? [])]
-    .reverse()
-    .find((operation) => operation.type === "llm_call");
-
-  return {
-    value: exec.llmOutputValue ?? exec.llmOutput,
-    eventId: lastLlmOperation?.id,
-  };
-}
-
 function computeSegmentWidths(operations: AgentOperation[], totalPx: number): number[] {
   if (operations.length === 0) return [];
   const durations = operations.map((op) => op.latencyMs ?? 1);
@@ -212,16 +193,6 @@ export function ExecutionDetails({ node }: Props) {
   const timelineWidth = widths.length > 0
     ? widths.reduce((sum, width) => sum + width, 0)
     : Math.max(barWidth, operations.length * MIN_SEGMENT_PX);
-  const resolvedOutputCandidate = resolveDisplayedOutputCandidate(node, exec);
-  const shouldShowResolvedOutput = Boolean(
-    activeItem
-      && resolvedOutputCandidate.eventId
-      && activeItem.id === resolvedOutputCandidate.eventId,
-  );
-  const resolvedOutputLog = shouldShowResolvedOutput
-    ? formatForLog(resolvedOutputCandidate.value, { full: true })
-    : { empty: true, text: "" };
-
   // the hovered segment for the floating icon tooltip, if it's too thin
   const tooltipItem = hoveredSegment ? operations.find((op) => op.id === hoveredSegment) : null;
   const tooltipIndex = tooltipItem ? operations.indexOf(tooltipItem) : -1;
@@ -275,15 +246,6 @@ export function ExecutionDetails({ node }: Props) {
           )}
         </div>
       </section>
-
-      {!resolvedOutputLog.empty && (
-        <section className="side-panel__section">
-          <h3 className="side-panel__section-title">output</h3>
-          <div className="side-panel__card">
-            <pre className="side-panel__pre">{resolvedOutputLog.text}</pre>
-          </div>
-        </section>
-      )}
 
       {operations.length > 0 && (
         <section className="side-panel__section">
@@ -396,7 +358,7 @@ export function ExecutionDetails({ node }: Props) {
               }
 
               const inputLog = formatForLog(activeItem.input);
-              const outputLog = formatForLog(activeItem.output);
+              const outputLog = formatForLog(activeItem.output, { full: true });
               const metadataLog = formatForLog(activeItem.metadata);
               return (
                 <div className="side-panel__timeline-detail">

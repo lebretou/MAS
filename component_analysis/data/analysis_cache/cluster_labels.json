@@ -1,79 +1,67 @@
 {
-  "fingerprint": "fd85cc8dd92add3a2911dae13cd147c69eabddabc9489b416253242b4abca1cb",
-  "cluster_count": 12,
-  "label_model": "gpt-4.1-mini",
+  "fingerprint": "5916a3b343ffd1b75f2bc540e5f9a4c8378b28b07dc633fc2ff565da01cba9f3",
+  "cluster_count": 10,
+  "label_model": "gpt-5.4",
   "labels": {
     "0": {
-      "cluster_name": "Query Optimization",
-      "centroid_summary": "Agents designed to analyze user queries and generate optimized search tags, questions, or filtering decisions to improve information retrieval and relevance.",
-      "guided_start_description": "Help users refine their queries by generating targeted search tags, relevant questions, or filtering criteria to enhance discovery and accuracy.",
+      "cluster_name": "Search Helpers",
+      "centroid_summary": "Agents in this cluster perform narrow retrieval-support tasks such as generating search tags, filtering whether deeper analysis is needed, querying research sources, and producing short relevance summaries or questions from user input.",
+      "guided_start_description": "Use this assistant when you want help turning a request into search terms, lightweight retrieval decisions, concise match explanations, or short queryable outputs for research and discovery workflows.",
       "cluster_id": 0
     },
     "1": {
-      "cluster_name": "Trading Decision Agents",
-      "centroid_summary": "Agents focused on analyzing market data and indicators to collaboratively generate buy, sell, or hold trading decisions with varying risk perspectives.",
-      "guided_start_description": "Start by selecting your trading role and risk preference, then input market data to receive data-driven trade recommendations and strategic insights.",
+      "cluster_name": "Research Coordinator",
+      "centroid_summary": "These prompts define agents that plan, gather, evaluate, synthesize, and finalize evidence-based research or analysis workflows, often coordinating multi-step information retrieval and reporting.",
+      "guided_start_description": "Use this agent to run a structured research process that searches for information, identifies gaps, and produces a reliable final report or analysis.",
       "cluster_id": 1
     },
     "2": {
-      "cluster_name": "Task Orchestration",
-      "centroid_summary": "Agents coordinating complex workflows by delegating subtasks, managing specialized subagents, and synthesizing outputs to achieve comprehensive task completion.",
-      "guided_start_description": "Introduce this role as a central coordinator that breaks down tasks, assigns work to expert subagents, and integrates their results to deliver complete solutions.",
+      "cluster_name": "Utility Assistants",
+      "centroid_summary": "This cluster contains narrowly scoped helper agents that perform specific support tasks such as answering from a knowledge base, checking compliance, summarizing or generating short content, and scoring simple inputs.",
+      "guided_start_description": "Use this role when you want a lightweight task-specific assistant for a single workflow step like Q&A, review, rating, or short-form content generation.",
       "cluster_id": 2
     },
     "3": {
-      "cluster_name": "Product Search Supervisor",
-      "centroid_summary": "Agents in this cluster coordinate and assist with product search tasks by delegating subtasks, evaluating document relevance, and generating user-friendly responses when no exact matches are found.",
-      "guided_start_description": "Introduce a supervisory assistant that manages product search workflows by analyzing queries, assigning tasks to specialized subagents, and providing clear, polite feedback on search results.",
+      "cluster_name": "Product Search",
+      "centroid_summary": "Agents in this cluster help users find products by searching a product database, judging result relevance, and responding clearly when matches are weak or unavailable.",
+      "guided_start_description": "Use this assistant to search for products, evaluate which results best match a shopper\u2019s request, and explain next steps when no exact items are found.",
       "cluster_id": 3
     },
     "4": {
-      "cluster_name": "Phase-Based Workflow",
-      "centroid_summary": "Prompts guiding multi-phase workflows by defining context, tasks, constraints, and summarization to support structured progress and evaluation across project phases.",
-      "guided_start_description": "Introduce the current project phase, outline key tasks and constraints, and provide targeted questions or summaries to guide users through each step of the workflow.",
+      "cluster_name": "Trading Analysts",
+      "centroid_summary": "Agents in this cluster analyze market, chart, sentiment, and risk signals to recommend or debate concrete trading actions such as buy, sell, hold, long, or short.",
+      "guided_start_description": "Use this role when you want an AI trading specialist to evaluate financial or prediction market data and produce a clear trade recommendation or risk-based viewpoint.",
       "cluster_id": 4
     },
     "5": {
-      "cluster_name": "Hardware Compatibility",
-      "centroid_summary": "Agents in this cluster analyze hardware constraints and compatibility to determine if software can run on specified hardware configurations.",
-      "guided_start_description": "Help users identify hardware requirements and check if their software dependencies are compatible with their target devices.",
+      "cluster_name": "Hardware Checks",
+      "centroid_summary": "Agents in this cluster identify hardware constraints from user requests and assess whether a project's dependencies are compatible with a target hardware environment.",
+      "guided_start_description": "Use this agent to detect device or resource limits like CPU-only, low-memory, or mobile targets and verify if a dependency stack can run under those hardware constraints.",
       "cluster_id": 5
     },
     "6": {
-      "cluster_name": "Specialized AI Assistants",
-      "centroid_summary": "This cluster comprises AI agents designed to perform focused tasks such as compliance checking, concise user assistance, content summarization, focus evaluation, and knowledge-based question answering within specific domains.",
-      "guided_start_description": "Introduce the AI assistant by highlighting its specialized role\u2014whether it's ensuring compliance, providing brief and engaging responses, generating content intros, assessing focus levels, or delivering detailed answers from a knowledge base.",
+      "cluster_name": "Rails Builder",
+      "centroid_summary": "Agents in this cluster help users design, build, test, and refine Ruby on Rails applications with an MVP-first, small-safe-diff workflow and strong product guidance.",
+      "guided_start_description": "Use this assistant to brainstorm features or incrementally implement, test, and polish a Rails app with clear step-by-step progress and cautious code changes.",
       "cluster_id": 6
     },
     "7": {
-      "cluster_name": "Value Extraction",
-      "centroid_summary": "Prompts designed to extract specific numerical values from structured input strings based on given keys.",
-      "guided_start_description": "Enter a structured text input and specify the key whose numeric value you want to extract.",
+      "cluster_name": "Field Extraction",
+      "centroid_summary": "These agents parse structured trading text and return only a specific requested numeric field such as price or size.",
+      "guided_start_description": "Use this helper when you need to extract a single exact value from a formatted market or trading string.",
       "cluster_id": 7
     },
     "8": {
-      "cluster_name": "Multi-Agent Dev Roles",
-      "centroid_summary": "This cluster defines specialized system prompts for autonomous agents collaboratively managing software development tasks such as issue reproduction, fault localization, code editing, testing, and team coordination.",
-      "guided_start_description": "Introduce users to a multi-agent software development workflow where distinct AI roles handle bug reproduction, debugging, code editing, verification, and project management to streamline issue resolution.",
+      "cluster_name": "Data Science",
+      "centroid_summary": "Agents in this cluster perform or coordinate practical data science workflows such as data loading, wrangling, feature engineering, visualization planning, and machine learning code generation.",
+      "guided_start_description": "Use this role when you want an AI teammate to help route, prepare, analyze, visualize, or model tabular data in an end-to-end data science workflow.",
       "cluster_id": 8
     },
     "9": {
-      "cluster_name": "Data Science Agent",
-      "centroid_summary": "Agents that generate code, recommend steps, or orchestrate processes for data preprocessing, feature engineering, model training, and visualization in data science workflows.",
-      "guided_start_description": "Select this role to assist with automated data preparation, feature engineering, model building, and visualization by generating code and instructions tailored to your dataset and objectives.",
+      "cluster_name": "Workflow Orchestrators",
+      "centroid_summary": "Prompts in this cluster define structured, phase-aware workflow roles that plan, execute, summarize, review, or validate work using explicit inputs, constraints, and output formats.",
+      "guided_start_description": "Use this role when you want an agent to operate as a step in a larger pipeline, with clear phase context, prescribed tasks, and standardized deliverables.",
       "cluster_id": 9
-    },
-    "10": {
-      "cluster_name": "Expert Agent Guidance",
-      "centroid_summary": "This cluster defines expert system prompts that guide AI agents to perform specialized, methodical tasks such as software development, testing, front-end design, and research synthesis with a focus on precision, reliability, and incremental progress.",
-      "guided_start_description": "Introduce the AI agent as a domain expert who follows a structured, step-by-step workflow to deliver accurate, reliable, and context-aware assistance tailored to the user's specific project or research needs.",
-      "cluster_id": 10
-    },
-    "11": {
-      "cluster_name": "Docstring Generation",
-      "centroid_summary": "Agents collaboratively generate, assess context for, and verify high-quality, clear, and actionable docstrings to improve code documentation.",
-      "guided_start_description": "Guide users through writing, reviewing context needs, and validating docstrings to ensure comprehensive and helpful code documentation.",
-      "cluster_id": 11
     }
   }
 }

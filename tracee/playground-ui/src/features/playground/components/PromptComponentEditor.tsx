@@ -32,6 +32,8 @@ interface Props {
   onCopyComponentContent?: (index: number) => void;
   onReorderComponent?: (fromIndex: number, toIndex: number) => void;
   registerSectionRef?: (componentKey: string, element: HTMLDivElement | null) => void;
+  componentStats?: Record<PromptComponentType, number> | null;
+  componentStatsLabel?: string | null;
 }
 
 const MESSAGE_ROLE_LABELS: Record<PromptMessageRole, string> = {
@@ -56,6 +58,8 @@ const PromptComponentEditor: React.FC<Props> = ({
   onCopyComponentContent,
   onReorderComponent,
   registerSectionRef,
+  componentStats,
+  componentStatsLabel,
 }) => {
   const textareaRefs = React.useRef<Array<HTMLTextAreaElement | null>>([]);
   const nameInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -234,6 +238,14 @@ const PromptComponentEditor: React.FC<Props> = ({
                   <span className="badge badge--neutral prompt-components__role-badge">
                     {MESSAGE_ROLE_LABELS[comp.message_role ?? getDefaultPromptMessageRole(comp.type)]}
                   </span>
+                  {componentStats?.[comp.type] != null && (
+                    <span
+                      className="badge badge--prevalence"
+                      title={componentStatsLabel ? `${Math.round(componentStats[comp.type] * 100)}% of ${componentStatsLabel} agents include this` : undefined}
+                    >
+                      {Math.round(componentStats[comp.type] * 100)}%
+                    </span>
+                  )}
                 </div>
                 <div className="prompt-components__header-actions">
                   <div className="prompt-components__hover-actions">

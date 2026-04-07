@@ -6,12 +6,10 @@ from pydantic import BaseModel, Field
 from backbone.models.prompt_artifact import (
     Prompt,
     PromptComponent,
-    PromptTemplate,
     PromptTool,
     PromptVersion,
 )
 from backbone.utils.identifiers import utc_timestamp
-from server.guided_start_service import build_prompt_templates_from_catalog
 from server.prompt_db import (
     create_prompt as db_create_prompt,
     delete_prompt as db_delete_prompt,
@@ -98,9 +96,9 @@ def _generate_version_id(prompt_id: str) -> str:
 
 
 @router.get("/prompt-templates")
-def list_prompt_templates() -> list[PromptTemplate]:
-    """List built-in prompt templates and agent archetypes."""
-    return build_prompt_templates_from_catalog()
+def list_prompt_templates() -> list:
+    """List built-in prompt templates (legacy endpoint, returns empty list)."""
+    return []
 
 
 @router.get("/prompts")

@@ -417,12 +417,6 @@ html, body, #root {
   stroke: #219ebc;
 }
 
-.react-flow__node.selected .agent-node {
-  border-color: #219ebc;
-  background: #eef2ff;
-  box-shadow: 0 0 0 1px #219ebc, 0 0 0 4px rgba(33, 158, 188, 0.15), 0 10px 25px -5px rgba(33, 158, 188, 0.15), 0 8px 10px -6px rgba(33, 158, 188, 0.1);
-}
-
 .react-flow__edge-textbg {
   fill: #f8f9fb;
 }

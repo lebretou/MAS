@@ -3,8 +3,6 @@
 import json
 import re
 from enum import Enum
-from typing import Literal
-
 from pydantic import BaseModel, Field, model_validator
 from backbone.utils.identifiers import generate_config_id
 
@@ -225,96 +223,30 @@ class PromptTemplate(BaseModel):
     suggested_output_schema: dict | None = None
 
 
-class GuidedStartStage(str, Enum):
-    """Ordered stages used by guided prompt authoring."""
-
-    role = "role"
-    questions = "questions"
-    tools = "tools"
-    schema = "schema"
-    review = "review"
-
-
-class GuidedStartQuestion(BaseModel):
-    """A starter question shown during guided prompt setup."""
-
-    question_id: str
-    label: str
-    description: str | None = None
-    input_type: str = "textarea"
-    required: bool = True
-    placeholder: str | None = None
-    default_value: str = ""
-
-
-class GuidedStartSuggestedComponent(BaseModel):
-    """A suggested prompt component with evidence metadata."""
+class GuidedStartRoleComponent(BaseModel):
+    """A prompt component with prevalence data from cluster analysis."""
 
     component_type: PromptComponentType
-    title: str
     prevalence: float
-    order_rank: int
-    content_template: str
+    placeholder: str = ""
 
 
-class GuidedStartArchetype(BaseModel):
-    """Curated guided-start metadata for a supported archetype."""
+class GuidedStartRole(BaseModel):
+    """A common agent role derived from cluster analysis."""
 
-    archetype_id: str
-    title: str
+    role_id: str
+    name: str
     summary: str
-    example_jobs: list[str] = Field(default_factory=list)
     sample_size: int
-    starter_questions: list[GuidedStartQuestion] = Field(default_factory=list)
-    suggested_components: list[GuidedStartSuggestedComponent] = Field(default_factory=list)
-    suggested_tools: list[PromptTool] = Field(default_factory=list)
-    suggested_output_schema: dict | None = None
+    components: list[GuidedStartRoleComponent] = Field(default_factory=list)
 
 
 class GuidedStartCatalog(BaseModel):
-    """Source-of-truth data for guided-start archetypes."""
+    """Source-of-truth data for guided-start roles."""
 
     version: str
     generated_at: str
-    fallback_questions: list[GuidedStartQuestion] = Field(default_factory=list)
-    fallback_components: list[GuidedStartSuggestedComponent] = Field(default_factory=list)
-    archetypes: list[GuidedStartArchetype] = Field(default_factory=list)
-
-
-class GuidedStartConversationTurn(BaseModel):
-    """A user-visible turn in the guided-start conversation."""
-
-    role: Literal["user", "assistant"]
-    content: str = Field(min_length=1, max_length=4000)
-
-
-class GuidedStartLlmRequest(BaseModel):
-    """Request payload for guided-start LLM refinement."""
-
-    provider: str = Field(min_length=1, max_length=64)
-    model: str = Field(min_length=1, max_length=128)
-    temperature: float = 0
-    stage: GuidedStartStage
-    selected_archetype: str | None = Field(default=None, max_length=64)
-    custom_role: str | None = Field(default=None, max_length=1000)
-    answers: dict[str, str] = Field(default_factory=dict, max_length=16)
-    current_draft: list[PromptComponent] = Field(default_factory=list, max_length=12)
-    conversation_history: list[GuidedStartConversationTurn] = Field(default_factory=list, max_length=24)
-    latest_user_turn: str = Field(min_length=1, max_length=4000)
-
-
-class GuidedStartLlmResponse(BaseModel):
-    """Structured response contract for guided-start assistance."""
-
-    assistant_message: str
-    selected_archetype: str | None = None
-    selected_archetype_title: str | None = None
-    component_draft: list[PromptComponent] = Field(default_factory=list)
-    current_stage: GuidedStartStage
-    follow_up_questions: list[str] = Field(default_factory=list)
-    stage_complete: bool = False
-    status: Literal["needs_input", "ready_for_next_stage", "ready_to_apply"]
-    updated_component_types: list[PromptComponentType] = Field(default_factory=list)
+    roles: list[GuidedStartRole] = Field(default_factory=list)
 
 
 class PromptVersion(BaseModel):

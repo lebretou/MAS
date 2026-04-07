@@ -127,6 +127,15 @@ export interface CreateVersionRequest {
   source_template_id?: string | null;
 }
 
+export interface ResolvedVersion {
+  prompt_id: string;
+  version_id: string;
+  resolved_text: string;
+  component_count: number;
+  enabled_count: number;
+  tool_count: number;
+}
+
 export type SchemaPropertyType = "string" | "number" | "integer" | "boolean" | "null" | "array";
 
 export type SchemaArrayItemType = "string" | "number" | "integer" | "boolean";

@@ -464,9 +464,6 @@ const PromptVersionTree: React.FC<Props> = ({
                       {isActive && (
                         <span className="version-tree__current-chip">current</span>
                       )}
-                      {compareIndex >= 0 && (
-                        <span className="version-tree__compare-chip">comparing</span>
-                      )}
                       {entry.kind === 'draft' && (
                         <span className="badge badge--warning">draft</span>
                       )}
@@ -507,6 +504,11 @@ const PromptVersionTree: React.FC<Props> = ({
                     )}
                   </div>
                 </div>
+                {compareIndex >= 0 && (
+                  <div className="version-tree__compare-row">
+                    <span className="version-tree__compare-chip">comparing</span>
+                  </div>
+                )}
                 <div className="version-tree__meta-section">
                   <div className="section-label version-tree__meta-label">components</div>
                   <div className="version-tree__node-components">

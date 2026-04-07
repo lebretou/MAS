@@ -45,6 +45,18 @@ function formatValue(value: unknown): string {
   return unescapeForDisplay(JSON.stringify(value, null, 2));
 }
 
+function isEmptyLog(value: unknown): boolean {
+  if (value == null || value === "") return true;
+  if (Array.isArray(value) && value.length === 0) return true;
+  if (
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value as object).length === 0
+  )
+    return true;
+  return false;
+}
+
 function findOperationByChip(
   chipType: string,
   chipValue: string,
@@ -155,33 +167,48 @@ export function CognitionDetails({ node }: Props) {
               &times;
             </button>
           </h3>
-          <div className="side-panel__card">
+          <div className="side-panel__timeline-detail">
             {isStateUpdate && changedKeys.length > 0 ? (
-              <StateDiffView
-                input={expandedOp.input}
-                output={expandedOp.output}
-                changedKeys={changedKeys}
-              />
+              <>
+                {expandedOp.errorMessage && (
+                  <div className="side-panel__card">
+                    <div className="side-panel__card-label side-panel__card-label--error">error</div>
+                    <pre className="side-panel__pre">{expandedOp.errorMessage}</pre>
+                  </div>
+                )}
+                <div className="side-panel__card">
+                  <div className="side-panel__card-label">state changes</div>
+                  <StateDiffView
+                    input={expandedOp.input}
+                    output={expandedOp.output}
+                    changedKeys={changedKeys}
+                  />
+                </div>
+              </>
             ) : (
               <>
-                {expandedOp.input != null && (
-                  <>
-                    <div className="side-panel__card-label">input</div>
+                {expandedOp.errorMessage && (
+                  <div className="side-panel__card">
+                    <div className="side-panel__card-label side-panel__card-label--error">error</div>
+                    <pre className="side-panel__pre">{expandedOp.errorMessage}</pre>
+                  </div>
+                )}
+                <div className="side-panel__card">
+                  <div className="side-panel__card-label">input</div>
+                  {isEmptyLog(expandedOp.input) ? (
+                    <span className="side-panel__empty">empty</span>
+                  ) : (
                     <pre className="side-panel__pre">{formatValue(expandedOp.input)}</pre>
-                  </>
-                )}
-                {expandedOp.output != null && (
-                  <>
-                    <div className="side-panel__card-label" style={{ marginTop: 8 }}>output</div>
+                  )}
+                </div>
+                <div className="side-panel__card">
+                  <div className="side-panel__card-label">output</div>
+                  {isEmptyLog(expandedOp.output) ? (
+                    <span className="side-panel__empty">empty</span>
+                  ) : (
                     <pre className="side-panel__pre">{formatValue(expandedOp.output)}</pre>
-                  </>
-                )}
-              </>
-            )}
-            {expandedOp.errorMessage && (
-              <>
-                <div className="side-panel__card-label side-panel__card-label--error" style={{ marginTop: 8 }}>error</div>
-                <pre className="side-panel__pre">{expandedOp.errorMessage}</pre>
+                  )}
+                </div>
               </>
             )}
           </div>

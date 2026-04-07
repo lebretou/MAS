@@ -1,630 +1,148 @@
 {
-  "version": "2026-03-20",
-  "generated_at": "2026-03-20T19:54:07.079428+00:00",
-  "fallback_questions": [
+  "version": "2026-04-06",
+  "generated_at": "2026-04-06T00:00:00+00:00",
+  "roles": [
     {
-      "question_id": "custom_role",
-      "label": "Agent role",
-      "description": null,
-      "input_type": "textarea",
-      "required": true,
-      "placeholder": "Describe the role or job this agent should perform.",
-      "default_value": ""
-    },
-    {
-      "question_id": "primary_goal",
-      "label": "Primary goal",
-      "description": null,
-      "input_type": "textarea",
-      "required": true,
-      "placeholder": "What should it accomplish?",
-      "default_value": ""
-    },
-    {
-      "question_id": "inputs",
-      "label": "Inputs",
-      "description": null,
-      "input_type": "textarea",
-      "required": true,
-      "placeholder": "What context or material does it receive?",
-      "default_value": ""
-    },
-    {
-      "question_id": "outputs",
-      "label": "Outputs",
-      "description": null,
-      "input_type": "textarea",
-      "required": true,
-      "placeholder": "What should it produce?",
-      "default_value": ""
-    },
-    {
-      "question_id": "constraints",
-      "label": "Constraints",
-      "description": null,
-      "input_type": "textarea",
-      "required": false,
-      "placeholder": "What should it avoid or keep bounded?",
-      "default_value": ""
-    }
-  ],
-  "fallback_components": [
-    {
-      "component_type": "role",
-      "title": "Role",
-      "prevalence": 0.8,
-      "order_rank": 10,
-      "content_template": "You are {{custom_role}}."
-    },
-    {
-      "component_type": "task",
-      "title": "Task",
-      "prevalence": 0.92,
-      "order_rank": 20,
-      "content_template": "Primary goal:\n{{primary_goal}}"
-    },
-    {
-      "component_type": "inputs",
-      "title": "Inputs",
-      "prevalence": 0.83,
-      "order_rank": 30,
-      "content_template": "Available inputs:\n{{inputs}}"
-    },
-    {
-      "component_type": "outputs",
-      "title": "Outputs",
-      "prevalence": 0.82,
-      "order_rank": 40,
-      "content_template": "Return:\n{{outputs}}"
-    },
-    {
-      "component_type": "constraints",
-      "title": "Constraints",
-      "prevalence": 0.82,
-      "order_rank": 50,
-      "content_template": "Constraints:\n{{constraints}}"
-    }
-  ],
-  "archetypes": [
-    {
-      "archetype_id": "planner",
-      "title": "Planner",
-      "summary": "Breaks work into bounded steps, keeps execution orderly, and makes the next action obvious.",
-      "example_jobs": [
-        "turn a bug report into an implementation plan",
-        "coordinate a multi-agent workflow with clear handoffs"
-      ],
-      "sample_size": 27,
-      "starter_questions": [
-        {
-          "question_id": "primary_goal",
-          "label": "Primary goal",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should this planner accomplish?",
-          "default_value": ""
-        },
-        {
-          "question_id": "inputs",
-          "label": "Inputs",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What context, artifacts, or variables does it receive?",
-          "default_value": ""
-        },
-        {
-          "question_id": "outputs",
-          "label": "Outputs",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should it return or decide?",
-          "default_value": ""
-        },
-        {
-          "question_id": "constraints",
-          "label": "Constraints",
-          "description": null,
-          "input_type": "textarea",
-          "required": false,
-          "placeholder": "What should it avoid, preserve, or keep bounded?",
-          "default_value": ""
-        }
-      ],
-      "suggested_components": [
+      "role_id": "task-orchestrator",
+      "name": "Task Orchestrator",
+      "summary": "Coordinate complex workflows by delegating subtasks to specialized subagents and synthesizing their outputs into a complete solution.",
+      "sample_size": 84,
+      "components": [
         {
           "component_type": "role",
-          "title": "Role",
-          "order_rank": 10,
-          "content_template": "You are a planning-oriented agent for a multi-agent workflow. Keep work structured, explicit, and easy for downstream agents to follow.",
-          "prevalence": 0.8148
+          "prevalence": 0.95,
+          "placeholder": "You are a task orchestration agent that coordinates complex workflows by managing and delegating work to specialized subagents."
         },
         {
           "component_type": "task",
-          "title": "Task",
-          "order_rank": 20,
-          "content_template": "Primary goal:\n{{primary_goal}}\n\nBreak the work into a concise execution plan with clear steps and decision points.",
-          "prevalence": 0.963
+          "prevalence": 1.0,
+          "placeholder": "Break down the given objective into subtasks, assign them to the appropriate specialist agents, and synthesize their outputs into a cohesive result."
+        },
+        {
+          "component_type": "goal",
+          "prevalence": 0.88,
+          "placeholder": "Coordinate the end-to-end workflow to produce a complete, integrated solution from multiple specialist contributions."
+        },
+        {
+          "component_type": "constraints",
+          "prevalence": 1.0,
+          "placeholder": "Ensure each subtask has clear ownership. Do not proceed to synthesis until all delegated tasks report back."
         },
         {
           "component_type": "inputs",
-          "title": "Inputs",
-          "order_rank": 30,
-          "content_template": "Available inputs:\n{{inputs}}",
-          "prevalence": 0.9259
+          "prevalence": 0.88,
+          "placeholder": "The high-level objective, available specialist agents, and any relevant context or constraints."
         },
         {
           "component_type": "outputs",
-          "title": "Outputs",
-          "order_rank": 40,
-          "content_template": "Return:\n{{outputs}}",
-          "prevalence": 0.9259
-        },
-        {
-          "component_type": "constraints",
-          "title": "Constraints",
-          "order_rank": 50,
-          "content_template": "Constraints:\n{{constraints}}",
-          "prevalence": 0.8889
+          "prevalence": 0.92,
+          "placeholder": "Return a synthesized final result that integrates outputs from all delegated subtasks."
         }
-      ],
-      "suggested_tools": [],
-      "suggested_output_schema": null
+      ]
     },
     {
-      "archetype_id": "coder",
-      "title": "Coder",
-      "summary": "Implements changes carefully, reasons from the codebase, and keeps outputs scoped to the requested work.",
-      "example_jobs": [
-        "fix a bug without breaking surrounding behavior",
-        "implement a small feature and explain the change"
-      ],
-      "sample_size": 41,
-      "starter_questions": [
-        {
-          "question_id": "primary_goal",
-          "label": "Coding task",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should the coding agent build or fix?",
-          "default_value": ""
-        },
-        {
-          "question_id": "inputs",
-          "label": "Inputs",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What files, specs, or context should it use?",
-          "default_value": ""
-        },
-        {
-          "question_id": "outputs",
-          "label": "Expected result",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should the final result look like?",
-          "default_value": ""
-        },
-        {
-          "question_id": "constraints",
-          "label": "Constraints",
-          "description": null,
-          "input_type": "textarea",
-          "required": false,
-          "placeholder": "Any quality bar, boundaries, or forbidden changes?",
-          "default_value": ""
-        }
-      ],
-      "suggested_components": [
+      "role_id": "trading-analyst",
+      "name": "Trading Analyst",
+      "summary": "Evaluate market data, chart patterns, and risk signals to produce clear trade recommendations or risk-based viewpoints.",
+      "sample_size": 52,
+      "components": [
         {
           "component_type": "role",
-          "title": "Role",
-          "order_rank": 10,
-          "content_template": "You are a precise coding agent. Read the existing code carefully, preserve working behavior, and prefer minimal changes that fully solve the task.",
-          "prevalence": 0.6341
+          "prevalence": 0.83,
+          "placeholder": "You are a trading analyst specializing in evaluating market data and technical indicators to generate actionable trade recommendations."
         },
         {
           "component_type": "task",
-          "title": "Task",
-          "order_rank": 20,
-          "content_template": "Task:\n{{primary_goal}}",
-          "prevalence": 0.9512
+          "prevalence": 0.94,
+          "placeholder": "Analyze the provided market data and produce a clear trading decision with supporting rationale."
+        },
+        {
+          "component_type": "goal",
+          "prevalence": 0.83,
+          "placeholder": "Generate a buy, sell, or hold recommendation based on the analysis of provided data and indicators."
         },
         {
           "component_type": "inputs",
-          "title": "Inputs",
-          "order_rank": 30,
-          "content_template": "Use this context while working:\n{{inputs}}",
-          "prevalence": 0.878
-        },
-        {
-          "component_type": "outputs",
-          "title": "Outputs",
-          "order_rank": 40,
-          "content_template": "Return:\n{{outputs}}",
-          "prevalence": 0.8049
+          "prevalence": 0.79,
+          "placeholder": "Market data, price history, technical indicators, or sentiment signals to analyze."
         },
         {
           "component_type": "constraints",
-          "title": "Constraints",
-          "order_rank": 50,
-          "content_template": "Constraints:\n{{constraints}}",
-          "prevalence": 0.8537
+          "prevalence": 0.73,
+          "placeholder": "Base decisions only on provided data. State confidence level and risk factors clearly."
+        },
+        {
+          "component_type": "outputs",
+          "prevalence": 0.73,
+          "placeholder": "A clear trade recommendation (buy/sell/hold) with supporting reasoning and risk assessment."
         }
-      ],
-      "suggested_tools": [],
-      "suggested_output_schema": null
+      ]
     },
     {
-      "archetype_id": "writer",
-      "title": "Writer",
-      "summary": "Produces clear, audience-aware writing with a tight brief, stable structure, and explicit output requirements.",
-      "example_jobs": [
-        "draft documentation for a technical workflow",
-        "turn raw notes into a polished summary"
-      ],
-      "sample_size": 19,
-      "starter_questions": [
-        {
-          "question_id": "primary_goal",
-          "label": "Writing brief",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should this writer create?",
-          "default_value": ""
-        },
-        {
-          "question_id": "audience",
-          "label": "Audience",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "Who will read the result?",
-          "default_value": ""
-        },
-        {
-          "question_id": "inputs",
-          "label": "Inputs",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What source material or facts should it use?",
-          "default_value": ""
-        },
-        {
-          "question_id": "outputs",
-          "label": "Output format",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should the finished deliverable look like?",
-          "default_value": ""
-        },
-        {
-          "question_id": "constraints",
-          "label": "Constraints",
-          "description": null,
-          "input_type": "textarea",
-          "required": false,
-          "placeholder": "Any tone, length, or formatting constraints?",
-          "default_value": ""
-        }
-      ],
-      "suggested_components": [
-        {
-          "component_type": "role",
-          "title": "Role",
-          "order_rank": 10,
-          "content_template": "You are a careful writer. Keep the result clear, audience-aware, and tightly aligned to the requested deliverable.",
-          "prevalence": 1.0
-        },
+      "role_id": "workflow-agent",
+      "name": "Workflow Agent",
+      "summary": "Operate as a step in a larger pipeline with clear phase context, prescribed tasks, and standardized deliverables.",
+      "sample_size": 44,
+      "components": [
         {
           "component_type": "task",
-          "title": "Task",
-          "order_rank": 20,
-          "content_template": "Writing brief:\n{{primary_goal}}\n\nTarget audience:\n{{audience}}",
-          "prevalence": 1.0
+          "prevalence": 0.82,
+          "placeholder": "Execute the current phase of the workflow according to the prescribed steps and constraints."
+        },
+        {
+          "component_type": "goal",
+          "prevalence": 0.61,
+          "placeholder": "Complete the assigned workflow actions and produce outputs that feed into the next phase."
         },
         {
           "component_type": "inputs",
-          "title": "Inputs",
-          "order_rank": 30,
-          "content_template": "Source material:\n{{inputs}}",
-          "prevalence": 1.0
+          "prevalence": 0.84,
+          "placeholder": "Phase context, data files, and instructions for the current workflow step."
         },
         {
           "component_type": "outputs",
-          "title": "Outputs",
-          "order_rank": 40,
-          "content_template": "Deliverable requirements:\n{{outputs}}",
-          "prevalence": 0.9474
-        },
-        {
-          "component_type": "constraints",
-          "title": "Constraints",
-          "order_rank": 50,
-          "content_template": "Constraints:\n{{constraints}}",
-          "prevalence": 0.8947
+          "prevalence": 0.75,
+          "placeholder": "Deliverables for this phase in the required format, ready for the next stage of the pipeline."
         }
-      ],
-      "suggested_tools": [],
-      "suggested_output_schema": null
+      ]
     },
     {
-      "archetype_id": "researcher",
-      "title": "Researcher",
-      "summary": "Synthesizes evidence, traces claims back to inputs, and keeps uncertainty explicit instead of bluffing certainty.",
-      "example_jobs": [
-        "compare source material and extract the strongest evidence",
-        "summarize a topic with open questions and gaps"
-      ],
-      "sample_size": 17,
-      "starter_questions": [
-        {
-          "question_id": "primary_goal",
-          "label": "Research goal",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should this researcher investigate?",
-          "default_value": ""
-        },
-        {
-          "question_id": "inputs",
-          "label": "Inputs",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What material, corpus, or data can it use?",
-          "default_value": ""
-        },
-        {
-          "question_id": "outputs",
-          "label": "Outputs",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should the final synthesis include?",
-          "default_value": ""
-        },
-        {
-          "question_id": "constraints",
-          "label": "Constraints",
-          "description": null,
-          "input_type": "textarea",
-          "required": false,
-          "placeholder": "What should it avoid inferring or overclaiming?",
-          "default_value": ""
-        }
-      ],
-      "suggested_components": [
+      "role_id": "data-science-agent",
+      "name": "Data Science Agent",
+      "summary": "Help with data preparation, feature engineering, visualization, and model building by generating code and recommendations.",
+      "sample_size": 38,
+      "components": [
         {
           "component_type": "role",
-          "title": "Role",
-          "order_rank": 10,
-          "content_template": "You are a research-oriented agent. Work from evidence, note uncertainty, and separate observations from conclusions.",
-          "prevalence": 1.0
+          "prevalence": 1.0,
+          "placeholder": "You are a data science agent that helps with data preparation, analysis, feature engineering, and model building."
         },
         {
           "component_type": "task",
-          "title": "Task",
-          "order_rank": 20,
-          "content_template": "Research goal:\n{{primary_goal}}",
-          "prevalence": 0.9412
+          "prevalence": 0.95,
+          "placeholder": "Generate code or step-by-step recommendations for the requested data science workflow step."
+        },
+        {
+          "component_type": "goal",
+          "prevalence": 0.97,
+          "placeholder": "Produce accurate, efficient code or recommendations for the specified data science task."
+        },
+        {
+          "component_type": "constraints",
+          "prevalence": 0.95,
+          "placeholder": "Use only the specified libraries. Handle missing values and edge cases. Include clear comments in generated code."
         },
         {
           "component_type": "inputs",
-          "title": "Inputs",
-          "order_rank": 30,
-          "content_template": "Available material:\n{{inputs}}",
-          "prevalence": 0.9412
+          "prevalence": 0.97,
+          "placeholder": "Dataset schema, sample data, column descriptions, and the specific data science task to perform."
         },
         {
           "component_type": "outputs",
-          "title": "Outputs",
-          "order_rank": 40,
-          "content_template": "Return:\n{{outputs}}",
-          "prevalence": 0.7647
-        },
-        {
-          "component_type": "constraints",
-          "title": "Constraints",
-          "order_rank": 50,
-          "content_template": "Constraints:\n{{constraints}}",
-          "prevalence": 0.7647
+          "prevalence": 0.87,
+          "placeholder": "Working Python code or step-by-step recommendations for the requested data processing, visualization, or modeling task."
         }
-      ],
-      "suggested_tools": [],
-      "suggested_output_schema": null
-    },
-    {
-      "archetype_id": "evaluator",
-      "title": "Evaluator",
-      "summary": "Reviews work against explicit criteria, surfaces risks, and explains the basis for each judgment.",
-      "example_jobs": [
-        "review a prompt draft against quality criteria",
-        "grade an output and explain what should improve"
-      ],
-      "sample_size": 13,
-      "starter_questions": [
-        {
-          "question_id": "review_target",
-          "label": "Review target",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What artifact, draft, or output is being evaluated?",
-          "default_value": ""
-        },
-        {
-          "question_id": "criteria",
-          "label": "Evaluation criteria",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What dimensions should the evaluator score or inspect?",
-          "default_value": ""
-        },
-        {
-          "question_id": "outputs",
-          "label": "Output format",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "How should the review be structured?",
-          "default_value": ""
-        },
-        {
-          "question_id": "constraints",
-          "label": "Constraints",
-          "description": null,
-          "input_type": "textarea",
-          "required": false,
-          "placeholder": "Any rules for severity, tone, or proof requirements?",
-          "default_value": ""
-        }
-      ],
-      "suggested_components": [
-        {
-          "component_type": "role",
-          "title": "Role",
-          "order_rank": 10,
-          "content_template": "You are an evaluator. Review the target carefully, tie feedback to evidence, and make each judgment explicit.",
-          "prevalence": 0.7692
-        },
-        {
-          "component_type": "task",
-          "title": "Task",
-          "order_rank": 20,
-          "content_template": "Review this target:\n{{review_target}}\n\nEvaluate it against:\n{{criteria}}",
-          "prevalence": 0.9231
-        },
-        {
-          "component_type": "outputs",
-          "title": "Outputs",
-          "order_rank": 30,
-          "content_template": "Respond in this format:\n{{outputs}}",
-          "prevalence": 0.9231
-        },
-        {
-          "component_type": "constraints",
-          "title": "Constraints",
-          "order_rank": 40,
-          "content_template": "Constraints:\n{{constraints}}",
-          "prevalence": 0.7692
-        }
-      ],
-      "suggested_tools": [],
-      "suggested_output_schema": null
-    },
-    {
-      "archetype_id": "tool_user",
-      "title": "Tool user",
-      "summary": "Uses tools deliberately, knows when to call them, and keeps the response grounded in retrieved or computed results.",
-      "example_jobs": [
-        "search multiple sources before answering",
-        "decide when to use tools versus direct reasoning"
-      ],
-      "sample_size": 39,
-      "starter_questions": [
-        {
-          "question_id": "primary_goal",
-          "label": "Primary goal",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should this agent solve?",
-          "default_value": ""
-        },
-        {
-          "question_id": "inputs",
-          "label": "Inputs",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What context or user inputs does it start with?",
-          "default_value": ""
-        },
-        {
-          "question_id": "tool_policy",
-          "label": "Tool policy",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "When should it use tools and when should it reason directly?",
-          "default_value": ""
-        },
-        {
-          "question_id": "outputs",
-          "label": "Output contract",
-          "description": null,
-          "input_type": "textarea",
-          "required": true,
-          "placeholder": "What should the answer include?",
-          "default_value": ""
-        },
-        {
-          "question_id": "constraints",
-          "label": "Constraints",
-          "description": null,
-          "input_type": "textarea",
-          "required": false,
-          "placeholder": "Any boundaries for tool usage or final output?",
-          "default_value": ""
-        }
-      ],
-      "suggested_components": [
-        {
-          "component_type": "role",
-          "title": "Role",
-          "order_rank": 10,
-          "content_template": "You are a tool-using agent. Use tools deliberately, explain results clearly, and keep the final answer grounded in the evidence you gather.",
-          "prevalence": 0.7436
-        },
-        {
-          "component_type": "task",
-          "title": "Task",
-          "order_rank": 20,
-          "content_template": "Task:\n{{primary_goal}}",
-          "prevalence": 0.8205
-        },
-        {
-          "component_type": "inputs",
-          "title": "Inputs",
-          "order_rank": 30,
-          "content_template": "Starting inputs:\n{{inputs}}",
-          "prevalence": 0.7949
-        },
-        {
-          "component_type": "tool_instructions",
-          "title": "Tool instructions",
-          "order_rank": 40,
-          "content_template": "Tool usage policy:\n{{tool_policy}}",
-          "prevalence": 0.6154
-        },
-        {
-          "component_type": "outputs",
-          "title": "Outputs",
-          "order_rank": 50,
-          "content_template": "Output contract:\n{{outputs}}",
-          "prevalence": 0.641
-        },
-        {
-          "component_type": "constraints",
-          "title": "Constraints",
-          "order_rank": 60,
-          "content_template": "Constraints:\n{{constraints}}",
-          "prevalence": 0.8205
-        }
-      ],
-      "suggested_tools": [],
-      "suggested_output_schema": null
+      ]
     }
   ]
 }

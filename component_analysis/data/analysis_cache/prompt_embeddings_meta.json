@@ -1,5 +1,6 @@
 {
   "fingerprint": "df482bb05c0c04011013b431838c2f4ae2636e47ebc34f400d0e298184d7399b",
   "embedding_model": "text-embedding-3-large",
+  "embedding_char_limit": 4000,
   "n_rows": 268
 }

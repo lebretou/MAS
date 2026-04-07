@@ -1,10 +1,5 @@
 import client from "../api/client";
-import type {
-  GuidedStartArchetype,
-  GuidedStartCatalog,
-  GuidedStartLlmRequest,
-  GuidedStartLlmResponse,
-} from "../types/guidedStart";
+import type { GuidedStartCatalog } from "../types/guidedStart";
 import type {
   PlaygroundAnalysisRequest,
   PlaygroundAnalysisResponse,
@@ -90,21 +85,42 @@ export const promptAPI = {
     const { data } = await client.get<PromptTemplate[]>("/prompt-templates");
     return data;
   },
+
+  async duplicatePrompt(
+    sourcePromptId: string,
+    newPromptId: string,
+    newName: string,
+  ): Promise<{ prompt: Prompt; version: PromptVersion }> {
+    const source = await promptAPI.getPrompt(sourcePromptId);
+    const latestVersion = source.versions.length > 0
+      ? source.versions.reduce((a, b) => a.created_at > b.created_at ? a : b)
+      : null;
+
+    const prompt = await promptAPI.createPrompt({
+      prompt_id: newPromptId,
+      name: newName,
+      description: source.prompt.description,
+    });
+
+    let version: PromptVersion | null = null;
+    if (latestVersion) {
+      version = await promptAPI.createVersion(newPromptId, {
+        name: latestVersion.name,
+        components: latestVersion.components,
+        variables: latestVersion.variables,
+        output_schema: latestVersion.output_schema,
+        tools: latestVersion.tools,
+        revision_note: `duplicated from ${sourcePromptId}/${latestVersion.version_id}`,
+      });
+    }
+
+    return { prompt, version: version! };
+  },
 };
 
 export const guidedStartAPI = {
   async getCatalog(): Promise<GuidedStartCatalog> {
     const { data } = await client.get<GuidedStartCatalog>("/guided-start/catalog");
     return data;
-  },
-
-  async getArchetype(archetypeId: string): Promise<GuidedStartArchetype> {
-    const { data } = await client.get<GuidedStartArchetype>(`/guided-start/archetypes/${archetypeId}`);
-    return data;
-  },
-
-  async respond(data: GuidedStartLlmRequest): Promise<GuidedStartLlmResponse> {
-    const { data: response } = await client.post<GuidedStartLlmResponse>("/guided-start/llm/respond", data);
-    return response;
   },
 };

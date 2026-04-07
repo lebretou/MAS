@@ -95,8 +95,7 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
       source: e.source,
       target: e.target,
       label: e.label ?? undefined,
-      animated: e.conditional,
-      style: e.conditional ? { strokeDasharray: "5 5" } : undefined,
+      animated: false,
       data: { conditional: e.conditional, label: e.label ?? undefined },
     }));
 

@@ -11,3 +11,6 @@ tracee/server/data/tracee.db
 tracee/sandbox/
 
 research_docs/
+
+# local complex document MAS (not tracked)
+complex_mas/

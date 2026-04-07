@@ -1,13 +1,14 @@
 [
   {
     "cluster_id": 0,
-    "cluster_name": "Query Optimization",
-    "cluster_display_name": "0: Query Optimization",
-    "centroid_summary": "Agents designed to analyze user queries and generate optimized search tags, questions, or filtering decisions to improve information retrieval and relevance.",
-    "guided_start_description": "Help users refine their queries by generating targeted search tags, relevant questions, or filtering criteria to enhance discovery and accuracy.",
-    "size": 7,
+    "cluster_name": "Search Helpers",
+    "cluster_display_name": "0: Search Helpers",
+    "centroid_summary": "Agents in this cluster perform narrow retrieval-support tasks such as generating search tags, filtering whether deeper analysis is needed, querying research sources, and producing short relevance summaries or questions from user input.",
+    "guided_start_description": "Use this assistant when you want help turning a request into search terms, lightweight retrieval decisions, concise match explanations, or short queryable outputs for research and discovery workflows.",
+    "size": 8,
     "source_repos": [
       "Polymarket_agents",
+      "SamuelSchmidgall_AgentLaboratory",
       "moondevonyt_moon-dev-ai-agents",
       "zamalali_DeepGit"
     ],
@@ -28,6 +29,11 @@
         "prompt_preview": "System Role: \"You are a minimal, resource-efficient filtering agent for a GitHub research tool. Your job is to decide whether code-level analysis (e.g., flake8, static checks, linting) should be run on a set of repositories. **Code analysis should almost never run** only when th..."
       },
       {
+        "repo_name": "SamuelSchmidgall_AgentLaboratory",
+        "agent_name": "ARXIV SEARCH TOOL - Command Docstring",
+        "prompt_preview": "\"============= ARXIV SEARCH TOOL ============= You also have access to machine learning paper from Arxiv. To search for summaries of papers on arxiv you can use the following command: ```SUMMARY\\n<search query>\\n```\\n where <search query> is a string that will be used as the sea..."
+      },
+      {
         "repo_name": "moondevonyt_moon-dev-ai-agents",
         "agent_name": "CHAT_QUESTION_GENERATOR",
         "prompt_preview": "System Role: You are an AI that analyzes live stream chat conversations and generates short, readable questions. User Instructions: Given the following recent chat messages from the last {minutes} minutes, generate up to {max_questions} questions that are: 1. MAXIMUM 10 WORDS EA..."
@@ -36,11 +42,6 @@
         "repo_name": "zamalali_DeepGit",
         "agent_name": "EVALUATION.PY - Justification Generator",
         "prompt_preview": "\"You are a highly knowledgeable AI research assistant that can succinctly justify repository matches.\" User Instructions: \"You are a highly knowledgeable AI research assistant. In one to two lines, explain why the repository titled \\\"{repo['title']}\\\" is a good match for a query..."
-      },
-      {
-        "repo_name": "Polymarket_agents",
-        "agent_name": "MULTIQUERY - Multi-Perspective Question Generator",
-        "prompt_preview": "\"You're an AI assistant. Your task is to generate five different versions of the given user question to retreive relevant documents from a vector database. By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations of..."
       }
     ],
     "medoid_agent": {
@@ -48,19 +49,190 @@
       "agent_name": "CHAT.PY - GitHub Search Optimization Expert"
     },
     "common_components": [
+      "task description workflow",
       "role description",
       "placeholder",
+      "constraints restrictions",
       "output",
-      "input",
-      "task description workflow"
+      "input"
     ]
   },
   {
     "cluster_id": 1,
-    "cluster_name": "Trading Decision Agents",
-    "cluster_display_name": "1: Trading Decision Agents",
-    "centroid_summary": "Agents focused on analyzing market data and indicators to collaboratively generate buy, sell, or hold trading decisions with varying risk perspectives.",
-    "guided_start_description": "Start by selecting your trading role and risk preference, then input market data to receive data-driven trade recommendations and strategic insights.",
+    "cluster_name": "Research Coordinator",
+    "cluster_display_name": "1: Research Coordinator",
+    "centroid_summary": "These prompts define agents that plan, gather, evaluate, synthesize, and finalize evidence-based research or analysis workflows, often coordinating multi-step information retrieval and reporting.",
+    "guided_start_description": "Use this agent to run a structured research process that searches for information, identifies gaps, and produces a reliable final report or analysis.",
+    "size": 109,
+    "source_repos": [
+      "FinStep-AI_ContestTrade",
+      "InternScience",
+      "LeapLabTHU_cooragent",
+      "NL2Code_CodeR",
+      "SalesforceAIResearch_enterprise-deep-research",
+      "SamuelSchmidgall_AgentLaboratory",
+      "SkyworkAI_DeepResearchAgent",
+      "assafelovic_gpt-researcher",
+      "autogluon_autogluon-assistant",
+      "dair-ai_m2-deep-research",
+      "danau5tin_multi-agent-coding-sytem",
+      "divar-ir_ai-doc-gen",
+      "facebookresearch_DocAgent",
+      "jmiao24_Paper2Agent",
+      "omni-georgio_deep_research-",
+      "qx-labs_agents-deep-research",
+      "showlab_MovieAgent"
+    ],
+    "representative_agents": [
+      {
+        "repo_name": "SalesforceAIResearch_enterprise-deep-research",
+        "agent_name": "finalize_report_instructions",
+        "prompt_preview": "<TIME_CONTEXT> Current date: {current_date} Current year: {current_year} One year ago: {one_year_ago} </TIME_CONTEXT> <AUGMENT_KNOWLEDGE_CONTEXT> {AUGMENT_KNOWLEDGE_CONTEXT} </AUGMENT_KNOWLEDGE_CONTEXT> You are an expert research editor tasked with producing a final, publication..."
+      },
+      {
+        "repo_name": "SalesforceAIResearch_enterprise-deep-research",
+        "agent_name": "reflection_instructions",
+        "prompt_preview": "<TIME_CONTEXT> Current date: {current_date} Current year: {current_year} One year ago: {one_year_ago} </TIME_CONTEXT> <AUGMENT_KNOWLEDGE_CONTEXT> {AUGMENT_KNOWLEDGE_CONTEXT} </AUGMENT_KNOWLEDGE_CONTEXT> You are an expert research evaluator analyzing a summary about {research_top..."
+      },
+      {
+        "repo_name": "SalesforceAIResearch_enterprise-deep-research",
+        "agent_name": "summarizer_instructions",
+        "prompt_preview": "<TIME_CONTEXT> Current date: {current_date} Current year: {current_year} One year ago: {one_year_ago} </TIME_CONTEXT> <AUGMENT_KNOWLEDGE_CONTEXT> {AUGMENT_KNOWLEDGE_CONTEXT} </AUGMENT_KNOWLEDGE_CONTEXT> <GOAL> Generate a comprehensive, research-quality synthesis of web search re..."
+      },
+      {
+        "repo_name": "SalesforceAIResearch_enterprise-deep-research",
+        "agent_name": "query_writer_instructions",
+        "prompt_preview": "<TIME_CONTEXT> Current date: {current_date} Current year: {current_year} One year ago: {one_year_ago} </TIME_CONTEXT> <AUGMENT_KNOWLEDGE_CONTEXT> {AUGMENT_KNOWLEDGE_CONTEXT} </AUGMENT_KNOWLEDGE_CONTEXT> <DATABASE_CONTEXT> {DATABASE_CONTEXT} </DATABASE_CONTEXT> You are an expert ..."
+      },
+      {
+        "repo_name": "jmiao24_Paper2Agent",
+        "agent_name": "STEP 5: CODE QUALITY & COVERAGE ANALYSIS COORDINATOR",
+        "prompt_preview": "Role: Quality assurance coordinator that generates comprehensive code coverage reports and quantitative code quality metrics (including style analysis via pylint) for all extracted tools. Core Mission: Analyze pre-generated coverage and pylint reports to extract quantitative met..."
+      },
+      {
+        "repo_name": "jmiao24_Paper2Agent",
+        "agent_name": "STEP 3: TOOL EXTRACTION & TESTING COORDINATOR",
+        "prompt_preview": "Role: Orchestrator agent that coordinates sequential tool extraction and testing by managing specialized subagents to transform tutorial notebooks into production-ready, tested function libraries. Core Mission: Convert executed tutorial notebooks into reusable tools with compreh..."
+      }
+    ],
+    "medoid_agent": {
+      "repo_name": "LeapLabTHU_cooragent",
+      "agent_name": "RESEARCHER"
+    },
+    "common_components": [
+      "task description workflow",
+      "constraints restrictions",
+      "role description",
+      "output",
+      "input",
+      "actions",
+      "placeholder"
+    ]
+  },
+  {
+    "cluster_id": 2,
+    "cluster_name": "Utility Assistants",
+    "cluster_display_name": "2: Utility Assistants",
+    "centroid_summary": "This cluster contains narrowly scoped helper agents that perform specific support tasks such as answering from a knowledge base, checking compliance, summarizing or generating short content, and scoring simple inputs.",
+    "guided_start_description": "Use this role when you want a lightweight task-specific assistant for a single workflow step like Q&A, review, rating, or short-form content generation.",
+    "size": 9,
+    "source_repos": [
+      "moondevonyt_moon-dev-ai-agents"
+    ],
+    "representative_agents": [
+      {
+        "repo_name": "moondevonyt_moon-dev-ai-agents",
+        "agent_name": "COMPLIANCE_AGENT",
+        "prompt_preview": "COMPLIANCE_AGENT - Moon Dev's Compliance Agent System Role: You are Moon Dev's Compliance Agent , an expert in analyzing ads for compliance with Facebook's advertising guidelines. Your task is to analyze the provided ad frames and transcript to determine if they comply with Face..."
+      },
+      {
+        "repo_name": "moondevonyt_moon-dev-ai-agents",
+        "agent_name": "PHONE_AGENT",
+        "prompt_preview": "You are Moon Dev's friendly AI assistant. Keep responses very short and concise (1-2 sentences max). Add emojis to make responses fun and engaging. Use this knowledge base for Moon Dev specific questions: {KNOWLEDGE_BASE} Key guidelines: - Use knowledge base for Moon Dev/Algo Tr..."
+      },
+      {
+        "repo_name": "moondevonyt_moon-dev-ai-agents",
+        "agent_name": "CLIPS_AGENT",
+        "prompt_preview": "{transcript} \ud83d\udd25 INSTRUCTIONS START HERE \ud83d\udd25 ================================ YOUR ONLY JOB IS TO WRITE 2-3 EXCITING SENTENCE BASED ON THE ABOVE TRANSCRIPT INTRODUCING THE TOPIC USE THE CONTEXT OF THE ABOVE TRANSCRIPT TO WRITE 2-3 EXCITING INTRO SENTENCES BASED ON THE TRANSRIPT THAT..."
+      },
+      {
+        "repo_name": "moondevonyt_moon-dev-ai-agents",
+        "agent_name": "FOCUS_AGENT",
+        "prompt_preview": "System Role: You are Moon Dev's Focus AI. You analyze focus and provide ratings. NO MARKDOWN OR FORMATTING. RESPOND WITH EXACTLY TWO LINES: A SCORE LINE (X/10) AND ONE SINGLE ENCOURAGING SENTENCE. User Instructions: You must respond in exactly 3 lines: Line 1: Just a number from..."
+      },
+      {
+        "repo_name": "moondevonyt_moon-dev-ai-agents",
+        "agent_name": "MILLION_AGENT",
+        "prompt_preview": "System Role: You are Moon Dev's Knowledge Base AI 319. Answer questions based on the provided content only. User Instructions: === KNOWLEDGE BASE CONTENT === {knowledge_base} === QUESTION === {question} Please provide a detailed answer based on the knowledge base content above. ..."
+      },
+      {
+        "repo_name": "moondevonyt_moon-dev-ai-agents",
+        "agent_name": "CODE_RUNNER_AGENT",
+        "prompt_preview": "System Role: N/A (Uses AppleScript and keyboard automation, no LLM system prompts) User Instructions: N/A (Automates code execution and AI-based debugging via CLI shortcuts)"
+      }
+    ],
+    "medoid_agent": {
+      "repo_name": "moondevonyt_moon-dev-ai-agents",
+      "agent_name": "MILLION_AGENT"
+    },
+    "common_components": []
+  },
+  {
+    "cluster_id": 3,
+    "cluster_name": "Product Search",
+    "cluster_display_name": "3: Product Search",
+    "centroid_summary": "Agents in this cluster help users find products by searching a product database, judging result relevance, and responding clearly when matches are weak or unavailable.",
+    "guided_start_description": "Use this assistant to search for products, evaluate which results best match a shopper\u2019s request, and explain next steps when no exact items are found.",
+    "size": 9,
+    "source_repos": [
+      "Deluxer_oliva"
+    ],
+    "representative_agents": [
+      {
+        "repo_name": "Deluxer_oliva",
+        "agent_name": "SUPERVISOR_SYSTEM_PROMPT - Supervisor Agent (Dynamic Generation)",
+        "prompt_preview": "Dynamic prompt generated by supervisor_system_prompt() method with parameters: - members: list of available subagents - agent_members_prompt_final: descriptions of each subagent Generated prompt template: \"# Role You are Oliva's personal assistant supervisor Agent. Your job is t..."
+      },
+      {
+        "repo_name": "Deluxer_oliva",
+        "agent_name": "GRADE_DOCUMENTS_PROMPT - Document Relevance Grader (Primary Version)",
+        "prompt_preview": "\"You are a grader assessing relevance of retrieved documents to a user question. User question: {question} Retrieved documents: {context} Task: 1. Carefully analyze if the documents contain information that could help answer the question 2. For price-based queries, check if ANY ..."
+      },
+      {
+        "repo_name": "Deluxer_oliva",
+        "agent_name": "GRADE_DOCUMENTS_PROMPT_OPT_2 - Document Relevance Grader (Alternative Version)",
+        "prompt_preview": "\"You are a grader assessing relevance of retrieved docs to a user question. Here are the retrieved docs: \\n ------- \\n {context} \\n ------- \\n Here is the user question: {question} If the content of the docs are relevant to the users question, score them as relevant. Give a bina..."
+      },
+      {
+        "repo_name": "Deluxer_oliva",
+        "agent_name": "ASSISTANT_SYSTEM - Main AI Assistant Role",
+        "prompt_preview": "\"You are Oliva, a helpful AI assistant that can engage in natural conversations and help users with various tasks. You aim to be: - Helpful and informative - Direct and concise in responses - Natural in conversation - Honest about capabilities and limitations When responding: 1...."
+      },
+      {
+        "repo_name": "Deluxer_oliva",
+        "agent_name": "AMAZON_SEARCH_PROMPT - Product Search Assistant",
+        "prompt_preview": "You are a helpful product search assistant that helps users find products on our database. When a user asks a question, always use the search_products_by_superlinked tool to find relevant products. Make sure to include the user's query in the tool call. Avoid mentioning the data..."
+      },
+      {
+        "repo_name": "Deluxer_oliva",
+        "agent_name": "NO_RESULTS_PROMPT - No Results Response Generator",
+        "prompt_preview": "You are a helpful assistant responding to a product search query. Original query: {question} Task: Generate a polite response explaining that no exact matches were found. Suggest broadening the search criteria (e.g. higher price range, different category)."
+      }
+    ],
+    "medoid_agent": {
+      "repo_name": "Deluxer_oliva",
+      "agent_name": "AGENT_PROMPT_BY_SUPERLINKED - Product Search Agent (Superlinked Version)"
+    },
+    "common_components": [
+      "role description"
+    ]
+  },
+  {
+    "cluster_id": 4,
+    "cluster_name": "Trading Analysts",
+    "cluster_display_name": "4: Trading Analysts",
+    "centroid_summary": "Agents in this cluster analyze market, chart, sentiment, and risk signals to recommend or debate concrete trading actions such as buy, sell, hold, long, or short.",
+    "guided_start_description": "Use this role when you want an AI trading specialist to evaluate financial or prediction market data and produce a clear trade recommendation or risk-based viewpoint.",
     "size": 52,
     "source_repos": [
       "FinStep-AI_ContestTrade",
@@ -111,130 +283,189 @@
     ]
   },
   {
-    "cluster_id": 2,
-    "cluster_name": "Task Orchestration",
-    "cluster_display_name": "2: Task Orchestration",
-    "centroid_summary": "Agents coordinating complex workflows by delegating subtasks, managing specialized subagents, and synthesizing outputs to achieve comprehensive task completion.",
-    "guided_start_description": "Introduce this role as a central coordinator that breaks down tasks, assigns work to expert subagents, and integrates their results to deliver complete solutions.",
-    "size": 84,
+    "cluster_id": 5,
+    "cluster_name": "Hardware Checks",
+    "cluster_display_name": "5: Hardware Checks",
+    "centroid_summary": "Agents in this cluster identify hardware constraints from user requests and assess whether a project's dependencies are compatible with a target hardware environment.",
+    "guided_start_description": "Use this agent to detect device or resource limits like CPU-only, low-memory, or mobile targets and verify if a dependency stack can run under those hardware constraints.",
+    "size": 2,
     "source_repos": [
-      "FinStep-AI_ContestTrade",
-      "InternScience",
-      "LeapLabTHU_cooragent",
-      "SamuelSchmidgall_AgentLaboratory",
-      "SkyworkAI_DeepResearchAgent",
-      "assafelovic_gpt-researcher",
-      "business-science_ai-data-science-team",
-      "dair-ai_m2-deep-research",
-      "danau5tin_multi-agent-coding-sytem",
-      "divar-ir_ai-doc-gen",
-      "jmiao24_Paper2Agent",
-      "omni-georgio_deep_research-",
-      "qx-labs_agents-deep-research",
-      "showlab_MovieAgent"
+      "zamalali_DeepGit"
     ],
     "representative_agents": [
       {
-        "repo_name": "jmiao24_Paper2Agent",
-        "agent_name": "STEP 5: CODE QUALITY & COVERAGE ANALYSIS COORDINATOR",
-        "prompt_preview": "Role: Quality assurance coordinator that generates comprehensive code coverage reports and quantitative code quality metrics (including style analysis via pylint) for all extracted tools. Core Mission: Analyze pre-generated coverage and pylint reports to extract quantitative met..."
+        "repo_name": "zamalali_DeepGit",
+        "agent_name": "PARSE_HARDWARE.PY - Hardware Constraint Extractor",
+        "prompt_preview": "System Role: (embedded in prompt template) User Instructions: \"Extract any hardware constraints from the user query. Return exactly one of: cpu-only, low-memory, mobile, NONE.\" Full Prompt Context: \"{PROMPT_TEMPLATE} User query: {state.user_query}\""
       },
       {
-        "repo_name": "jmiao24_Paper2Agent",
-        "agent_name": "STEP 3: TOOL EXTRACTION & TESTING COORDINATOR",
-        "prompt_preview": "Role: Orchestrator agent that coordinates sequential tool extraction and testing by managing specialized subagents to transform tutorial notebooks into production-ready, tested function libraries. Core Mission: Convert executed tutorial notebooks into reusable tools with compreh..."
-      },
-      {
-        "repo_name": "danau5tin_multi-agent-coding-sytem",
-        "agent_name": "ORCHESTRATOR AGENT (Orca) - Task Orchestration & Coordination",
-        "prompt_preview": "System Role: Strategic task orchestration and coordination agent that delegates work to specialized subagents while maintaining comprehensive system understanding System Message: \"You are the Orchestrator Agent (Orca). You solve terminal-based tasks by strategically delegating w..."
-      },
-      {
-        "repo_name": "SamuelSchmidgall_AgentLaboratory",
-        "agent_name": "PAPER SOLVER - system_prompt() method",
-        "prompt_preview": "System Role: \"You are a computer science PhD student at a top university who has submitted their paper to an ML conference called ICLR. Your goal was to write a research paper and get high scores from the reviewers so that it get accepted to the conference. Your paper should be ..."
-      },
-      {
-        "repo_name": "danau5tin_multi-agent-coding-sytem",
-        "agent_name": "CODER AGENT - Implementation Specialist",
-        "prompt_preview": "System Role: Write-capable implementation specialist for transforming architectural vision into production-ready solutions System Message: \"You are a Coder Agent, a state-of-the-art AI software engineer with extraordinary expertise spanning the entire technology landscape. You o..."
-      },
-      {
-        "repo_name": "danau5tin_multi-agent-coding-sytem",
-        "agent_name": "EXPLORER SUBAGENT - Investigative Analysis Specialist",
-        "prompt_preview": "System Role: Specialized investigative agent designed to understand, verify, and report on system states and behaviors (read-only) System Message: \"You are an Explorer Subagent, a specialized investigative agent designed to understand, verify, and report on system states and beh..."
+        "repo_name": "zamalali_DeepGit",
+        "agent_name": "DEPENDENCY_ANALYSIS.PY - Hardware Compatibility Checker",
+        "prompt_preview": "System Role: (embedded in prompt template) User Instructions: \"Given the following dependency list, can this project run on {hw}? Answer YES or NO and a short reason. Dependencies: {deps}\""
       }
     ],
     "medoid_agent": {
-      "repo_name": "LeapLabTHU_cooragent",
-      "agent_name": "RESEARCHER"
+      "repo_name": "zamalali_DeepGit",
+      "agent_name": "DEPENDENCY_ANALYSIS.PY - Hardware Compatibility Checker"
     },
     "common_components": [
-      "constraints restrictions",
-      "task description workflow",
-      "role description",
+      "placeholder",
       "output",
-      "actions",
-      "input"
+      "input",
+      "task description workflow"
     ]
   },
   {
-    "cluster_id": 3,
-    "cluster_name": "Product Search Supervisor",
-    "cluster_display_name": "3: Product Search Supervisor",
-    "centroid_summary": "Agents in this cluster coordinate and assist with product search tasks by delegating subtasks, evaluating document relevance, and generating user-friendly responses when no exact matches are found.",
-    "guided_start_description": "Introduce a supervisory assistant that manages product search workflows by analyzing queries, assigning tasks to specialized subagents, and providing clear, polite feedback on search results.",
-    "size": 9,
+    "cluster_id": 6,
+    "cluster_name": "Rails Builder",
+    "cluster_display_name": "6: Rails Builder",
+    "centroid_summary": "Agents in this cluster help users design, build, test, and refine Ruby on Rails applications with an MVP-first, small-safe-diff workflow and strong product guidance.",
+    "guided_start_description": "Use this assistant to brainstorm features or incrementally implement, test, and polish a Rails app with clear step-by-step progress and cautious code changes.",
+    "size": 5,
     "source_repos": [
-      "Deluxer_oliva"
+      "KodyKendall_LlamaBot"
     ],
     "representative_agents": [
       {
-        "repo_name": "Deluxer_oliva",
-        "agent_name": "SUPERVISOR_SYSTEM_PROMPT - Supervisor Agent (Dynamic Generation)",
-        "prompt_preview": "Dynamic prompt generated by supervisor_system_prompt() method with parameters: - members: list of available subagents - agent_members_prompt_final: descriptions of each subagent Generated prompt template: \"# Role You are Oliva's personal assistant supervisor Agent. Your job is t..."
+        "repo_name": "KodyKendall_LlamaBot",
+        "agent_name": "RAILS_AI_BUILDER_AGENT_PROMPT (LangGraph Agent Architect)",
+        "prompt_preview": "You are **Leonardo**, an expert LangGraph agent architect helping users add AI agent capabilities to their Leonardo Rails applications. You operate with precision and systematic methodology. Your contract: - **Understand first**: research schema, routes, and controllers before i..."
       },
       {
-        "repo_name": "Deluxer_oliva",
-        "agent_name": "GRADE_DOCUMENTS_PROMPT - Document Relevance Grader (Primary Version)",
-        "prompt_preview": "\"You are a grader assessing relevance of retrieved documents to a user question. User question: {question} Retrieved documents: {context} Task: 1. Carefully analyze if the documents contain information that could help answer the question 2. For price-based queries, check if ANY ..."
+        "repo_name": "KodyKendall_LlamaBot",
+        "agent_name": "RAILS_QA_SOFTWARE_ENGINEER_PROMPT (QA/Test Builder)",
+        "prompt_preview": "You are **Leonardo Test Builder**, a test-driven development expert specializing in writing, running, and debugging tests for Leonardo Rails applications. You operate with precision and test-first methodology. Your contract: - **Test-first**: write comprehensive tests for existi..."
       },
       {
-        "repo_name": "Deluxer_oliva",
-        "agent_name": "GRADE_DOCUMENTS_PROMPT_OPT_2 - Document Relevance Grader (Alternative Version)",
-        "prompt_preview": "\"You are a grader assessing relevance of retrieved docs to a user question. Here are the retrieved docs: \\n ------- \\n {context} \\n ------- \\n Here is the user question: {question} If the content of the docs are relevant to the users question, score them as relevant. Give a bina..."
+        "repo_name": "KodyKendall_LlamaBot",
+        "agent_name": "RAILS_FRONTEND_STARTER_AGENT_PROMPT (Front-End Designer/Product Advisor)",
+        "prompt_preview": "You are **Leonardo**, an expert front-end designer and product advisor helping a non\u0011technical user ptototype the front-end for their Ruby on Rails application. You operate with elegate design rigor and product discipline. Your contract: - **MVP-first**: deliver the smallest pos..."
       },
       {
-        "repo_name": "Deluxer_oliva",
-        "agent_name": "ASSISTANT_SYSTEM - Main AI Assistant Role",
-        "prompt_preview": "\"You are Oliva, a helpful AI assistant that can engage in natural conversations and help users with various tasks. You aim to be: - Helpful and informative - Direct and concise in responses - Natural in conversation - Honest about capabilities and limitations When responding: 1...."
+        "repo_name": "KodyKendall_LlamaBot",
+        "agent_name": "USER_FEEDBACK_AGENT_PROMPT (Feedback/Requirements Brainstorming Partner)",
+        "prompt_preview": "You are **Leonardo**, a brainstorming partner helping users think through their Rails app ideas. ## STOP - READ THIS BEFORE EVERY RESPONSE **YOUR RESPONSES MUST BE SHORT. 2-3 SENTENCES MAX.** BAD RESPONSE (DO NOT DO THIS): ``` Hey there! Welcome to Feedback Mode! I'm Leonardo......"
       },
       {
-        "repo_name": "Deluxer_oliva",
-        "agent_name": "AMAZON_SEARCH_PROMPT - Product Search Assistant",
-        "prompt_preview": "You are a helpful product search assistant that helps users find products on our database. When a user asks a question, always use the search_products_by_superlinked tool to find relevant products. Make sure to include the user's query in the tool call. Avoid mentioning the data..."
-      },
-      {
-        "repo_name": "Deluxer_oliva",
-        "agent_name": "NO_RESULTS_PROMPT - No Results Response Generator",
-        "prompt_preview": "You are a helpful assistant responding to a product search query. Original query: {question} Task: Generate a polite response explaining that no exact matches were found. Suggest broadening the search criteria (e.g. higher price range, different category)."
+        "repo_name": "KodyKendall_LlamaBot",
+        "agent_name": "RAILS_AGENT_PROMPT (Rails Engineer/Product Advisor)",
+        "prompt_preview": "You are **Leonardo**, an expert Rails engineer and product advisor helping a non\u0011technical user build a Ruby on Rails application. You operate with engineering rigor and product discipline. Your contract: - **MVP-first**: deliver the smallest possible working slice that the user..."
       }
     ],
     "medoid_agent": {
-      "repo_name": "Deluxer_oliva",
-      "agent_name": "AGENT_PROMPT_BY_SUPERLINKED - Product Search Agent (Superlinked Version)"
+      "repo_name": "KodyKendall_LlamaBot",
+      "agent_name": "RAILS_AGENT_PROMPT (Rails Engineer/Product Advisor)"
     },
     "common_components": [
-      "role description"
+      "security disclaimer",
+      "external information",
+      "in context examples",
+      "context",
+      "role description",
+      "actions",
+      "constraints restrictions",
+      "output",
+      "task description workflow",
+      "tool definitions"
     ]
   },
   {
-    "cluster_id": 4,
-    "cluster_name": "Phase-Based Workflow",
-    "cluster_display_name": "4: Phase-Based Workflow",
-    "centroid_summary": "Prompts guiding multi-phase workflows by defining context, tasks, constraints, and summarization to support structured progress and evaluation across project phases.",
-    "guided_start_description": "Introduce the current project phase, outline key tasks and constraints, and provide targeted questions or summaries to guide users through each step of the workflow.",
-    "size": 44,
+    "cluster_id": 7,
+    "cluster_name": "Field Extraction",
+    "cluster_display_name": "7: Field Extraction",
+    "centroid_summary": "These agents parse structured trading text and return only a specific requested numeric field such as price or size.",
+    "guided_start_description": "Use this helper when you need to extract a single exact value from a formatted market or trading string.",
+    "size": 2,
+    "source_repos": [
+      "Polymarket_agents"
+    ],
+    "representative_agents": [
+      {
+        "repo_name": "Polymarket_agents",
+        "agent_name": "FORMAT PRICE EXTRACTION - Price Parsing Helper",
+        "prompt_preview": "\"You will be given an input such as: ` price:0.5, size:0.1, side:BUY, ` Please extract only the value associated with price. In this case, you would return \\\"0.5\\\". Only return the number after price:\""
+      },
+      {
+        "repo_name": "Polymarket_agents",
+        "agent_name": "FORMAT SIZE EXTRACTION - Size Parsing Helper",
+        "prompt_preview": "\"You will be given an input such as: ` price:0.5, size:0.1, side:BUY, ` Please extract only the value associated with price. In this case, you would return \\\"0.1\\\". Only return the number after size:\""
+      }
+    ],
+    "medoid_agent": {
+      "repo_name": "Polymarket_agents",
+      "agent_name": "FORMAT SIZE EXTRACTION - Size Parsing Helper"
+    },
+    "common_components": [
+      "in context examples",
+      "actions",
+      "constraints restrictions",
+      "output",
+      "input",
+      "task description workflow"
+    ]
+  },
+  {
+    "cluster_id": 8,
+    "cluster_name": "Data Science",
+    "cluster_display_name": "8: Data Science",
+    "centroid_summary": "Agents in this cluster perform or coordinate practical data science workflows such as data loading, wrangling, feature engineering, visualization planning, and machine learning code generation.",
+    "guided_start_description": "Use this role when you want an AI teammate to help route, prepare, analyze, visualize, or model tabular data in an end-to-end data science workflow.",
+    "size": 27,
+    "source_repos": [
+      "Polymarket_agents",
+      "business-science_ai-data-science-team"
+    ],
+    "representative_agents": [
+      {
+        "repo_name": "business-science_ai-data-science-team",
+        "agent_name": "SUPERVISOR_DS_TEAM - Supervisor Router",
+        "prompt_preview": "SYSTEM Role: \"You are a supervisor managing a data science team with these workers: {subagent_names}. Each worker has specific tools/capabilities (names are a hint for routing): - Data_Loader_Tools_Agent: Good for inspecting file folder system, finding files, searching and loadi..."
+      },
+      {
+        "repo_name": "business-science_ai-data-science-team",
+        "agent_name": "FEATURE_ENGINEERING_AGENT - Create Feature Engineering Code",
+        "prompt_preview": "System Role: \"You are a Feature Engineering Agent. Your job is to create a {function_name}() function that can be run on the data provided using the following recommended steps.\" User Instructions: \"Recommended Steps: {recommended_steps} Use the schema summary below to decide ap..."
+      },
+      {
+        "repo_name": "business-science_ai-data-science-team",
+        "agent_name": "H2O_ML_AGENT - Create H2O AutoML Code",
+        "prompt_preview": "System Role: \"You are an H2O AutoML agent. Create a Python function named {function_name}(data_raw) that runs H2OAutoML on the provided data with a focus on maximizing model accuracy and incorporating user instructions for flexibility.\" User Instructions: \"Do not perform substan..."
+      },
+      {
+        "repo_name": "business-science_ai-data-science-team",
+        "agent_name": "FEATURE_ENGINEERING_AGENT - Recommend Feature Engineering Steps",
+        "prompt_preview": "System Role: \"You are a Feature Engineering Expert. Given the following information about the data, recommend a series of numbered steps to take to engineer features.\" User Instructions: \"General Steps: Things that should be considered in the feature engineering steps: * Convert..."
+      },
+      {
+        "repo_name": "business-science_ai-data-science-team",
+        "agent_name": "DATA_VISUALIZATION_AGENT - Create Chart Generator Instructions",
+        "prompt_preview": "System Role: \"You are a supervisor that is an expert in providing instructions to a chart generator agent for plotting.\" User Instructions: \"You will take a question that a user has and the data that was generated to answer the question, and create instructions to create a chart..."
+      },
+      {
+        "repo_name": "business-science_ai-data-science-team",
+        "agent_name": "PANDAS_DATA_ANALYST - Routing Preprocessor",
+        "prompt_preview": "System Role: \"You are an expert in routing decisions for a Pandas Data Manipulation Wrangling Agent, a Charting Visualization Agent, and a Pandas Table Agent. Your job is to tell the agents which actions to perform and determine the correct routing for the incoming user question..."
+      }
+    ],
+    "medoid_agent": {
+      "repo_name": "business-science_ai-data-science-team",
+      "agent_name": "DATA_WRANGLING_AGENT - Create Data Wrangler Code"
+    },
+    "common_components": [
+      "role description",
+      "actions",
+      "input",
+      "constraints restrictions",
+      "placeholder"
+    ]
+  },
+  {
+    "cluster_id": 9,
+    "cluster_name": "Workflow Orchestrators",
+    "cluster_display_name": "9: Workflow Orchestrators",
+    "centroid_summary": "Prompts in this cluster define structured, phase-aware workflow roles that plan, execute, summarize, review, or validate work using explicit inputs, constraints, and output formats.",
+    "guided_start_description": "Use this role when you want an agent to operate as a step in a larger pipeline, with clear phase context, prescribed tasks, and standardized deliverables.",
+    "size": 45,
     "source_repos": [
       "multimodal-art-projection_AutoKaggle"
     ],
@@ -275,338 +506,5 @@
       "agent_name": "DEVELOPER - MAIN PROMPT"
     },
     "common_components": []
-  },
-  {
-    "cluster_id": 5,
-    "cluster_name": "Hardware Compatibility",
-    "cluster_display_name": "5: Hardware Compatibility",
-    "centroid_summary": "Agents in this cluster analyze hardware constraints and compatibility to determine if software can run on specified hardware configurations.",
-    "guided_start_description": "Help users identify hardware requirements and check if their software dependencies are compatible with their target devices.",
-    "size": 2,
-    "source_repos": [
-      "zamalali_DeepGit"
-    ],
-    "representative_agents": [
-      {
-        "repo_name": "zamalali_DeepGit",
-        "agent_name": "PARSE_HARDWARE.PY - Hardware Constraint Extractor",
-        "prompt_preview": "System Role: (embedded in prompt template) User Instructions: \"Extract any hardware constraints from the user query. Return exactly one of: cpu-only, low-memory, mobile, NONE.\" Full Prompt Context: \"{PROMPT_TEMPLATE} User query: {state.user_query}\""
-      },
-      {
-        "repo_name": "zamalali_DeepGit",
-        "agent_name": "DEPENDENCY_ANALYSIS.PY - Hardware Compatibility Checker",
-        "prompt_preview": "System Role: (embedded in prompt template) User Instructions: \"Given the following dependency list, can this project run on {hw}? Answer YES or NO and a short reason. Dependencies: {deps}\""
-      }
-    ],
-    "medoid_agent": {
-      "repo_name": "zamalali_DeepGit",
-      "agent_name": "DEPENDENCY_ANALYSIS.PY - Hardware Compatibility Checker"
-    },
-    "common_components": [
-      "placeholder",
-      "output",
-      "input",
-      "task description workflow"
-    ]
-  },
-  {
-    "cluster_id": 6,
-    "cluster_name": "Specialized AI Assistants",
-    "cluster_display_name": "6: Specialized AI Assistants",
-    "centroid_summary": "This cluster comprises AI agents designed to perform focused tasks such as compliance checking, concise user assistance, content summarization, focus evaluation, and knowledge-based question answering within specific domains.",
-    "guided_start_description": "Introduce the AI assistant by highlighting its specialized role\u2014whether it's ensuring compliance, providing brief and engaging responses, generating content intros, assessing focus levels, or delivering detailed answers from a knowledge base.",
-    "size": 9,
-    "source_repos": [
-      "moondevonyt_moon-dev-ai-agents"
-    ],
-    "representative_agents": [
-      {
-        "repo_name": "moondevonyt_moon-dev-ai-agents",
-        "agent_name": "COMPLIANCE_AGENT",
-        "prompt_preview": "COMPLIANCE_AGENT - Moon Dev's Compliance Agent System Role: You are Moon Dev's Compliance Agent , an expert in analyzing ads for compliance with Facebook's advertising guidelines. Your task is to analyze the provided ad frames and transcript to determine if they comply with Face..."
-      },
-      {
-        "repo_name": "moondevonyt_moon-dev-ai-agents",
-        "agent_name": "PHONE_AGENT",
-        "prompt_preview": "You are Moon Dev's friendly AI assistant. Keep responses very short and concise (1-2 sentences max). Add emojis to make responses fun and engaging. Use this knowledge base for Moon Dev specific questions: {KNOWLEDGE_BASE} Key guidelines: - Use knowledge base for Moon Dev/Algo Tr..."
-      },
-      {
-        "repo_name": "moondevonyt_moon-dev-ai-agents",
-        "agent_name": "CLIPS_AGENT",
-        "prompt_preview": "{transcript} \ud83d\udd25 INSTRUCTIONS START HERE \ud83d\udd25 ================================ YOUR ONLY JOB IS TO WRITE 2-3 EXCITING SENTENCE BASED ON THE ABOVE TRANSCRIPT INTRODUCING THE TOPIC USE THE CONTEXT OF THE ABOVE TRANSCRIPT TO WRITE 2-3 EXCITING INTRO SENTENCES BASED ON THE TRANSRIPT THAT..."
-      },
-      {
-        "repo_name": "moondevonyt_moon-dev-ai-agents",
-        "agent_name": "FOCUS_AGENT",
-        "prompt_preview": "System Role: You are Moon Dev's Focus AI. You analyze focus and provide ratings. NO MARKDOWN OR FORMATTING. RESPOND WITH EXACTLY TWO LINES: A SCORE LINE (X/10) AND ONE SINGLE ENCOURAGING SENTENCE. User Instructions: You must respond in exactly 3 lines: Line 1: Just a number from..."
-      },
-      {
-        "repo_name": "moondevonyt_moon-dev-ai-agents",
-        "agent_name": "MILLION_AGENT",
-        "prompt_preview": "System Role: You are Moon Dev's Knowledge Base AI 319. Answer questions based on the provided content only. User Instructions: === KNOWLEDGE BASE CONTENT === {knowledge_base} === QUESTION === {question} Please provide a detailed answer based on the knowledge base content above. ..."
-      },
-      {
-        "repo_name": "moondevonyt_moon-dev-ai-agents",
-        "agent_name": "CODE_RUNNER_AGENT",
-        "prompt_preview": "System Role: N/A (Uses AppleScript and keyboard automation, no LLM system prompts) User Instructions: N/A (Automates code execution and AI-based debugging via CLI shortcuts)"
-      }
-    ],
-    "medoid_agent": {
-      "repo_name": "moondevonyt_moon-dev-ai-agents",
-      "agent_name": "MILLION_AGENT"
-    },
-    "common_components": []
-  },
-  {
-    "cluster_id": 7,
-    "cluster_name": "Value Extraction",
-    "cluster_display_name": "7: Value Extraction",
-    "centroid_summary": "Prompts designed to extract specific numerical values from structured input strings based on given keys.",
-    "guided_start_description": "Enter a structured text input and specify the key whose numeric value you want to extract.",
-    "size": 2,
-    "source_repos": [
-      "Polymarket_agents"
-    ],
-    "representative_agents": [
-      {
-        "repo_name": "Polymarket_agents",
-        "agent_name": "FORMAT PRICE EXTRACTION - Price Parsing Helper",
-        "prompt_preview": "\"You will be given an input such as: ` price:0.5, size:0.1, side:BUY, ` Please extract only the value associated with price. In this case, you would return \\\"0.5\\\". Only return the number after price:\""
-      },
-      {
-        "repo_name": "Polymarket_agents",
-        "agent_name": "FORMAT SIZE EXTRACTION - Size Parsing Helper",
-        "prompt_preview": "\"You will be given an input such as: ` price:0.5, size:0.1, side:BUY, ` Please extract only the value associated with price. In this case, you would return \\\"0.1\\\". Only return the number after size:\""
-      }
-    ],
-    "medoid_agent": {
-      "repo_name": "Polymarket_agents",
-      "agent_name": "FORMAT PRICE EXTRACTION - Price Parsing Helper"
-    },
-    "common_components": [
-      "in context examples",
-      "actions",
-      "constraints restrictions",
-      "output",
-      "input",
-      "task description workflow"
-    ]
-  },
-  {
-    "cluster_id": 8,
-    "cluster_name": "Multi-Agent Dev Roles",
-    "cluster_display_name": "8: Multi-Agent Dev Roles",
-    "centroid_summary": "This cluster defines specialized system prompts for autonomous agents collaboratively managing software development tasks such as issue reproduction, fault localization, code editing, testing, and team coordination.",
-    "guided_start_description": "Introduce users to a multi-agent software development workflow where distinct AI roles handle bug reproduction, debugging, code editing, verification, and project management to streamline issue resolution.",
-    "size": 9,
-    "source_repos": [
-      "InternScience",
-      "NL2Code_CodeR",
-      "SamuelSchmidgall_AgentLaboratory"
-    ],
-    "representative_agents": [
-      {
-        "repo_name": "NL2Code_CodeR",
-        "agent_name": "MANAGER - Team coordination and issue resolution planning",
-        "prompt_preview": "System Role: \"SETTING: You are a Manager responsible for overseeing a software engineering team. Your team comprises four members: the **Reproducer**, the **Fault Localizer**, the **Editor**, and the **Verifier**. Your primary task is to efficiently solve GitHub issues and ensur..."
-      },
-      {
-        "repo_name": "NL2Code_CodeR",
-        "agent_name": "EDITOR/PROGRAMMER - Autonomous code editor for issue resolution",
-        "prompt_preview": "System Role: \"You are an autonomous programmer, and you're working directly in the command line with a special interface. The special interface consists of a file editor that shows you 100 lines of a file at a time. In addition to typical bash commands, you can also use the foll..."
-      },
-      {
-        "repo_name": "NL2Code_CodeR",
-        "agent_name": "FAULT_LOCALIZER/DEBUGGER - Issue analysis and fault localization",
-        "prompt_preview": "System Role: \"SETTING: You are a helpful assistant tasked to gather project contextual information related to the issue by search APIs, and then to locate the position of the edits in the issue. You're working directly in the command line with a special interface. The project co..."
-      },
-      {
-        "repo_name": "NL2Code_CodeR",
-        "agent_name": "REPRODUCER - Bug reproduction and test case generation",
-        "prompt_preview": "System Role: \"SETTING: You are a helpful assistant tasked with writing tests to reproduce a specified issue, and you're working directly in the command line with a special interface. The special interface consists of a file editor that shows you {WINDOW} lines of a file at a tim..."
-      },
-      {
-        "repo_name": "NL2Code_CodeR",
-        "agent_name": "VERIFIER/TESTER - Test execution and verification",
-        "prompt_preview": "System Role: \"You are an autonomous tester working directly in the command line with a special interface designed for efficient and effective software testing. In addition to typical bash commands, you can also use the following *general* and *tester-specific* commands to help y..."
-      },
-      {
-        "repo_name": "SamuelSchmidgall_AgentLaboratory",
-        "agent_name": "ML SOLVER - Code Repair System Prompt (Edit mode)",
-        "prompt_preview": "System Role: \"You are an automated code repair tool. Your goal is to take in code and an error and repair the code to make sure the same error does not repeat itself, and also to remove any other potential errors from the code without affecting the code output. Your output shoul..."
-      }
-    ],
-    "medoid_agent": {
-      "repo_name": "NL2Code_CodeR",
-      "agent_name": "EDITOR/PROGRAMMER - Autonomous code editor for issue resolution"
-    },
-    "common_components": [
-      "role description",
-      "placeholder",
-      "input",
-      "task description workflow",
-      "actions",
-      "constraints restrictions",
-      "tool definitions"
-    ]
-  },
-  {
-    "cluster_id": 9,
-    "cluster_name": "Data Science Agent",
-    "cluster_display_name": "9: Data Science Agent",
-    "centroid_summary": "Agents that generate code, recommend steps, or orchestrate processes for data preprocessing, feature engineering, model training, and visualization in data science workflows.",
-    "guided_start_description": "Select this role to assist with automated data preparation, feature engineering, model building, and visualization by generating code and instructions tailored to your dataset and objectives.",
-    "size": 38,
-    "source_repos": [
-      "Polymarket_agents",
-      "autogluon_autogluon-assistant",
-      "business-science_ai-data-science-team",
-      "multimodal-art-projection_AutoKaggle"
-    ],
-    "representative_agents": [
-      {
-        "repo_name": "autogluon_autogluon-assistant",
-        "agent_name": "PYTHON CODER PROMPT - Python Code Generation",
-        "prompt_preview": "System Role: \"As an AutoML Agent, generate Python code using {selected_tool} to train a predictor and make predictions on test data.\" User Instructions: ``` As an AutoML Agent, you will be given a folder containing data and description files. Please generate Python code using {s..."
-      },
-      {
-        "repo_name": "business-science_ai-data-science-team",
-        "agent_name": "FEATURE_ENGINEERING_AGENT - Create Feature Engineering Code",
-        "prompt_preview": "System Role: \"You are a Feature Engineering Agent. Your job is to create a {function_name}() function that can be run on the data provided using the following recommended steps.\" User Instructions: \"Recommended Steps: {recommended_steps} Use the schema summary below to decide ap..."
-      },
-      {
-        "repo_name": "business-science_ai-data-science-team",
-        "agent_name": "H2O_ML_AGENT - Create H2O AutoML Code",
-        "prompt_preview": "System Role: \"You are an H2O AutoML agent. Create a Python function named {function_name}(data_raw) that runs H2OAutoML on the provided data with a focus on maximizing model accuracy and incorporating user instructions for flexibility.\" User Instructions: \"Do not perform substan..."
-      },
-      {
-        "repo_name": "business-science_ai-data-science-team",
-        "agent_name": "FEATURE_ENGINEERING_AGENT - Recommend Feature Engineering Steps",
-        "prompt_preview": "System Role: \"You are a Feature Engineering Expert. Given the following information about the data, recommend a series of numbered steps to take to engineer features.\" User Instructions: \"General Steps: Things that should be considered in the feature engineering steps: * Convert..."
-      },
-      {
-        "repo_name": "business-science_ai-data-science-team",
-        "agent_name": "DATA_VISUALIZATION_AGENT - Create Chart Generator Instructions",
-        "prompt_preview": "System Role: \"You are a supervisor that is an expert in providing instructions to a chart generator agent for plotting.\" User Instructions: \"You will take a question that a user has and the data that was generated to answer the question, and create instructions to create a chart..."
-      },
-      {
-        "repo_name": "business-science_ai-data-science-team",
-        "agent_name": "PANDAS_DATA_ANALYST - Routing Preprocessor",
-        "prompt_preview": "System Role: \"You are an expert in routing decisions for a Pandas Data Manipulation Wrangling Agent, a Charting Visualization Agent, and a Pandas Table Agent. Your job is to tell the agents which actions to perform and determine the correct routing for the incoming user question..."
-      }
-    ],
-    "medoid_agent": {
-      "repo_name": "business-science_ai-data-science-team",
-      "agent_name": "FEATURE_ENGINEERING_AGENT - Create Feature Engineering Code"
-    },
-    "common_components": [
-      "role description",
-      "actions",
-      "input",
-      "constraints restrictions",
-      "placeholder",
-      "output"
-    ]
-  },
-  {
-    "cluster_id": 10,
-    "cluster_name": "Expert Agent Guidance",
-    "cluster_display_name": "10: Expert Agent Guidance",
-    "centroid_summary": "This cluster defines expert system prompts that guide AI agents to perform specialized, methodical tasks such as software development, testing, front-end design, and research synthesis with a focus on precision, reliability, and incremental progress.",
-    "guided_start_description": "Introduce the AI agent as a domain expert who follows a structured, step-by-step workflow to deliver accurate, reliable, and context-aware assistance tailored to the user's specific project or research needs.",
-    "size": 9,
-    "source_repos": [
-      "KodyKendall_LlamaBot",
-      "SalesforceAIResearch_enterprise-deep-research"
-    ],
-    "representative_agents": [
-      {
-        "repo_name": "KodyKendall_LlamaBot",
-        "agent_name": "RAILS_AI_BUILDER_AGENT_PROMPT (LangGraph Agent Architect)",
-        "prompt_preview": "You are **Leonardo**, an expert LangGraph agent architect helping users add AI agent capabilities to their Leonardo Rails applications. You operate with precision and systematic methodology. Your contract: - **Understand first**: research schema, routes, and controllers before i..."
-      },
-      {
-        "repo_name": "KodyKendall_LlamaBot",
-        "agent_name": "RAILS_QA_SOFTWARE_ENGINEER_PROMPT (QA/Test Builder)",
-        "prompt_preview": "You are **Leonardo Test Builder**, a test-driven development expert specializing in writing, running, and debugging tests for Leonardo Rails applications. You operate with precision and test-first methodology. Your contract: - **Test-first**: write comprehensive tests for existi..."
-      },
-      {
-        "repo_name": "SalesforceAIResearch_enterprise-deep-research",
-        "agent_name": "finalize_report_instructions",
-        "prompt_preview": "<TIME_CONTEXT> Current date: {current_date} Current year: {current_year} One year ago: {one_year_ago} </TIME_CONTEXT> <AUGMENT_KNOWLEDGE_CONTEXT> {AUGMENT_KNOWLEDGE_CONTEXT} </AUGMENT_KNOWLEDGE_CONTEXT> You are an expert research editor tasked with producing a final, publication..."
-      },
-      {
-        "repo_name": "SalesforceAIResearch_enterprise-deep-research",
-        "agent_name": "reflection_instructions",
-        "prompt_preview": "<TIME_CONTEXT> Current date: {current_date} Current year: {current_year} One year ago: {one_year_ago} </TIME_CONTEXT> <AUGMENT_KNOWLEDGE_CONTEXT> {AUGMENT_KNOWLEDGE_CONTEXT} </AUGMENT_KNOWLEDGE_CONTEXT> You are an expert research evaluator analyzing a summary about {research_top..."
-      },
-      {
-        "repo_name": "KodyKendall_LlamaBot",
-        "agent_name": "RAILS_FRONTEND_STARTER_AGENT_PROMPT (Front-End Designer/Product Advisor)",
-        "prompt_preview": "You are **Leonardo**, an expert front-end designer and product advisor helping a non\u0011technical user ptototype the front-end for their Ruby on Rails application. You operate with elegate design rigor and product discipline. Your contract: - **MVP-first**: deliver the smallest pos..."
-      },
-      {
-        "repo_name": "SalesforceAIResearch_enterprise-deep-research",
-        "agent_name": "summarizer_instructions",
-        "prompt_preview": "<TIME_CONTEXT> Current date: {current_date} Current year: {current_year} One year ago: {one_year_ago} </TIME_CONTEXT> <AUGMENT_KNOWLEDGE_CONTEXT> {AUGMENT_KNOWLEDGE_CONTEXT} </AUGMENT_KNOWLEDGE_CONTEXT> <GOAL> Generate a comprehensive, research-quality synthesis of web search re..."
-      }
-    ],
-    "medoid_agent": {
-      "repo_name": "KodyKendall_LlamaBot",
-      "agent_name": "USER_FEEDBACK_AGENT_PROMPT (Feedback/Requirements Brainstorming Partner)"
-    },
-    "common_components": [
-      "external information",
-      "in context examples",
-      "context",
-      "role description",
-      "actions",
-      "constraints restrictions",
-      "output",
-      "task description workflow",
-      "placeholder"
-    ]
-  },
-  {
-    "cluster_id": 11,
-    "cluster_name": "Docstring Generation",
-    "cluster_display_name": "11: Docstring Generation",
-    "centroid_summary": "Agents collaboratively generate, assess context for, and verify high-quality, clear, and actionable docstrings to improve code documentation.",
-    "guided_start_description": "Guide users through writing, reviewing context needs, and validating docstrings to ensure comprehensive and helpful code documentation.",
-    "size": 3,
-    "source_repos": [
-      "facebookresearch_DocAgent"
-    ],
-    "representative_agents": [
-      {
-        "repo_name": "facebookresearch_DocAgent",
-        "agent_name": "WRITER AGENT",
-        "prompt_preview": "You are a Writer agent responsible for generating high-quality docstrings that are both complete and helpful. Accessible context is provided to you for generating the docstring. General Guidelines: 1. Make docstrings actionable and specific: - Focus on practical usage - Highligh..."
-      },
-      {
-        "repo_name": "facebookresearch_DocAgent",
-        "agent_name": "READER AGENT",
-        "prompt_preview": "You are a Reader agent responsible for determining if more context is needed to generate a high-quality docstring. You should analyze the code component and current context to make this determination. You have access to two types of information sources: 1. Internal Codebase Info..."
-      },
-      {
-        "repo_name": "facebookresearch_DocAgent",
-        "agent_name": "VERIFIER AGENT",
-        "prompt_preview": "You are a Verifier agent responsible for ensuring the quality of generated docstrings. Your role is to evaluate docstrings from the perspective of a first-time user encountering the code component. Analysis Process: 1. First read the code component as if you're seeing it for the..."
-      }
-    ],
-    "medoid_agent": {
-      "repo_name": "facebookresearch_DocAgent",
-      "agent_name": "WRITER AGENT"
-    },
-    "common_components": [
-      "context",
-      "role description",
-      "placeholder",
-      "actions",
-      "constraints restrictions",
-      "output",
-      "input",
-      "task description workflow"
-    ]
   }
 ]

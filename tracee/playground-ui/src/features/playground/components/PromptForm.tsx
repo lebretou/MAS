@@ -2,12 +2,14 @@ import React from 'react';
 import type {
   Prompt,
   PromptComponent,
+  PromptComponentType,
   PromptListItem,
   PromptTool,
   PromptVersion,
   PromptWithVersions,
   SchemaProperty,
 } from '../../../types/prompt';
+import type { GuidedStartRole } from '../../../types/guidedStart';
 import SchemaBuilder, {
   createSchemaProperty,
   getSchemaValidationError,
@@ -17,6 +19,8 @@ import PromptComponentEditor from './PromptComponentEditor';
 import PromptToolsEditor from './PromptToolsEditor';
 import PromptVersionTree from './PromptVersionTree';
 import GuidedPromptStart from './GuidedPromptStart';
+import GuidedOverlay from './GuidedOverlay';
+import type { GuidedOverlayStep } from './GuidedOverlay';
 import VersionComparisonWorkspace from './VersionComparisonWorkspace';
 import PromptStructureOutline from './PromptStructureOutline';
 import PromptResolvedView from './PromptResolvedView';
@@ -339,39 +343,6 @@ function normalizePromptTools(tools: PromptTool[]) {
     .filter((tool) => tool.name || tool.description || tool.arguments.length > 0);
 }
 
-function mergeGuidedComponents(current: PromptComponent[], guided: PromptComponent[]) {
-  const currentByType = new Map(current.map((component) => [component.type, component]));
-  const merged = current.map((component) => {
-    const scaffold = guided.find((candidate) => candidate.type === component.type);
-    if (!scaffold) {
-      return component;
-    }
-    if (component.content.trim()) {
-      return component;
-    }
-    return {
-      ...scaffold,
-      component_id: component.component_id ?? scaffold.component_id,
-      enabled: component.enabled || scaffold.enabled,
-    };
-  });
-
-  guided.forEach((component) => {
-    if (!currentByType.has(component.type)) {
-      merged.push(component);
-    }
-  });
-
-  return merged;
-}
-
-function mergeGuidedTools(current: PromptTool[], guided: PromptTool[]) {
-  const existingNames = new Set(current.map((tool) => tool.name));
-  return [
-    ...current,
-    ...guided.filter((tool) => !existingNames.has(tool.name)),
-  ];
-}
 
 const PromptForm: React.FC<Props> = ({
   mode,
@@ -444,6 +415,18 @@ const PromptForm: React.FC<Props> = ({
   const [toolError, setToolError] = React.useState<string | null>(null);
   const [revisionNote, setRevisionNote] = React.useState('');
   const [appliedTemplateId, setAppliedTemplateId] = React.useState<string | null>(null);
+
+  const [guidedOverlayStep, setGuidedOverlayStep] = React.useState<GuidedOverlayStep | null>(null);
+  const [selectedGuidedRole, setSelectedGuidedRole] = React.useState<GuidedStartRole | null>(null);
+  const workspaceBodyRef = React.useRef<HTMLDivElement | null>(null);
+  const componentStats = React.useMemo<Record<PromptComponentType, number> | null>(() => {
+    if (!selectedGuidedRole || guidedOverlayStep === null) {
+      return null;
+    }
+    return Object.fromEntries(
+      selectedGuidedRole.components.map((comp) => [comp.component_type, comp.prevalence])
+    ) as Record<PromptComponentType, number>;
+  }, [selectedGuidedRole, guidedOverlayStep]);
   const workspaceModeHintId = React.useId();
 
   const {
@@ -710,25 +693,6 @@ const PromptForm: React.FC<Props> = ({
     ),
     [normalizedPromptComponents, inputVars, normalizedTools, currentOutputSchema]
   );
-  const hasGuidedApplyChoice = React.useMemo(
-    () => Boolean(
-      loadedPromptContext
-      || selectedPromptData
-      || promptWorkflow === 'existing'
-      || promptNameInput.trim()
-      || revisionNote.trim()
-      || currentSaveSignature !== defaultEditorSaveSignature
-    ),
-    [
-      currentSaveSignature,
-      defaultEditorSaveSignature,
-      loadedPromptContext,
-      promptNameInput,
-      promptWorkflow,
-      revisionNote,
-      selectedPromptData,
-    ]
-  );
   const draftLeaf = React.useMemo(() => {
     if (
       !loadedPromptContext
@@ -771,7 +735,7 @@ const PromptForm: React.FC<Props> = ({
 
     switch (activePanel) {
       case 'guided':
-        return ['template flow'];
+        return selectedGuidedRole ? [selectedGuidedRole.name] : ['choose a role'];
       case 'model':
         return [provider, model, `${numRuns} run${numRuns === 1 ? '' : 's'}`];
       case 'variables':
@@ -1654,7 +1618,9 @@ const PromptForm: React.FC<Props> = ({
                               triggerRefs.current.guided = element;
                             }}
                             className={`btn btn--secondary btn--sm create-run__panel-btn${activePanel === 'guided' ? ' is-active' : ''}`}
-                            onClick={() => setActivePanel((current) => (current === 'guided' ? null : 'guided'))}
+                            onClick={() => {
+                              setActivePanel((current) => (current === 'guided' ? null : 'guided'));
+                            }}
                             aria-pressed={activePanel === 'guided'}
                             aria-expanded={activePanel === 'guided'}
                             aria-controls={activePanel === 'guided' ? activePanelId : undefined}
@@ -1681,7 +1647,7 @@ const PromptForm: React.FC<Props> = ({
                             ref={(element) => {
                               triggerRefs.current.variables = element;
                             }}
-                            className={`btn btn--secondary btn--sm create-run__panel-btn${activePanel === 'variables' ? ' is-active' : ''}`}
+                            className={`btn btn--secondary btn--sm create-run__panel-btn${activePanel === 'variables' ? ' is-active' : ''}${guidedOverlayStep === 3 ? ' is-guided-highlight' : ''}`}
                             onClick={() => setActivePanel((current) => (current === 'variables' ? null : 'variables'))}
                             aria-pressed={activePanel === 'variables'}
                             aria-expanded={activePanel === 'variables'}
@@ -1695,7 +1661,7 @@ const PromptForm: React.FC<Props> = ({
                             ref={(element) => {
                               triggerRefs.current.tools = element;
                             }}
-                            className={`btn btn--secondary btn--sm create-run__panel-btn${activePanel === 'tools' ? ' is-active' : ''}`}
+                            className={`btn btn--secondary btn--sm create-run__panel-btn${activePanel === 'tools' ? ' is-active' : ''}${guidedOverlayStep === 4 ? ' is-guided-highlight' : ''}`}
                             onClick={() => setActivePanel((current) => (current === 'tools' ? null : 'tools'))}
                             aria-pressed={activePanel === 'tools'}
                             aria-expanded={activePanel === 'tools'}
@@ -1709,7 +1675,7 @@ const PromptForm: React.FC<Props> = ({
                             ref={(element) => {
                               triggerRefs.current.schema = element;
                             }}
-                            className={`btn btn--secondary btn--sm create-run__panel-btn${activePanel === 'schema' ? ' is-active' : ''}`}
+                            className={`btn btn--secondary btn--sm create-run__panel-btn${activePanel === 'schema' ? ' is-active' : ''}${guidedOverlayStep === 4 ? ' is-guided-highlight' : ''}`}
                             onClick={() => setActivePanel((current) => (current === 'schema' ? null : 'schema'))}
                             aria-pressed={activePanel === 'schema'}
                             aria-expanded={activePanel === 'schema'}
@@ -1791,7 +1757,7 @@ const PromptForm: React.FC<Props> = ({
                       )}
                     </div>
 
-                    <div className="create-run__workspace-body">
+                    <div className="create-run__workspace-body" ref={workspaceBodyRef}>
                       {editorView === 'components' && (
                         <div className="field">
                           <div className="create-run__field-head">
@@ -1810,6 +1776,8 @@ const PromptForm: React.FC<Props> = ({
                             registerSectionRef={(componentKey, element) => {
                               sectionRefs.current[componentKey] = element;
                             }}
+                            componentStats={componentStats}
+                            componentStatsLabel={selectedGuidedRole?.name ?? null}
                           />
                         </div>
                       )}
@@ -1839,6 +1807,30 @@ const PromptForm: React.FC<Props> = ({
                         </div>
                       )}
                     </div>
+
+                    {guidedOverlayStep && selectedGuidedRole && (
+                      <GuidedOverlay
+                        step={guidedOverlayStep}
+                        role={selectedGuidedRole}
+                        getAnchor={() => (
+                          guidedOverlayStep === 3 ? triggerRefs.current.variables
+                          : guidedOverlayStep === 4 ? triggerRefs.current.tools
+                          : triggerRefs.current.guided
+                        )}
+                        onNext={() => setGuidedOverlayStep((current) => (current && current < 4 ? (current + 1) as GuidedOverlayStep : current))}
+                        onOpenTools={() => {
+                          setGuidedOverlayStep(null);
+                          setActivePanel('tools');
+                        }}
+                        onOpenSchema={() => {
+                          setGuidedOverlayStep(null);
+                          setActivePanel('schema');
+                        }}
+                        onDone={() => {
+                          setGuidedOverlayStep(null);
+                        }}
+                      />
+                    )}
 
                   </div>
                 ) : (
@@ -1984,46 +1976,26 @@ const PromptForm: React.FC<Props> = ({
                       <div className="create-run__panel-surface">
                         <GuidedPromptStart
                           onClose={() => setActivePanel(null)}
-                          existingDraft={{
-                            components: normalizedPromptComponents,
-                            tools,
-                            outputSchema: currentOutputSchema,
-                            hasUserContent: hasGuidedApplyChoice,
-                          }}
-                          modelConfig={{
-                            provider,
-                            model,
-                            temperature,
-                          }}
-                          onApply={({ sourceTemplateId, templateName, promptName, components, tools: guidedTools, outputSchema, applyMode }) => {
-                            const nextComponents = applyMode === 'merge'
-                              ? mergeGuidedComponents(normalizedPromptComponents, components)
-                              : components;
-                            const nextTools = applyMode === 'merge'
-                              ? mergeGuidedTools(tools, guidedTools ?? [])
-                              : (guidedTools ?? []);
-                            const shouldKeepCurrentSchema = applyMode === 'merge' && schemaEnabled && Boolean(currentOutputSchema);
-                            const nextSchemaEnabled = shouldKeepCurrentSchema
-                              ? schemaEnabled
-                              : Boolean(outputSchema);
-                            const nextSchemaProperties = shouldKeepCurrentSchema
-                              ? schemaProperties
-                              : (outputSchema ? schemaPropertiesFromOutputSchema(outputSchema) : []);
+                          onSelectRole={(role) => {
+                            setSelectedGuidedRole(role);
 
-                            const normalizedNextComponents = preparePromptComponentsForEditor(nextComponents);
-                            setPromptComponents(normalizedNextComponents);
-                            setInputVars((current) => snapshotPromptVariables(normalizedNextComponents, current));
-                            setTools(nextTools);
-                            setAppliedTemplateId(sourceTemplateId);
-                            setRevisionNote('');
-                            setPromptNameInput((current) => current || promptName || templateName);
-                            setSchemaEnabled(nextSchemaEnabled);
-                            setSchemaProperties(nextSchemaProperties);
+                            const components = role.components.map((comp) => ({
+                              type: comp.component_type,
+                              content: comp.placeholder,
+                              enabled: true,
+                            }));
+                            const editorComponents = preparePromptComponentsForEditor(components);
+                            setPromptComponents(editorComponents);
+                            setInputVars((current) => snapshotPromptVariables(editorComponents, current));
+                            setAppliedTemplateId(`guided-${role.role_id}`);
+                            setPromptNameInput((current) => current || `${role.name} prompt`);
                             setCollapsedSections({});
                             setPendingScrollSectionKey(null);
                             setEditorCompareTarget(null);
                             setEditorView('components');
+
                             setActivePanel(null);
+                            setGuidedOverlayStep(2);
                           }}
                         />
                       </div>
