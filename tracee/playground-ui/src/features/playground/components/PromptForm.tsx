@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type {
   Prompt,
   PromptComponent,
@@ -15,7 +16,11 @@ import SchemaBuilder, {
   getSchemaValidationError,
   toJsonSchema,
 } from './SchemaBuilder';
-import PromptComponentEditor from './PromptComponentEditor';
+import PromptComponentEditor, {
+  findPromptVariableMatch,
+  type PromptVariableHighlightRequest,
+  type PromptVariableMatch,
+} from './PromptComponentEditor';
 import PromptToolsEditor from './PromptToolsEditor';
 import PromptVersionTree from './PromptVersionTree';
 import GuidedPromptStart from './GuidedPromptStart';
@@ -47,6 +52,12 @@ import {
   resolvePromptMessages,
   serializePromptMessages,
 } from '../promptEditor';
+import {
+  clearStoredPromptVersionSelection,
+  readStoredPromptSession,
+  type PromptWorkflow,
+  writeStoredPromptSession,
+} from '../promptPlaygroundSession';
 
 function getMaskIconStyle(icon: string): React.CSSProperties {
   return {
@@ -116,7 +127,6 @@ const TOOL_NAME_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 const TOOL_ARGUMENT_NAME_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 type WorkspacePanel = 'guided' | 'model' | 'variables' | 'tools' | 'schema' | 'anchor';
-type PromptWorkflow = 'new' | 'existing';
 type SaveIntent = 'current' | 'new';
 type EditorView = 'components' | 'resolved' | 'diff';
 
@@ -357,6 +367,17 @@ const PromptForm: React.FC<Props> = ({
   onAnchorChange,
   onClearAnchor,
 }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const storedPromptSession = React.useMemo(() => readStoredPromptSession(), []);
+  const requestedPromptId = searchParams.get('promptId') ?? '';
+  const requestedVersionId = searchParams.get('versionId') ?? '';
+  const requestedPromptSelectionId = requestedPromptId || storedPromptSession.selectedPromptId;
+  const initialRequestedVersionId = requestedPromptId
+    ? requestedVersionId
+    : storedPromptSession.selectedVersionId;
+  const initialPromptWorkflow: PromptWorkflow = requestedPromptId
+    ? 'existing'
+    : storedPromptSession.promptWorkflow;
   const triggerRefs = React.useRef<Record<WorkspacePanel, HTMLButtonElement | null>>({
     guided: null,
     model: null,
@@ -377,6 +398,8 @@ const PromptForm: React.FC<Props> = ({
   const previousActivePanelRef = React.useRef<WorkspacePanel | null>(null);
   const selectedPromptIdRef = React.useRef('');
   const promptWorkflowRef = React.useRef<PromptWorkflow>('new');
+  const requestedVersionIdRef = React.useRef(initialRequestedVersionId);
+  const variableHighlightRequestIdRef = React.useRef(0);
   const [promptComponents, setPromptComponents] = React.useState<PromptComponent[]>(
     () => preparePromptComponentsForEditor(DEFAULT_PROMPT_COMPONENTS)
   );
@@ -390,7 +413,7 @@ const PromptForm: React.FC<Props> = ({
   const [savedPrompts, setSavedPrompts] = React.useState<PromptListItem[]>([]);
   const [savedPromptsLoading, setSavedPromptsLoading] = React.useState(true);
   const [savedPromptsError, setSavedPromptsError] = React.useState<string | null>(null);
-  const [selectedPromptId, setSelectedPromptId] = React.useState('');
+  const [selectedPromptId, setSelectedPromptId] = React.useState(requestedPromptSelectionId);
   const [selectedPromptData, setSelectedPromptData] = React.useState<PromptWithVersions | null>(null);
   const [selectedPromptLoading, setSelectedPromptLoading] = React.useState(false);
   const [comparisonTargets, setComparisonTargets] = React.useState<CompareTarget[]>([]);
@@ -399,7 +422,9 @@ const PromptForm: React.FC<Props> = ({
   const [editorCompareTarget, setEditorCompareTarget] = React.useState<CompareTarget | null>(null);
   const [collapsedSections, setCollapsedSections] = React.useState<Record<string, boolean>>({});
   const [pendingScrollSectionKey, setPendingScrollSectionKey] = React.useState<string | null>(null);
-  const [promptWorkflow, setPromptWorkflow] = React.useState<PromptWorkflow>('new');
+  const [pendingVariableMatch, setPendingVariableMatch] = React.useState<PromptVariableMatch | null>(null);
+  const [editorHighlightRequest, setEditorHighlightRequest] = React.useState<PromptVariableHighlightRequest | null>(null);
+  const [promptWorkflow, setPromptWorkflow] = React.useState<PromptWorkflow>(initialPromptWorkflow);
   const [saveDialogOpen, setSaveDialogOpen] = React.useState(false);
   const [saveIntent, setSaveIntent] = React.useState<SaveIntent>('current');
   const [saveLoading, setSaveLoading] = React.useState(false);
@@ -491,7 +516,7 @@ const PromptForm: React.FC<Props> = ({
         aria-describedby={mode === 'author' && !hasResults ? workspaceModeHintId : undefined}
         disabled={!hasResults}
       >
-        <span>Analysis</span>
+        <span>Outputs</span>
         {hasResults && <span className="playground-workspace-nav__count">{resultCount}</span>}
       </button>
     </div>
@@ -566,6 +591,13 @@ const PromptForm: React.FC<Props> = ({
   }, [promptWorkflow]);
 
   React.useEffect(() => {
+    writeStoredPromptSession({
+      promptWorkflow,
+      selectedPromptId,
+    });
+  }, [promptWorkflow, selectedPromptId]);
+
+  React.useEffect(() => {
     if (!activePanel && !saveDialogOpen) {
       return undefined;
     }
@@ -629,19 +661,31 @@ const PromptForm: React.FC<Props> = ({
     const target = sectionRefs.current[pendingScrollSectionKey];
     if (!target) {
       setPendingScrollSectionKey(null);
+      setPendingVariableMatch(null);
       return;
     }
 
+    const matchToHighlight = pendingVariableMatch?.componentKey === pendingScrollSectionKey
+      ? pendingVariableMatch
+      : null;
     const frameId = requestAnimationFrame(() => {
       target.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       });
       setPendingScrollSectionKey(null);
+      if (matchToHighlight) {
+        variableHighlightRequestIdRef.current += 1;
+        setEditorHighlightRequest({
+          ...matchToHighlight,
+          requestId: variableHighlightRequestIdRef.current,
+        });
+        setPendingVariableMatch(null);
+      }
     });
 
     return () => cancelAnimationFrame(frameId);
-  }, [editorView, pendingScrollSectionKey]);
+  }, [editorView, pendingScrollSectionKey, pendingVariableMatch]);
 
   React.useEffect(() => {
     if (!saveDialogOpen) {
@@ -941,6 +985,32 @@ const PromptForm: React.FC<Props> = ({
   }, []);
 
   React.useEffect(() => {
+    if (selectedPromptId === requestedPromptSelectionId) {
+      return;
+    }
+
+    requestedVersionIdRef.current = '';
+    clearStoredPromptVersionSelection();
+  }, [requestedPromptSelectionId, selectedPromptId]);
+
+  React.useEffect(() => {
+    if (!requestedPromptId || selectedPromptId === requestedPromptSelectionId) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('promptId');
+    nextSearchParams.delete('versionId');
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [
+    requestedPromptId,
+    requestedPromptSelectionId,
+    searchParams,
+    selectedPromptId,
+    setSearchParams,
+  ]);
+
+  React.useEffect(() => {
     if (!selectedPromptId) {
       setSelectedPromptData(null);
       setLoadedPromptContext(null);
@@ -963,12 +1033,24 @@ const PromptForm: React.FC<Props> = ({
 
         setSavedPromptsError(null);
         setSelectedPromptData(promptData);
+        const requestedVersionId = promptData.prompt.prompt_id === requestedPromptSelectionId
+          ? requestedVersionIdRef.current
+          : '';
+        const requestedVersion = requestedVersionId
+          ? promptData.versions.find((version) => version.version_id === requestedVersionId) ?? null
+          : null;
         const latestVersion = promptData.versions.find(
           (version) => version.version_id === promptData.prompt.latest_version_id
         ) ?? [...promptData.versions].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+        const versionToLoad = requestedVersion ?? latestVersion;
 
-        if (latestVersion) {
-          loadVersionIntoEditor(promptData.prompt, latestVersion);
+        if (requestedVersionId) {
+          requestedVersionIdRef.current = '';
+          clearStoredPromptVersionSelection();
+        }
+
+        if (versionToLoad) {
+          loadVersionIntoEditor(promptData.prompt, versionToLoad);
           return;
         }
 
@@ -990,7 +1072,7 @@ const PromptForm: React.FC<Props> = ({
     return () => {
       cancelled = true;
     };
-  }, [selectedPromptId, loadVersionIntoEditor, resetEditorState]);
+  }, [selectedPromptId, loadVersionIntoEditor, requestedPromptSelectionId, resetEditorState]);
 
   const toggleCompareTarget = React.useCallback((promptName: string, version: PromptVersion) => {
     setComparisonTargets((current) => {
@@ -1071,6 +1153,7 @@ const PromptForm: React.FC<Props> = ({
     });
   }, []);
   const handleJumpToSection = React.useCallback((componentKey: string) => {
+    setPendingVariableMatch(null);
     setCollapsedSections((current) => {
       if (!(current[componentKey] ?? false)) {
         return current;
@@ -1084,6 +1167,28 @@ const PromptForm: React.FC<Props> = ({
     setEditorView('components');
     setPendingScrollSectionKey(componentKey);
   }, []);
+  const handleJumpToVariable = React.useCallback((variableName: string) => {
+    const match = findPromptVariableMatch(normalizedPromptComponents, variableName);
+
+    setEditorView('components');
+    if (!match) {
+      setPendingVariableMatch(null);
+      return;
+    }
+
+    setCollapsedSections((current) => {
+      if (!(current[match.componentKey] ?? false)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [match.componentKey]: false,
+      };
+    });
+    setPendingVariableMatch(match);
+    setPendingScrollSectionKey(match.componentKey);
+  }, [normalizedPromptComponents]);
 
   const handleStartNewPrompt = React.useCallback((nextPromptName = '') => {
     setPromptWorkflow('new');
@@ -1773,6 +1878,7 @@ const PromptForm: React.FC<Props> = ({
                             onToggleCollapse={toggleCollapsedSection}
                             onCopyComponentContent={copyPromptComponentContent}
                             onReorderComponent={reorderPromptComponent}
+                            highlightRequest={editorHighlightRequest}
                             registerSectionRef={(componentKey, element) => {
                               sectionRefs.current[componentKey] = element;
                             }}
@@ -1917,6 +2023,7 @@ const PromptForm: React.FC<Props> = ({
                     detectedVariables={detectedVariables}
                     inputVars={inputVars}
                     onJumpToSection={handleJumpToSection}
+                    onJumpToVariable={handleJumpToVariable}
                   />
                 </aside>
               )}

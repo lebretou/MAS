@@ -20,6 +20,7 @@ interface Props {
   detectedVariables: string[];
   inputVars: Record<string, string>;
   onJumpToSection: (componentKey: string) => void;
+  onJumpToVariable: (variableName: string) => void;
 }
 
 const ROLE_LABELS = {
@@ -99,6 +100,7 @@ const PromptStructureOutline: React.FC<Props> = ({
   detectedVariables,
   inputVars,
   onJumpToSection,
+  onJumpToVariable,
 }) => {
   const normalizedComponents = React.useMemo(
     () => normalizePromptComponents(components),
@@ -112,7 +114,6 @@ const PromptStructureOutline: React.FC<Props> = ({
   );
   const previewToolNames = toolNames.slice(0, SECONDARY_PREVIEW_LIMIT);
   const previewSchemaFields = schemaFields.slice(0, SECONDARY_PREVIEW_LIMIT);
-  const previewVariableStates = variableStates.slice(0, SECONDARY_PREVIEW_LIMIT);
 
   return (
     <div className="card">
@@ -252,21 +253,22 @@ const PromptStructureOutline: React.FC<Props> = ({
             <div className="playground-outline__empty">no variables detected</div>
           ) : (
             <div className="playground-outline__detail-list">
-              {previewVariableStates.map((variable) => (
-                <div key={variable.name} className="playground-outline__detail-row">
+              {variableStates.map((variable) => (
+                <button
+                  key={variable.name}
+                  type="button"
+                  className="playground-outline__detail-row playground-outline__detail-row--interactive"
+                  onClick={() => onJumpToVariable(variable.name)}
+                  aria-label={`highlight ${variable.name} in the editor`}
+                >
                   <span className="playground-outline__detail-main">
                     <code className="playground-outline__detail-name">{`{{${variable.name}}}`}</code>
                   </span>
                   <span className={`playground-outline__status${variable.isFilled ? ' is-filled' : ''}`}>
                     {variable.isFilled ? 'filled' : 'missing'}
                   </span>
-                </div>
+                </button>
               ))}
-              {variableStates.length > previewVariableStates.length && (
-                <div className="playground-outline__more">
-                  +{variableStates.length - previewVariableStates.length} more variables
-                </div>
-              )}
             </div>
           )}
         </div>

@@ -60,13 +60,14 @@ def _create_tracing_components(
     output_dir: str | Path | None = None,
     output_file: str = "trace_events.jsonl",
     base_url: str | None = None,
+    graph_id: str | None = None,
 ) -> tuple[str, str, EventSink, RawCallbackHandler]:
     """create sink and handler for tracing."""
     tid = trace_id or generate_trace_id()
     eid = execution_id or generate_execution_id()
 
     if base_url:
-        sink: EventSink = HttpSink(base_url=base_url, trace_id=tid)
+        sink: EventSink = HttpSink(base_url=base_url, trace_id=tid, graph_id=graph_id)
     elif output_dir:
         output_path = Path(output_dir) / tid / output_file
         sink = FileSink(output_path)
@@ -88,6 +89,7 @@ def enable_tracing(
     output_dir: str | Path | None = None,
     output_file: str = "trace_events.jsonl",
     base_url: str | None = None,
+    graph_id: str | None = None,
 ) -> Generator[TracingContext, None, None]:
     """Enable tracing for LangChain/LangGraph code.
     
@@ -101,6 +103,7 @@ def enable_tracing(
                    If not provided, traces are stored in memory only.
         output_file: Name of the trace events file (default: trace_events.jsonl)
         base_url: Base URL for the trace API (posts events to server)
+        graph_id: Optional graph ID to associate traces with a specific graph
     
     Yields:
         TracingContext with callbacks
@@ -128,6 +131,7 @@ def enable_tracing(
         output_dir=output_dir,
         output_file=output_file,
         base_url=base_url,
+        graph_id=graph_id,
     )
     
     # create context

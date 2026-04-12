@@ -11,10 +11,17 @@ interface SidebarContextType {
   selectedNodeId: string | null;
   selectedNode: GraphNodeData | null;
   chipExpansion: ChipExpansion | null;
-  openSidebar: (nodeId: string, nodeData: GraphNodeData, expansion?: ChipExpansion) => void;
+  selectedOperationId: string | null;
+  openSidebar: (
+    nodeId: string,
+    nodeData: GraphNodeData,
+    expansion?: ChipExpansion,
+    operationId?: string | null,
+  ) => void;
   syncSelectedNode: (nodeData: GraphNodeData) => void;
   closeSidebar: () => void;
   clearChipExpansion: () => void;
+  clearSelectedOperation: () => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -23,11 +30,18 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNodeData | null>(null);
   const [chipExpansion, setChipExpansion] = useState<ChipExpansion | null>(null);
+  const [selectedOperationId, setSelectedOperationId] = useState<string | null>(null);
 
-  const openSidebar = useCallback((nodeId: string, nodeData: GraphNodeData, expansion?: ChipExpansion) => {
+  const openSidebar = useCallback((
+    nodeId: string,
+    nodeData: GraphNodeData,
+    expansion?: ChipExpansion,
+    operationId?: string | null,
+  ) => {
     setSelectedNodeId(nodeId);
     setSelectedNode(nodeData);
     setChipExpansion(expansion ?? null);
+    setSelectedOperationId(operationId ?? null);
   }, []);
 
   const syncSelectedNode = useCallback((nodeData: GraphNodeData) => {
@@ -38,14 +52,19 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     setSelectedNodeId(null);
     setSelectedNode(null);
     setChipExpansion(null);
+    setSelectedOperationId(null);
   }, []);
 
   const clearChipExpansion = useCallback(() => {
     setChipExpansion(null);
   }, []);
 
+  const clearSelectedOperation = useCallback(() => {
+    setSelectedOperationId(null);
+  }, []);
+
   return (
-    <SidebarContext.Provider value={{ selectedNodeId, selectedNode, chipExpansion, openSidebar, syncSelectedNode, closeSidebar, clearChipExpansion }}>
+    <SidebarContext.Provider value={{ selectedNodeId, selectedNode, chipExpansion, selectedOperationId, openSidebar, syncSelectedNode, closeSidebar, clearChipExpansion, clearSelectedOperation }}>
       {children}
     </SidebarContext.Provider>
   );

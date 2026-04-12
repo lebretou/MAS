@@ -691,6 +691,28 @@
   padding: 7px 0;
 }
 
+.playground-outline__detail-row--interactive {
+  width: 100%;
+  padding: 7px 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.playground-outline__detail-row--interactive:hover {
+  background: rgba(148, 163, 184, 0.08);
+  color: #0f172a;
+}
+
+.playground-outline__detail-row--interactive:focus-visible {
+  outline: 2px solid rgba(100, 116, 139, 0.28);
+  outline-offset: 3px;
+}
+
 .playground-outline__detail-name {
   font-family: "JetBrains Mono", monospace;
   font-size: 11.5px;
@@ -2496,6 +2518,13 @@
   gap: 8px;
 }
 
+.prompt-detail__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .prompt-detail__component-name {
   font-size: 13px;
   font-weight: 600;
@@ -3047,6 +3076,11 @@
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.18);
 }
 
+.prompt-components__card.is-variable-highlighted {
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.18);
+}
+
 .prompt-components__card--disabled {
   border-color: #eceff3;
   background: #fafbfc;
@@ -3120,6 +3154,38 @@
   padding: 4px 8px 8px;
 }
 
+.prompt-components__textarea-wrap {
+  position: relative;
+}
+
+.prompt-components__textarea-highlight {
+  position: absolute;
+  inset: 0;
+  padding: 6px 8px 7px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: transparent;
+  pointer-events: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.4;
+}
+
+.prompt-components__textarea-highlight-copy {
+  display: block;
+  min-height: 1.4em;
+}
+
+.prompt-components__textarea-highlight-token {
+  border-radius: 4px;
+  background: rgba(125, 211, 252, 0.42);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.16);
+  color: transparent;
+  animation: prompt-components-variable-flash 1.8s ease-out forwards;
+}
+
 .prompt-components__body .textarea {
   min-height: 0;
   resize: none;
@@ -3140,6 +3206,29 @@
   border-color: rgba(148, 163, 184, 0.12);
   background: #ffffff;
   box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.14);
+}
+
+@keyframes prompt-components-variable-flash {
+  0% {
+    background: rgba(125, 211, 252, 0.46);
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2);
+  }
+
+  60% {
+    background: rgba(125, 211, 252, 0.24);
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.1);
+  }
+
+  100% {
+    background: rgba(125, 211, 252, 0);
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt-components__textarea-highlight-token {
+    animation: none;
+  }
 }
 
 .prompt-components__add {
@@ -3293,6 +3382,42 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.prompt-resolved__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.prompt-resolved__copy-btn {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  color: #94a3b8;
+}
+
+.prompt-resolved__copy-btn:hover {
+  background: rgba(241, 245, 249, 0.9);
+  color: #64748b;
+}
+
+.prompt-resolved__copied-label {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: #10b981;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.prompt-resolved__copied-label.is-visible {
+  opacity: 1;
 }
 
 .prompt-resolved__body {

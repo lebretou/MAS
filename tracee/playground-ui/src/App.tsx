@@ -5,6 +5,7 @@ import { AppShell } from "./features/app-shell/AppShell";
 import { GraphViewer } from "./features/graph-viewer/GraphViewer";
 import { PlaygroundPage } from "./features/playground/PlaygroundPage";
 import { PromptsPage } from "./features/playground/PromptsPage";
+import { DocsPage } from "./features/docs/DocsPage";
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
               <Route index element={<GraphViewer />} />
               <Route path="playground" element={<PlaygroundPage />} />
               <Route path="prompts" element={<PromptsPage />} />
+              <Route path="docs" element={<DocsPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

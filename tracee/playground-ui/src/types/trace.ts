@@ -15,6 +15,7 @@ export interface TraceEvent {
 export interface TraceMetadata {
   trace_id: string;
   event_count: number;
+  graph_id?: string | null;
   created_at: string;
   updated_at: string;
 }

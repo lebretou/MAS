@@ -2,6 +2,7 @@
 
 import json
 import logging
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -49,14 +50,19 @@ class FileSink(EventSink):
 class HttpSink(EventSink):
     """Posts events to the trace API."""
 
-    def __init__(self, base_url: str, trace_id: str, timeout: float = 10.0) -> None:
+    def __init__(self, base_url: str, trace_id: str, graph_id: str | None = None, timeout: float = 10.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.trace_id = trace_id
+        self.graph_id = graph_id
         self.timeout = timeout
 
     def append(self, event: TraceEvent) -> None:
         payload = {"events": [event.model_dump()]}
-        url = f"{self.base_url}/api/traces/{self.trace_id}/events"
+        base = f"{self.base_url}/api/traces/{self.trace_id}/events"
+        if self.graph_id:
+            url = f"{base}?{urllib.parse.urlencode({'graph_id': self.graph_id})}"
+        else:
+            url = base
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             url,

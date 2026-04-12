@@ -9,6 +9,7 @@ import iconRag from "../../../assets/icon-rag.svg";
 import iconState from "../../../assets/icon-state.svg";
 import iconTool from "../../../assets/icon-tool.svg";
 import iconChain from "../../../assets/icon-chain.svg";
+import { useSidebar } from "../../../context/SidebarContext";
 
 const operationIconMap: Record<AgentOperation["type"], string> = {
   llm_call: iconLlm,
@@ -148,6 +149,7 @@ function computeSegmentWidths(operations: AgentOperation[], totalPx: number): nu
 }
 
 export function ExecutionDetails({ node }: Props) {
+  const { selectedOperationId, clearSelectedOperation } = useSidebar();
   const exec = node.execution;
   const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
@@ -172,6 +174,13 @@ export function ExecutionDetails({ node }: Props) {
     if (!selectedSegment || operations.some((op) => op.id === selectedSegment)) return;
     setSelectedSegment(operations[0].id);
   }, [exec?.invoked, operations, selectedSegment]);
+
+  useEffect(() => {
+    if (!selectedOperationId) return;
+    if (!operations.some((op) => op.id === selectedOperationId)) return;
+    setSelectedSegment(selectedOperationId);
+    clearSelectedOperation();
+  }, [selectedOperationId, operations, clearSelectedOperation]);
 
   if (!exec || !exec.invoked) {
     const emptyCopy = node.playback?.frameState === "upcoming"

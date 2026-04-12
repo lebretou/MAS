@@ -60,6 +60,8 @@ export function SchemaTable({ schema }: Props) {
     return <p className="side-panel__empty">Empty schema.</p>;
   }
 
+  const hasAnyEnum = flatRows.some((r) => r.enumValues && r.enumValues.length > 0);
+
   return (
     <div className="schema-table-wrapper">
       <table className="schema-table">
@@ -67,7 +69,7 @@ export function SchemaTable({ schema }: Props) {
           <tr>
             <th>Property</th>
             <th>Type</th>
-            <th>Description</th>
+            {hasAnyEnum && <th>Values</th>}
           </tr>
         </thead>
         <tbody>
@@ -79,17 +81,20 @@ export function SchemaTable({ schema }: Props) {
               </td>
               <td className="schema-table__cell-type">
                 <span className="schema-table__type">{row.type}</span>
-                {row.enumValues && (
-                  <div className="schema-table__enum">
-                    {row.enumValues.map((val, i) => (
-                      <span key={i} className="schema-table__enum-val">{String(val)}</span>
-                    ))}
-                  </div>
-                )}
               </td>
-              <td className="schema-table__cell-description">
-                {row.description || <span className="schema-table__no-desc">&mdash;</span>}
-              </td>
+              {hasAnyEnum && (
+                <td className="schema-table__cell-values">
+                  {row.enumValues && row.enumValues.length > 0 ? (
+                    <div className="schema-table__enum">
+                      {row.enumValues.map((val, i) => (
+                        <span key={i} className="schema-table__enum-val">{String(val)}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="schema-table__no-desc">&mdash;</span>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

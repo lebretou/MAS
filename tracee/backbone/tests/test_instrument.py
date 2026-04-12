@@ -158,7 +158,20 @@ class TestTrace:
         tracee.init(DummyGraph(), server_url="http://localhost:8123")
 
         assert tracee.trace() == "ctx"
-        enable.assert_called_once_with(base_url="http://localhost:8123")
+        enable.assert_called_once_with(base_url="http://localhost:8123", graph_id=None)
+
+    def test_trace_passes_graph_id_from_init(self, monkeypatch):
+        import tracee
+        import backbone.sdk.instrument as instrument
+
+        enable = MagicMock(return_value="ctx")
+        monkeypatch.setattr(instrument, "enable_tracing", enable)
+        monkeypatch.setattr(instrument, "extract_and_register", MagicMock())
+
+        tracee.init(DummyGraph(), graph_id="my-graph", server_url="http://localhost:8123")
+
+        assert tracee.trace() == "ctx"
+        enable.assert_called_once_with(base_url="http://localhost:8123", graph_id="my-graph")
 
     def test_trace_allows_explicit_override(self, monkeypatch):
         import tracee
@@ -166,6 +179,7 @@ class TestTrace:
 
         enable = MagicMock(return_value="ctx")
         monkeypatch.setattr(instrument, "enable_tracing", enable)
+        monkeypatch.setitem(instrument._config, "graph_id", None)
 
         assert tracee.trace(base_url="http://localhost:9999") == "ctx"
-        enable.assert_called_once_with(base_url="http://localhost:9999")
+        enable.assert_called_once_with(base_url="http://localhost:9999", graph_id=None)

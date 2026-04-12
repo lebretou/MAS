@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Node } from "@xyflow/react";
-import { fetchTraceEvents } from "../api/traces";
-import type { ExecutionFrame, GraphNodeData, NodeFrameState } from "../types/node-data";
-import type { TraceEvent } from "../types/trace";
+import type { Node, Edge } from "@xyflow/react";
+import { fetchTraceEvents, fetchTraceSummary } from "../api/traces";
+import type { ExecutionFrame, GraphNodeData, GraphEdgeData, NodeFrameState } from "../types/node-data";
+import type { TraceEvent, TraceSummary } from "../types/trace";
 import {
   diffStateKeys,
   getEventTags,
@@ -14,6 +14,8 @@ import {
   sortTraceEvents,
 } from "../utils/traceEventUtils";
 import { computeOverlay } from "./useTraceOverlay";
+import { ACTIVE_EDGE_STYLE, INACTIVE_EDGE_STYLE, INACTIVE_LABEL_STYLE } from "./edgeStyles";
+import { buildTraceOutline } from "../utils/traceOutline";
 
 function cloneStateSnapshot(snapshot: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(JSON.stringify(snapshot)) as Record<string, unknown>;
@@ -137,10 +139,53 @@ export function getNodeFrameState(
   return "upcoming";
 }
 
+/** derive the set of activated edge keys.
+ *  for non-terminal edges, use the invoked agent set as a lightweight fallback.
+ *  for END edges, only mark the branch from the final visible frame when it
+ *  explicitly routes to end. */
+export function computeActivatedEdgeKeys(
+  summary: TraceSummary | null,
+  baseEdges: Edge<GraphEdgeData>[],
+  baseNodes: Node<GraphNodeData>[],
+  finalVisibleFrame: ExecutionFrame | null,
+): Set<string> {
+  if (!summary) return new Set();
+  const invokedAgents = new Set(summary.agents);
+  const startIds = new Set(
+    baseNodes.filter((n) => n.data.nodeType === "start").map((n) => n.id),
+  );
+  const endIds = new Set(
+    baseNodes.filter((n) => n.data.nodeType === "end").map((n) => n.id),
+  );
+  const nextAgent = typeof finalVisibleFrame?.stateSnapshot?.next_agent === "string"
+    ? finalVisibleFrame.stateSnapshot.next_agent
+    : null;
+
+  const keys = new Set<string>();
+  for (const edge of baseEdges) {
+    if (endIds.has(edge.target)) {
+      if (nextAgent === "end" && finalVisibleFrame?.nodeId === edge.source) {
+        keys.add(`${edge.source}->${edge.target}`);
+      }
+      continue;
+    }
+
+    const srcInvoked = invokedAgents.has(edge.source) || startIds.has(edge.source);
+    const tgtInvoked = invokedAgents.has(edge.target);
+    if (srcInvoked && tgtInvoked) {
+      keys.add(`${edge.source}->${edge.target}`);
+    }
+  }
+  return keys;
+}
+
 interface TracePlaybackResult {
   nodes: Node<GraphNodeData>[];
+  edges: Edge<GraphEdgeData>[];
   frames: ExecutionFrame[];
+  outline: import("../types/node-data").TraceOutlineItem[];
   activeFrame: ExecutionFrame | null;
+  loading: boolean;
   error: boolean;
 }
 
@@ -148,30 +193,41 @@ interface TracePlaybackResult {
 export function useTracePlayback(
   traceId: string | null,
   baseNodes: Node<GraphNodeData>[],
+  baseEdges: Edge<GraphEdgeData>[],
   activeFrameIndex: number | null,
 ): TracePlaybackResult {
   const [events, setEvents] = useState<TraceEvent[] | null>(null);
+  const [summary, setSummary] = useState<TraceSummary | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!traceId) {
       setEvents(null);
+      setSummary(null);
+      setLoading(false);
       setError(false);
       return;
     }
 
     let cancelled = false;
     setEvents(null);
+    setSummary(null);
+    setLoading(true);
     setError(false);
-    fetchTraceEvents(traceId)
-      .then((nextEvents) => {
+
+    Promise.all([fetchTraceEvents(traceId), fetchTraceSummary(traceId)])
+      .then(([nextEvents, nextSummary]) => {
         if (cancelled) return;
         setEvents(nextEvents);
-        setError(false);
+        setSummary(nextSummary);
+        setLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
         setEvents(null);
+        setSummary(null);
+        setLoading(false);
         setError(true);
       });
 
@@ -193,6 +249,7 @@ export function useTracePlayback(
 
   const orderedEvents = useMemo(() => sortTraceEvents(events ?? []), [events]);
   const frames = useMemo(() => computeExecutionFrames(orderedEvents, nodeLabels), [orderedEvents, nodeLabels]);
+  const outline = useMemo(() => buildTraceOutline(orderedEvents, nodeLabels), [orderedEvents, nodeLabels]);
 
   const resolvedFrameIndex = useMemo(() => {
     if (!traceId || frames.length === 0 || activeFrameIndex == null) return null;
@@ -200,6 +257,11 @@ export function useTracePlayback(
   }, [traceId, frames, activeFrameIndex]);
 
   const activeFrame = resolvedFrameIndex == null ? null : frames[resolvedFrameIndex] ?? null;
+  const finalVisibleFrame = useMemo(() => {
+    if (frames.length === 0) return null;
+    if (resolvedFrameIndex == null) return frames[frames.length - 1] ?? null;
+    return frames[resolvedFrameIndex] ?? null;
+  }, [frames, resolvedFrameIndex]);
 
   // events visible at current scrub position (all events if no frame selected)
   const scopedEvents = useMemo(() => {
@@ -207,6 +269,11 @@ export function useTracePlayback(
     if (!activeFrame) return orderedEvents;
     return orderedEvents.slice(0, activeFrame.eventOrder + 1);
   }, [traceId, orderedEvents, activeFrame]);
+
+  const activatedEdgeKeys = useMemo(
+    () => computeActivatedEdgeKeys(summary, baseEdges, baseNodes, finalVisibleFrame),
+    [summary, baseEdges, baseNodes, finalVisibleFrame],
+  );
 
   // base nodes with execution overlay and playback frameState for current frame
   const displayNodes = useMemo(() => {
@@ -218,8 +285,29 @@ export function useTracePlayback(
     }
 
     const overlay = computeOverlay(scopedEvents, agentNodes.map((node) => node.id));
+
+    // terminal nodes: START is always active when a trace is loaded;
+    // END nodes are active only if an activated edge points to them
+    const activeTerminalTargets = new Set(
+      [...activatedEdgeKeys].map((key) => key.split("->")[1]),
+    );
+
     return baseNodes.map((node) => {
-      if (node.data.nodeType !== "agent") return node;
+      if (node.data.nodeType === "start") {
+        return {
+          ...node,
+          data: { ...node.data, playback: { frameState: "completed" as NodeFrameState } },
+        };
+      }
+
+      if (node.data.nodeType === "end") {
+        const reached = activeTerminalTargets.has(node.id);
+        return {
+          ...node,
+          data: { ...node.data, playback: { frameState: reached ? "completed" as NodeFrameState : "idle" as NodeFrameState } },
+        };
+      }
+
       const execution = overlay.get(node.id);
       const playback = activeFrame
         ? { frameState: getNodeFrameState(node.id, frames, resolvedFrameIndex) }
@@ -234,12 +322,28 @@ export function useTracePlayback(
         },
       };
     });
-  }, [traceId, baseNodes, scopedEvents, agentNodes, activeFrame, frames, resolvedFrameIndex]);
+  }, [traceId, baseNodes, scopedEvents, agentNodes, activeFrame, frames, resolvedFrameIndex, activatedEdgeKeys]);
+
+  const displayEdges = useMemo(() => {
+    if (!traceId) return baseEdges;
+    return baseEdges.map((edge) => {
+      const key = `${edge.source}->${edge.target}`;
+      const isActive = activatedEdgeKeys.has(key);
+      return {
+        ...edge,
+        style: isActive ? ACTIVE_EDGE_STYLE : INACTIVE_EDGE_STYLE,
+        labelStyle: isActive ? undefined : INACTIVE_LABEL_STYLE,
+      };
+    });
+  }, [traceId, baseEdges, activatedEdgeKeys]);
 
   return {
     nodes: displayNodes,
+    edges: displayEdges,
     frames,
+    outline,
     activeFrame,
+    loading,
     error,
   };
 }

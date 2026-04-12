@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { promptAPI } from '../../services/api';
 import type { PromptListItem, PromptVersion, PromptWithVersions } from '../../types/prompt';
 import {
@@ -11,6 +12,8 @@ import PromptVersionTree from './components/PromptVersionTree';
 import PromptResolvedView from './components/PromptResolvedView';
 import PromptDiffWorkspace from './components/PromptDiffWorkspace';
 import PromptDetailPanel from './components/PromptDetailPanel';
+import { SchemaTable } from '../graph-viewer/panels/SchemaTable';
+import type { JsonSchema } from '../../types/schema';
 import iconCompare from '../../assets/icon-compare.svg';
 import iconPlayground from '../../assets/icon-playground.svg';
 import iconTrash from '../../assets/icon-trash.svg';
@@ -434,8 +437,10 @@ export function PromptsPage() {
                           <span>Clear compare</span>
                         </button>
                       )}
-                      <a
-                        href="/playground"
+                      <Link
+                        to={effectiveVersion
+                          ? `/playground?promptId=${encodeURIComponent(detail.prompt.prompt_id)}&versionId=${encodeURIComponent(effectiveVersion.version_id)}`
+                          : '/playground'}
                         className="btn btn--secondary btn--sm prompts-page__action-btn prompts-page__link-btn"
                       >
                         <span
@@ -444,7 +449,7 @@ export function PromptsPage() {
                           aria-hidden
                         />
                         <span>Load in Playground</span>
-                      </a>
+                      </Link>
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm prompts-page__action-btn prompts-page__action-btn--danger"
@@ -542,6 +547,7 @@ export function PromptsPage() {
 
 // simple read-only component viewer (matches the pattern used in PromptForm's component editor view)
 const ComponentsView: React.FC<{ version: PromptVersion }> = ({ version }) => {
+  const [schemaMode, setSchemaMode] = useState<'table' | 'json'>('table');
   const components = version.components;
   const tools = version.tools ?? [];
   const variables = version.variables ?? {};
@@ -601,10 +607,32 @@ const ComponentsView: React.FC<{ version: PromptVersion }> = ({ version }) => {
 
       {version.output_schema && (
         <div className="prompt-detail__section">
-          <div className="section-label">Output schema</div>
-          <pre className="prompt-detail__schema-pre">
-            {JSON.stringify(version.output_schema, null, 2)}
-          </pre>
+          <div className="prompt-detail__section-head">
+            <div className="section-label">Output schema</div>
+            <div className="side-panel__mode-toggle">
+              <button
+                type="button"
+                className={`side-panel__mode-btn ${schemaMode === 'table' ? 'is-active' : ''}`}
+                onClick={() => setSchemaMode('table')}
+              >
+                Table
+              </button>
+              <button
+                type="button"
+                className={`side-panel__mode-btn ${schemaMode === 'json' ? 'is-active' : ''}`}
+                onClick={() => setSchemaMode('json')}
+              >
+                Raw JSON
+              </button>
+            </div>
+          </div>
+          {schemaMode === 'table' ? (
+            <SchemaTable schema={version.output_schema as JsonSchema} />
+          ) : (
+            <pre className="prompt-detail__schema-pre">
+              {JSON.stringify(version.output_schema, null, 2)}
+            </pre>
+          )}
         </div>
       )}
     </div>

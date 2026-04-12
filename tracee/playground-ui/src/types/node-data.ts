@@ -25,6 +25,21 @@ export interface ExecutionFrame {
   stateSnapshot: Record<string, unknown>;
 }
 
+export type TraceOutlineItemKind = "agent" | AgentOperationType;
+
+export interface TraceOutlineItem {
+  id: string;
+  runId: string;
+  parentRunId: string | null;
+  nodeId: string | null;
+  label: string;
+  kind: TraceOutlineItemKind;
+  status: "success" | "error";
+  latencyMs?: number;
+  operationId?: string;
+  children: TraceOutlineItem[];
+}
+
 export type NodeFrameState = "active" | "completed" | "upcoming" | "idle";
 
 export interface AgentOperation {
@@ -54,6 +69,13 @@ export interface ExecutionData {
   events?: TraceEvent[];
 }
 
+export interface PortInfo {
+  id: string;
+  type: "source" | "target";
+  x: number;
+  y: number;
+}
+
 export interface GraphNodeData extends Record<string, unknown> {
   label: string;
   nodeType: "agent" | "start" | "end";
@@ -73,6 +95,7 @@ export interface GraphNodeData extends Record<string, unknown> {
   playback?: {
     frameState: NodeFrameState;
   };
+  ports?: PortInfo[];
 }
 
 export interface GraphEdgeData extends Record<string, unknown> {

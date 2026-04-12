@@ -1,5 +1,6 @@
 """SQLite storage for traces and events."""
 
+import json
 import os
 import sqlite3
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ class TraceRow:
     event_count: int
     created_at: str
     updated_at: str
+    graph_id: str | None = None
 
 
 def _utc_now() -> str:
@@ -39,11 +41,16 @@ def init_db() -> None:
             create table if not exists traces (
                 trace_id text primary key,
                 event_count integer not null default 0,
+                graph_id text,
                 created_at text not null,
                 updated_at text not null
             )
             """
         )
+        # migrate existing tables that lack the graph_id column
+        columns = [row[1] for row in conn.execute("pragma table_info(traces)").fetchall()]
+        if "graph_id" not in columns:
+            conn.execute("alter table traces add column graph_id text")
         conn.execute(
             """
             create table if not exists trace_events (
@@ -65,7 +72,7 @@ def init_db() -> None:
         conn.commit()
 
 
-def upsert_trace(trace_id: str, event_count_delta: int) -> None:
+def upsert_trace(trace_id: str, event_count_delta: int, graph_id: str | None = None) -> None:
     now = _utc_now()
     with _connect() as conn:
         existing = conn.execute(
@@ -73,26 +80,37 @@ def upsert_trace(trace_id: str, event_count_delta: int) -> None:
             (trace_id,),
         ).fetchone()
         if existing:
-            conn.execute(
-                """
-                update traces
-                set event_count = event_count + ?, updated_at = ?
-                where trace_id = ?
-                """,
-                (event_count_delta, now, trace_id),
-            )
+            if graph_id:
+                conn.execute(
+                    """
+                    update traces
+                    set event_count = event_count + ?, updated_at = ?,
+                        graph_id = coalesce(graph_id, ?)
+                    where trace_id = ?
+                    """,
+                    (event_count_delta, now, graph_id, trace_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    update traces
+                    set event_count = event_count + ?, updated_at = ?
+                    where trace_id = ?
+                    """,
+                    (event_count_delta, now, trace_id),
+                )
         else:
             conn.execute(
                 """
-                insert into traces (trace_id, event_count, created_at, updated_at)
-                values (?, ?, ?, ?)
+                insert into traces (trace_id, event_count, graph_id, created_at, updated_at)
+                values (?, ?, ?, ?, ?)
                 """,
-                (trace_id, event_count_delta, now, now),
+                (trace_id, event_count_delta, graph_id, now, now),
             )
         conn.commit()
 
 
-def insert_events(trace_id: str, events: list[TraceEvent]) -> int:
+def insert_events(trace_id: str, events: list[TraceEvent], graph_id: str | None = None) -> int:
     if not events:
         return 0
     rows = []
@@ -121,25 +139,131 @@ def insert_events(trace_id: str, events: list[TraceEvent]) -> int:
             rows,
         )
         conn.commit()
-    upsert_trace(trace_id, len(events))
+    upsert_trace(trace_id, len(events), graph_id=graph_id)
     return len(events)
 
 
-def list_traces(limit: int = 100, offset: int = 0) -> list[TraceRow]:
+def _trace_node_ids(conn: sqlite3.Connection, trace_id: str) -> set[str]:
+    rows = conn.execute(
+        """
+        select event_json
+        from trace_events
+        where trace_id = ?
+        order by id asc
+        """,
+        (trace_id,),
+    ).fetchall()
+    node_ids: set[str] = set()
+    for row in rows:
+        event = json.loads(row["event_json"])
+        refs = event.get("refs") or {}
+        langgraph = refs.get("langgraph") or {}
+        hint = refs.get("hint") or {}
+        if isinstance(langgraph.get("node"), str):
+            node_ids.add(langgraph["node"])
+        if isinstance(hint.get("agent_id"), str):
+            node_ids.add(hint["agent_id"])
+    return node_ids
+
+
+def _graph_node_sets() -> dict[str, set[str]]:
+    from server.graph_db import list_graphs
+
+    return {
+        graph.graph_id: {node.node_id for node in graph.nodes}
+        for graph in list_graphs()
+    }
+
+
+def _infer_trace_graph_id(
+    conn: sqlite3.Connection,
+    trace_id: str,
+    graph_nodes_by_id: dict[str, set[str]],
+) -> str | None:
+    trace_nodes = _trace_node_ids(conn, trace_id)
+    if not trace_nodes:
+        return None
+
+    best_graph_id: str | None = None
+    best_score = 0
+    is_tied = False
+
+    for graph_id, graph_nodes in graph_nodes_by_id.items():
+        score = len(trace_nodes & graph_nodes)
+        if score == 0:
+            continue
+        if score > best_score:
+            best_graph_id = graph_id
+            best_score = score
+            is_tied = False
+            continue
+        if score == best_score:
+            is_tied = True
+
+    if is_tied or best_score == 0:
+        return None
+    return best_graph_id
+
+
+def _resolve_trace_graph_id(
+    conn: sqlite3.Connection,
+    trace_id: str,
+    current_graph_id: str | None,
+    graph_nodes_by_id: dict[str, set[str]],
+) -> str | None:
+    if current_graph_id:
+        return current_graph_id
+
+    inferred_graph_id = _infer_trace_graph_id(conn, trace_id, graph_nodes_by_id)
+    if inferred_graph_id:
+        conn.execute(
+            "update traces set graph_id = ? where trace_id = ? and graph_id is null",
+            (inferred_graph_id, trace_id),
+        )
+    return inferred_graph_id
+
+
+def _backfill_trace_graph_ids(conn: sqlite3.Connection) -> None:
+    graph_nodes_by_id = _graph_node_sets()
+    if not graph_nodes_by_id:
+        return
+
+    rows = conn.execute(
+        """
+        select trace_id, graph_id
+        from traces
+        where graph_id is null
+        order by updated_at desc
+        """
+    ).fetchall()
+    for row in rows:
+        _resolve_trace_graph_id(
+            conn,
+            row["trace_id"],
+            row["graph_id"],
+            graph_nodes_by_id,
+        )
+
+
+def list_traces(limit: int = 100, offset: int = 0, graph_id: str | None = None) -> list[TraceRow]:
     with _connect() as conn:
+        _backfill_trace_graph_ids(conn)
         rows = conn.execute(
             """
-            select trace_id, event_count, created_at, updated_at
+            select trace_id, event_count, graph_id, created_at, updated_at
             from traces
+            where (? is null or graph_id = ?)
             order by updated_at desc
             limit ? offset ?
             """,
-            (limit, offset),
+            (graph_id, graph_id, limit, offset),
         ).fetchall()
+        conn.commit()
     return [
         TraceRow(
             trace_id=row["trace_id"],
             event_count=row["event_count"],
+            graph_id=row["graph_id"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
@@ -180,17 +304,28 @@ def get_trace(trace_id: str) -> TraceRow | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            select trace_id, event_count, created_at, updated_at
+            select trace_id, event_count, graph_id, created_at, updated_at
             from traces
             where trace_id = ?
             """,
             (trace_id,),
         ).fetchone()
+        if row and not row["graph_id"]:
+            graph_id = _resolve_trace_graph_id(
+                conn,
+                trace_id,
+                row["graph_id"],
+                _graph_node_sets(),
+            )
+            conn.commit()
+        else:
+            graph_id = row["graph_id"] if row else None
     if not row:
         return None
     return TraceRow(
         trace_id=row["trace_id"],
         event_count=row["event_count"],
+        graph_id=graph_id,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )

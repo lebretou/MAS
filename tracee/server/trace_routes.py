@@ -25,6 +25,7 @@ class TraceMetadata(BaseModel):
 
     trace_id: str
     event_count: int
+    graph_id: str | None = None
     created_at: str
     updated_at: str
 
@@ -55,13 +56,14 @@ def _summary_to_dict(summary: TraceSummary) -> dict:
 
 
 @router.get("/traces")
-def list_traces_endpoint(limit: int = 100, offset: int = 0) -> list[TraceMetadata]:
-    """List traces with metadata."""
-    rows = list_traces(limit=limit, offset=offset)
+def list_traces_endpoint(limit: int = 100, offset: int = 0, graph_id: str | None = None) -> list[TraceMetadata]:
+    """List traces with metadata, optionally filtered by graph_id."""
+    rows = list_traces(limit=limit, offset=offset, graph_id=graph_id)
     return [
         TraceMetadata(
             trace_id=row.trace_id,
             event_count=row.event_count,
+            graph_id=row.graph_id,
             created_at=_utc_to_est(row.created_at),
             updated_at=_utc_to_est(row.updated_at),
         )
@@ -70,7 +72,7 @@ def list_traces_endpoint(limit: int = 100, offset: int = 0) -> list[TraceMetadat
 
 
 @router.post("/traces/{trace_id}/events")
-def ingest_events(trace_id: str, request: TraceIngestRequest) -> dict:
+def ingest_events(trace_id: str, request: TraceIngestRequest, graph_id: str | None = None) -> dict:
     """Append events to a trace."""
     if not request.events:
         return {"trace_id": trace_id, "inserted": 0}
@@ -83,7 +85,7 @@ def ingest_events(trace_id: str, request: TraceIngestRequest) -> dict:
                 detail="trace_id mismatch between path and event payload",
             )
         events.append(event)
-    inserted = insert_events(trace_id, events)
+    inserted = insert_events(trace_id, events, graph_id=graph_id)
     return {"trace_id": trace_id, "inserted": inserted}
 
 

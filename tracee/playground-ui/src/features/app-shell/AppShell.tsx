@@ -25,6 +25,12 @@ export function AppShell() {
           >
             Prompts
           </NavLink>
+          <NavLink
+            className={({ isActive }) => `app-shell__link${isActive ? " is-active" : ""}`}
+            to="docs"
+          >
+            Docs
+          </NavLink>
         </div>
       </nav>
       <main className="app-shell__content">

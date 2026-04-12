@@ -136,7 +136,7 @@ export function useGraph(requestedGraphId?: string | null): UseGraphResult {
       }
     }
 
-    const { nodes: layouted, edges: layoutedEdges } = getLayoutedElements(rawNodes, visibleEdges, "LR");
+    const { nodes: layouted, edges: layoutedEdges } = await getLayoutedElements(rawNodes, visibleEdges, "LR");
     setNodes(layouted);
     setEdges(layoutedEdges);
     setLoading(false);

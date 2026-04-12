@@ -7,7 +7,7 @@ from functools import wraps
 from backbone.sdk.graph_extractor import extract_and_register
 from backbone.sdk.tracing import enable_tracing, get_active_context
 
-_config: dict[str, str | None] = {"server_url": None}
+_config: dict[str, str | None] = {"server_url": None, "graph_id": None}
 
 
 def init(
@@ -19,6 +19,7 @@ def init(
 ):
     """patch a compiled graph and optionally register its topology."""
     _config["server_url"] = server_url
+    _config["graph_id"] = graph_id
 
     if graph_id:
         extract_and_register(
@@ -33,9 +34,12 @@ def init(
     return compiled_graph
 
 
-def trace(base_url: str | None = None):
+def trace(base_url: str | None = None, graph_id: str | None = None):
     """start a traced run using the configured server url."""
-    return enable_tracing(base_url=base_url or _config.get("server_url"))
+    return enable_tracing(
+        base_url=base_url or _config.get("server_url"),
+        graph_id=graph_id or _config.get("graph_id"),
+    )
 
 
 def _patch_invoke(compiled_graph) -> None:
